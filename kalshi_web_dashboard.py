@@ -5153,6 +5153,15 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#e3e9f7; }
 .press-top { border-bottom:none; margin-bottom:10px; }
 .press-sub { font-size:11px; margin:-2px 0 3px; }
+.fa-item { padding:4px 8px; cursor:default; }
+.fa-item .fa-detail { display:none; }
+.fa-item:hover .fa-detail, .fa-item:active .fa-detail { display:block; }
+.fa-where { color:#c9d3f0; font-size:12px; }
+.fa-item.fa-void { border-left-color:#e3e9f7; background:#151b2b; }
+.void { color:#e3e9f7 !important; }
+.fa-item.fa-void b { font-weight:700; }
+.fa-arrow { font-size:11px; }
+
 body.ov-off .ov { display:none; }
 .ov-toggle { margin-left:10px; }
 .sb-sig { font-size:11px; margin-top:4px; line-height:1.45; }
@@ -7700,22 +7709,49 @@ def _ago(ts):
     return f"{s}s ago" if s < 90 else (f"{s // 60}m ago" if s < 3600 else f"{s // 3600}h ago")
 
 
+def _alert_line(a, dec):
+    """One short line per alert: what, how big, which exchange, what price. Everything else is in the hover / tap text."""
+    sd = a["side"]
+    usd = _usd_short(a["usd"]) if a.get("usd") else ""
+    px = fmt_price(a["price"], dec) if a.get("price") else ""
+    ven = a.get("venue") or ""
+    bs = "BUY" if sd == "buy" else "SELL"
+    k = a["kind"]
+    where = " &middot; ".join(x for x in (ven, ("@ " + px) if px else "") if x)
+    if k == "whale":
+        return f"WHALE {bs} {usd}", where
+    if k == "sweep":
+        return f"BIG {bs} {usd}", where + " &middot; moved the price"
+    if k == "liq":
+        return f"FORCED {'SALE' if sd == 'sell' else 'BUY-BACK'} {usd}", where
+    if k == "absorbed":
+        return f"FILLED: BIG {'SELL' if sd == 'buy' else 'BUY'} ORDER {usd}", where
+    if k == "pulled":
+        return f"CANCELED: BIG {'SELL' if sd == 'buy' else 'BUY'} ORDER {usd}", where + " &middot; never filled"
+    if k == "wall":
+        return f"BIG {'SELL' if sd == 'sell' else 'BUY'} ORDER WAITING {usd}", ("Coinbase @ " + px) if px else "Coinbase"
+    return a["title"], ""
+
+
 def build_alert_box(name):
-    rows = _ENG.alerts_for(name, max_age=1200, limit=12)
+    rows = _ENG.alerts_for(name, max_age=1200, limit=14)
+    dec = 4 if name == "XRP" else 2
     items = []
     for a in rows:
-        side_cls = "up" if a["side"] == "buy" else ("down" if a["side"] == "sell" else "flat")
-        arrow = "&#9650;" if a["side"] == "buy" else ("&#9660;" if a["side"] == "sell" else "&#9679;")
+        void = a["kind"] == "pulled"          # canceled / never filled: shown in white, not green / red
+        side_cls = "void" if void else ("up" if a["side"] == "buy" else ("down" if a["side"] == "sell" else "flat"))
+        arrow = "&#10005;" if void else ("&#9650;" if a["side"] == "buy" else ("&#9660;" if a["side"] == "sell" else "&#9679;"))
         fresh = " fa-fresh" if time.time() - a["ts"] < 20 else ""
+        head, where = _alert_line(a, dec)
         items.append(
-            f'<div class="fa-item fa-sev{a["sev"]} fa-{side_cls}{fresh}" data-alert-id="{name}::{a["id"]}" data-kind="{a["kind"]}" '
+            f'<div class="fa-item fa-sev{a["sev"]} fa-{side_cls}{fresh}" title="{_html_attr(a["detail"])}" data-alert-id="{name}::{a["id"]}" data-kind="{a["kind"]}" '
             f'data-side="{a["side"] or ""}" data-sev="{a["sev"]}" data-sound="{1 if a.get("sound") else 0}" data-ts="{a["ts"]:.0f}" '
             f'data-name="{name}" data-title="{_html_attr(a["title"])}" data-usd="{a.get("usd") or 0:.0f}">'
-            f'<span class="fa-tag {side_cls}">{arrow} {a["label"]}</span> <b class="{side_cls}">{a["title"]}</b> '
-            f'<span class="fa-age hint">{_ago(a["ts"])}</span><div class="fa-detail">{a["detail"]}</div></div>')
+            f'<span class="fa-arrow {side_cls}">{arrow}</span> <b class="{side_cls}">{head}</b>'
+            + (f' <span class="fa-where">{where}</span>' if where else "")
+            + f'<span class="fa-age hint">{_ago(a["ts"])}</span><div class="fa-detail">{a["detail"]}</div></div>')
     if not items:
-        items.append('<div class="hint fa-empty">Quiet - no whales, big orders, fake breakouts or forced sales in the last 20 minutes. '
-                     'Anything that shows up will land here and play a sound.</div>')
+        items.append('<div class="hint fa-empty">Quiet - no whales, big orders, fake breakouts or forced sales in the last 20 minutes.</div>')
     h = _flow.HUB.feed_health()
     lt = _ENG.liq_totals(name, 300)
     liq_txt = ""
