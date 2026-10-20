@@ -2108,6 +2108,64 @@ def _save_history():
         pass  # persistence is a nice-to-have - never let it crash the poll loop
 
 
+# ---- history safety net (2026-10-20). Railway's disk is wiped on every redeploy unless a volume is mounted at DATA_DIR,
+# which silently erased the round history (and the streak) on each code push. Two fixes:
+#   1. every browser that opens the dashboard keeps a full copy of the history (IndexedDB) and pushes back anything the
+#      server is missing - so after a wipe, the first page load restores it automatically;
+#   2. a warning banner while history is NOT on a persistent volume.
+ON_RAILWAY = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PROJECT_ID") or os.environ.get("RAILWAY_SERVICE_ID"))
+HISTORY_ON_VOLUME = bool(os.environ.get("DATA_DIR"))
+_TICKER_RE = re.compile(r"^[A-Z0-9]+-\d\d[A-Z]{3}\d{6}-")
+_history_lock = threading.Lock()
+
+
+def history_meta():
+    out = {}
+    for name, rows in list(_history.items()):
+        ts = [_window_close_utc(h.get("ticker")) for h in rows]
+        ts = [t.timestamp() for t in ts if t]
+        out[name] = {"n": len(rows), "first": min(ts) if ts else None, "last": max(ts) if ts else None}
+    return {"assets": out, "volume": HISTORY_ON_VOLUME, "railway": ON_RAILWAY}
+
+
+def history_export(name, after=0.0, limit=5000):
+    rows = []
+    for h in list(_history.get(name, [])):
+        t = _window_close_utc(h.get("ticker"))
+        if t and t.timestamp() > after:
+            rows.append(h)
+    return rows[:limit]
+
+
+def history_restore(name, rows):
+    """Additive merge: rows whose ticker the server does not have yet are added; nothing existing is changed or removed."""
+    if not isinstance(rows, list) or not isinstance(name, str) or len(name) > 12:
+        return 0
+    with _history_lock:
+        cur = _history.setdefault(name, [])
+        have = {h.get("ticker") for h in cur}
+        add = []
+        for h in rows[:HISTORY_CAP]:
+            if not isinstance(h, dict) or len(h) > 80:
+                continue
+            tk = h.get("ticker")
+            if not isinstance(tk, str) or tk in have or not _TICKER_RE.match(tk) or _window_close_utc(tk) is None:
+                continue
+            clean = {k: v for k, v in h.items() if isinstance(k, str) and len(k) <= 40
+                     and (v is None or isinstance(v, (bool, int, float, str)) and (not isinstance(v, str) or len(v) <= 200))}
+            add.append(clean)
+            have.add(tk)
+        if not add:
+            return 0
+        merged = cur + add
+        merged.sort(key=lambda h: _window_close_utc(h.get("ticker")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc))
+        del merged[:-HISTORY_CAP]
+        _history[name] = merged
+        _save_history()
+    print(f"[history] restored {len(add)} {name} rounds from a browser backup")
+    return len(add)
+
+
 # in-flight lock persistence - added 2026-09-13 after a real report: a
 # restart mid-window (which happens often while iterating on this file)
 # used to silently wipe whatever call was already locked for the CURRENTLY
@@ -4027,6 +4085,8 @@ def poll_loop():
                             hist[-1][f"{_sk}_kp"] = _c.get("kp")
                             hist[-1][f"{_sk}_correct"] = (_c["call"] == actual_side) if _c.get("call") else None
                             hist[-1][f"{_sk}_tier"] = _c.get("tier")
+                            hist[-1][f"{_sk}_reversal"] = bool(_c.get("reversal"))
+                            hist[-1][f"{_sk}_payout"] = _c.get("rev_payout")
                         del hist[:-HISTORY_CAP]
                         _save_history()
                     # new window starts UNLOCKED - no call has formed yet
@@ -4262,7 +4322,19 @@ def poll_loop():
                         if _why_extra and _cs and _agree >= 2 and _oppose == 0 and max(_use_p, 1 - _use_p) < STAGE_CALL_MIN:
                             _call, _tier = ("YES" if _cs > 0 else "NO"), "WEAK"
                         _why = " + ".join(x for x in (_why, _why_extra) if x)
+                    _rev = None
+                    try:
+                        _rev = reversal_check(asset["name"], live_price, target, seconds_left, elapsed_seconds, line_stats,
+                                              rsi_multi, stage_sig, kalshi_price, ticker)
+                    except Exception as _rve:
+                        print(f"[reversal] {_rve!r}")
+                    if _rev and _rev["call"] != _call:
+                        _call, _tier, _why = _rev["call"], _rev["tier"], _rev["why"]
+                    elif _rev:
+                        _rev = None
                     stage_calls[_sk] = {
+                        "reversal": bool(_rev), "rev_payout": _rev["payout"] if _rev else None,
+                        "rev_score": _rev["score"] if _rev else None,
                         "call": _call, "tier": _tier, "skipped": _call is None, "why": _why,
                         "p_yes": round(_use_p if _use_p is not None else stage_p_yes, 4), "strength": stage_strength(stage_p_yes),
                         "kalshi_yes": kalshi_price, "fair_yes": round(fair_yes, 4) if fair_yes is not None else None,
@@ -5152,6 +5224,11 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .sc-pct { font-size:30px; font-weight:800; color:#fbf4ec; line-height:1; }
 .sc-wl { font-size:14px; line-height:1.35; }
 .sc-cur { margin:8px 0 6px; }
+.fr-high { color:#ff9f43 !important; } .fr-track2 i.fr-high { background:#ff9f43 !important; }
+.sb-rev { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#ffd36e; }
+.wr-rev { margin:4px 0 6px; font-size:12px; padding:6px; border-radius:8px; background:#211a21; }
+.vol-warn { margin:4px 0 8px; padding:8px 10px; border-radius:10px; border:1px solid #d29922; background:rgba(210,153,34,0.12); color:#f3d28c; font-size:12px; line-height:1.4; }
+.hist-toast { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:9999; padding:10px 14px; border-radius:10px; background:#e5b85c; color:#1a1218; font-weight:700; }
 .twap-lock { margin-top:4px; padding:4px 6px; border:1px dashed #4a3c43; border-radius:8px; }
 .twap-avg { font-weight:800; font-size:18px; line-height:1.2; }
 .twap-need { font-size:12px; line-height:1.3; }
@@ -6837,6 +6914,90 @@ async function loadWr(p) {
     const lst = panel.querySelector('.wr-list'); if (lst) lst.scrollTop = sc;
   } catch (e) {}
 }
+// ---- device backup of the round history (IndexedDB). Pulls every new graded round from the server; if the server ever
+// has FEWER rounds than this device (a Railway redeploy wiped its disk), pushes the missing ones back. Additive only.
+let histDb = null, histSyncing = false;
+function histOpen() {
+  return new Promise((res) => {
+    if (histDb) return res(histDb);
+    try {
+      const rq = indexedDB.open('brainHistory', 1);
+      rq.onupgradeneeded = () => { const db = rq.result; const st = db.createObjectStore('rows', {keyPath: 'k'}); st.createIndex('asset', 'asset'); };
+      rq.onsuccess = () => { histDb = rq.result; res(histDb); };
+      rq.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+}
+function histAll(asset) {
+  return new Promise((res) => {
+    try {
+      const tx = histDb.transaction('rows', 'readonly');
+      const rq = tx.objectStore('rows').index('asset').getAll(asset);
+      rq.onsuccess = () => res(rq.result || []); rq.onerror = () => res([]);
+    } catch (e) { res([]); }
+  });
+}
+function histPut(asset, rows) {
+  return new Promise((res) => {
+    try {
+      const tx = histDb.transaction('rows', 'readwrite'); const st = tx.objectStore('rows');
+      rows.forEach(r => { if (r && r.ticker) st.put({k: asset + '|' + r.ticker, asset: asset, t: r._t || 0, row: r}); });
+      tx.oncomplete = () => res(true); tx.onerror = () => res(false);
+    } catch (e) { res(false); }
+  });
+}
+async function histSync() {
+  if (histSyncing) return; histSyncing = true;
+  try {
+    if (!(await histOpen())) return;
+    const meta = await (await fetch('/history_meta', {cache: 'no-store'})).json();
+    const vw = document.getElementById('vol-warn'); if (vw) vw.style.display = (meta.railway && !meta.volume) ? 'block' : 'none';
+    let restored = 0;
+    for (const asset of Object.keys(meta.assets || {}).concat(['BTC', 'XRP']).filter((v, i, a) => a.indexOf(v) === i)) {
+      const sm = (meta.assets || {})[asset] || {n: 0, first: null, last: null};
+      let local = await histAll(asset);
+      // 1) pull what this device does not have yet
+      let after = local.reduce((m, x) => Math.max(m, x.t || 0), 0);
+      for (let guard = 0; guard < 20; guard++) {
+        const j = await (await fetch('/history_export?asset=' + encodeURIComponent(asset) + '&after=' + after, {cache: 'no-store'})).json();
+        const rows = j.rows || [];
+        if (!rows.length) break;
+        rows.forEach(r => { r._t = tickerClose(r.ticker); });
+        await histPut(asset, rows);
+        after = rows.reduce((m, r) => Math.max(m, r._t || 0), after);
+        if (rows.length < 5000) break;
+      }
+      // 2) the server lost rounds this device still has -> put them back
+      local = await histAll(asset);
+      if (local.length > (sm.n || 0)) {
+        const rows = local.map(x => { const r = Object.assign({}, x.row); delete r._t; return r; });
+        for (let i = 0; i < rows.length; i += 3000) {
+          const rsp = await fetch('/restore_history', {method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({asset: asset, rows: rows.slice(i, i + 3000)})});
+          try { restored += ((await rsp.json()).added || 0); } catch (e) {}
+        }
+      }
+    }
+    if (restored > 0) {
+      const b = document.createElement('div'); b.className = 'hist-toast';
+      b.textContent = 'Restored ' + restored.toLocaleString() + ' rounds from this device\'s backup';
+      document.body.appendChild(b); setTimeout(() => b.remove(), 8000);
+    }
+  } catch (e) {} finally { histSyncing = false; }
+}
+const _TK_MON = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+function tickerClose(tk) {
+  const m = /^[A-Z0-9]+-(\d\d)([A-Z]{3})(\d\d)(\d\d)(\d\d)-/.exec(tk || '');
+  if (!m || !(m[2] in _TK_MON)) return 0;
+  // ticker times are US Eastern; convert via the offset Eastern had on that date
+  const y = 2000 + +m[1], mo = _TK_MON[m[2]], d = +m[3], h = +m[4], mi = +m[5];
+  const guess = Date.UTC(y, mo, d, h, mi) / 1000;
+  const etStr = new Date(guess * 1000).toLocaleString('en-US', {timeZone: 'America/New_York', hour12: false});
+  const et = new Date(etStr + ' UTC').getTime() / 1000;
+  return guess + (guess - et);
+}
+setTimeout(histSync, 4000);
+setInterval(histSync, 120000);
 function toggleWr() {
   const panel = document.getElementById('wr-panel');
   wrOpen = !wrOpen;
@@ -6869,6 +7030,9 @@ window.onload = function() {
 </head><body>
 <header class="g-top"><div class="g-brand"><svg class="b-logo" viewBox="0 0 64 56" width="52" height="46" aria-hidden="true"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7c3d3"/><stop offset="1" stop-color="#e595b0"/></linearGradient><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3e0c8"/><stop offset="1" stop-color="#d2ae86"/></linearGradient></defs><path d="M31 6 C25 2 17 4 15 10 C9 10 5 15 7 21 C2 24 2 32 7 35 C5 41 10 47 16 46 C18 51 26 53 31 49 Z" fill="url(#bg1)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M33 6 C39 2 47 4 49 10 C55 10 59 15 57 21 C62 24 62 32 57 35 C59 41 54 47 48 46 C46 51 38 53 33 49 Z" fill="url(#bg2)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M15 16 C19 15 21 18 24 17 M10 27 C15 25 17 29 22 27 M14 38 C18 36 21 40 25 38 M24 9 C24 13 27 14 27 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path d="M49 16 C45 15 43 18 40 17 M54 27 C49 25 47 29 42 27 M50 38 C46 36 43 40 39 38 M40 9 C40 13 37 14 37 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path class="b-spark" d="M58 2 L59.4 5.6 L63 7 L59.4 8.4 L58 12 L56.6 8.4 L53 7 L56.6 5.6 Z" fill="#ffd36e"/></svg><div class="g-logo">Brain</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
+<div id="vol-warn" class="vol-warn" style="display:none;">&#9888; Round history is NOT on a Railway volume - every redeploy wipes it.
+This page keeps a backup on this device and puts it back after a wipe, but add a volume to fix it for good:
+Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/data</b>, then Variables &rarr; <b>DATA_DIR=/data</b>.</div>
 <div class="view-bar"><span class="hint">Show:</span>
   <button class="size-mode-btn" data-view="BTC" onclick="setAssetView('BTC')">BTC only</button>
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
@@ -8065,7 +8229,9 @@ def build_stage_box(name, d, key):
         if holding is not None:
             hold_html = (f'<div class="sb-line">Kalshi now: <span class="{"up" if holding >= 0.5 else "down"}"><b>{holding:.0%}</b> - '
                          f'{"holding" if holding >= 0.5 else "going AGAINST it"}</span></div>')
-        body = (f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>'
+        rev = (f'<div class="sb-rev">&#8634; REVERSAL{(" &middot; ~" + format(c["rev_payout"], ".1f") + "x") if c.get("rev_payout") else ""}</div>'
+               if c.get("reversal") else "")
+        body = (f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>{rev}'
                 f'<div class="sb-tier {_TIER_CLS.get(tier, "")}">{tier}</div>'
                 f'<div class="sb-line">{p_side:.0%} sure &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
                 f'{"" if c.get("crosses") == 1 else "es"} so far</div>'
@@ -8097,6 +8263,13 @@ def build_stage_box(name, d, key):
             if max(p, 1 - p) < STAGE_CALL_MIN and not (_cs and _ag >= 3 and _op == 0):
                 pc = None
                 pw = "a coin flip right now - it will wait up to 60s"
+            try:
+                _rv = reversal_check(name, d.get("spot_price"), d.get("target_price"), d.get("seconds_left"), el, ls,
+                                     d.get("rsi_multi"), sg, d.get("kalshi_price"), d.get("ticker"))
+            except Exception:
+                _rv = None
+            if _rv and _rv["call"] != pc:
+                pc, pt = _rv["call"], _rv["tier"] + " &#8634; REVERSAL" + (f' ~{_rv["payout"]:.1f}x' if _rv.get("payout") else "")
             if pc:
                 prev = (f'<div class="sb-line">Right now: <span class="{"up" if pc == "YES" else "down"}"><b>{"UP" if pc == "YES" else "DOWN"} '
                         f'{pt}</b></span></div>')
@@ -8387,49 +8560,254 @@ def build_twap_lock(name, d):
     return f'<div class="twap-lock">{head}{sub}</div>'
 
 
+# ---------------------------------------------------------------- FLIP RADAR (rebuilt 2026-10-20)
+# No longer a mirror of Kalshi's price (Kalshi odds lag raw order flow, and traders stop bidding the other side late in
+# the round). A 0-99% composite flip-risk score for the call on screen, from the live feeds the dashboard already has:
+#   1. opposing momentum  (0-40)  - opposing taker share 10s/30s/1m + net dollars against the call while price moves at the line
+#   2. cushion + crosses  (0-40)  - % distance from the line, +5 per line cross (recent crosses weigh more); wrong side = 75 floor
+#   3. order book walls (-15..+20) - every exchange's resting bids vs asks: walls defending the call vs walls pressing on it
+#   x  pace (0.75-1.35x) and time (final 90s with a solid cushion, and the 60-second settlement average) dampeners
+FLIP_OPP_DELTA_USD = {"BTC": 1_200_000, "XRP": 150_000}   # net dollars against the call (30s + 1m) that counts as "strong"
+FLIP_TIERS = ((20, "LOW", "up"), (45, "WATCH", "warn"), (70, "HIGH", "fr-high"), (99, "CRITICAL", "down"))
+
+
+def _lerp(x, x0, x1, y0, y1):
+    if x <= x0:
+        return y0
+    if x >= x1:
+        return y1
+    return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+
+
+def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, crosses=0, events=None, ticker=None):
+    """call_sign: +1 the call is UP, -1 DOWN. Returns {"score", "tier", "cls", "parts", "drivers", "opp_share", "toward"}."""
+    if not spot or not line or call_sign not in (1, -1):
+        return None
+    parts, drivers = {}, []
+    usd = lambda v: _usd_short(abs(v))
+    # ---- 1. opposing momentum
+    win = {}
+    if name in _flow.ASSETS:
+        for w in (10, 30, 60):
+            try:
+                win[w] = _flow.HUB.window_detail(name, w)
+            except Exception:
+                pass
+    shares, wts = [], []
+    for w, wt in ((10, 0.30), (30, 0.45), (60, 0.25)):
+        x = win.get(w)
+        if x and x.get("pct") is not None and (x["buy"] + x["sell"]) > 0:
+            opp = (1 - x["pct"]) if call_sign > 0 else x["pct"]
+            shares.append(opp * wt)
+            wts.append(wt)
+    opp_share = sum(shares) / sum(wts) if wts else None
+    mom = _lerp(opp_share, 0.45, 0.80, 0, 30) if opp_share is not None else 0.0
+    net_against = 0.0
+    for w in (30, 60):
+        x = win.get(w)
+        if x:
+            net_against += ((x["sell"] - x["buy"]) if call_sign > 0 else (x["buy"] - x["sell"]))
+    net_qty = 0.0
+    x30 = win.get(30)
+    if x30:
+        net_qty = (x30["sell_qty"] - x30["buy_qty"]) if call_sign > 0 else (x30["buy_qty"] - x30["sell_qty"])
+    sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
+    toward = False
+    ago = None
+    if sym:
+        ticks = get_tick_history(sym)
+        if ticks:
+            cut = time.time() - 30
+            older = [px for t, px in ticks if t <= cut]
+            ago = older[-1] if older else ticks[0][1]
+            # moving at the line = an UP call losing ground (price falling) / a DOWN call losing ground (price rising)
+            toward = ((spot - ago) * call_sign) < -(line * 0.00005)
+    thr = FLIP_OPP_DELTA_USD.get(name, 1e12)
+    if net_against > 0 and toward:
+        mom += _lerp(net_against, thr * 0.5, thr * 2, 0, 10)
+    parts["momentum"] = round(mom, 1)
+    if opp_share is not None and opp_share > 0.5:
+        opp_word = "sellers" if call_sign > 0 else "buyers"
+        coin_txt = f' ({"-" if call_sign > 0 else "+"}{abs(net_qty):,.{2 if name == "BTC" else 0}f} {name} 30s)' if net_qty > 0 else ""
+        drivers.append((mom, f'{opp_word} {opp_share:.0%} of 10s/30s/1m flow{coin_txt}' + (" &amp; price moving at the line" if toward else " (absorbed - price holding)")))
+    # ---- 2. cushion + crosses
+    dist = (spot - line) / line * 100 * call_sign          # + = on the call's side, % of the line
+    wrong_side = dist < 0
+    cush = 0.0 if wrong_side else _lerp(-dist, -0.20, -0.02, 0, 25)
+    if not wrong_side:
+        for lo_, hi_, a_, b_ in ((0.15, 0.20, 5, 0), (0.10, 0.15, 12, 5), (0.05, 0.10, 20, 12), (0.02, 0.05, 25, 20)):
+            if lo_ <= dist < hi_:
+                cush = _lerp(dist, lo_, hi_, a_, b_)
+        if dist < 0.02:
+            cush = 25.0
+        if dist >= 0.20:
+            cush = 0.0
+    cx = 0.0
+    for ev in (events or []):
+        recent = elapsed is not None and (elapsed - ev[0]) <= 180
+        cx += 6.5 if recent else 5.0
+    cx = min(15.0, cx) if events else min(15.0, 5.0 * (crosses or 0))
+    parts["cushion"], parts["crosses"] = round(cush, 1), round(cx, 1)
+    dec = 4 if name == "XRP" else 2
+    gap_usd = abs(spot - line)
+    if wrong_side:
+        drivers.append((75, f'price already on the WRONG side of the line ({fmt_price(gap_usd, dec)} / {abs(dist):.3f}%)'))
+    elif cush >= 12:
+        drivers.append((cush, f'thin cushion: +{fmt_price(gap_usd, dec)} ({dist:.3f}%) from the line'))
+    if crosses:
+        drivers.append((cx, f'{crosses} line cross{"es" if crosses != 1 else ""} - contested level'))
+    # ---- 3. order book walls (every exchange that reports its book)
+    book = 0.0
+    try:
+        sm = _flow.HUB.summary(name) if name in _flow.ASSETS else {}
+    except Exception:
+        sm = {}
+    bp, bn = sm.get("book_pct"), sm.get("book_n") or 0
+    if bp is not None:
+        sup = bp if call_sign > 0 else 1 - bp
+        opp = 1 - sup
+        if opp > 0.52:
+            book = _lerp(opp, 0.52, 0.65, 2, 20)
+            drivers.append((book, f'{opp:.0%} {"ask" if call_sign > 0 else "bid"} walls pressing on the call ({bn} books)'))
+        elif sup > 0.52:
+            book = -_lerp(sup, 0.52, 0.65, 2, 15)
+            drivers.append((book, f'{sup:.0%} {"bid" if call_sign > 0 else "ask"} walls defending ({bn} books)'))
+    parts["book"] = round(book, 1)
+    # ---- pace + time
+    pace = None
+    try:
+        vg = _flow.HUB.volume_gauge(name) if name in _flow.ASSETS else None
+        if vg and vg.get("median"):
+            pace = vg["total"] / vg["median"]
+    except Exception:
+        pass
+    raw = mom + cush + cx + book
+    pf = min(1.35, max(0.75, pace)) if pace else 1.0
+    score = max(0.0, raw) * pf
+    tf = 1.0
+    if seconds_left is not None and not wrong_side:
+        if seconds_left <= 90 and dist > 0.12:
+            tf = max(0.35, seconds_left / 90)
+        try:
+            tw = twap_lock(name, {"ticker": ticker, "target_price": line, "spot_price": spot}) if ticker else None
+        except Exception:
+            tw = None
+        if tw and not tw["final"] and ((tw["side"] == "UP") == (call_sign > 0)):
+            # final minute: how hard is it for the remaining seconds to drag the 60s average across?
+            tf = min(tf, 0.3 if tw["locked"] else _lerp(tw["reach"] or 0, 0.0, 0.25, 1.0, 0.45))
+            drivers.append((0, f'60s settlement avg {fmt_price(tw["avg"], dec)} - {"LOCKED" if tw["locked"] else "still reachable"}'))
+    score *= tf
+    if wrong_side:
+        score = max(score, 75.0 + min(20.0, abs(dist) * 100))
+    score = max(0.0, min(99.0, score))
+    tier, cls = "LOW", "up"
+    for lim, t_, c_ in FLIP_TIERS:
+        if score <= lim:
+            tier, cls = t_, c_
+            break
+    if pace:
+        drivers.append((0, f'market pace {pace:.1f}x normal'))
+    return {"score": score, "tier": tier, "cls": cls, "parts": parts, "pace": pace, "opp_share": opp_share,
+            "toward": toward, "wrong_side": wrong_side, "dist_pct": dist,
+            "drivers": [t for _w, t in sorted(drivers, key=lambda z: -abs(z[0]))]}
+
+
+# ---------------------------------------------------------------- REVERSAL CALLS (2026-10-20, user request)
+# "Don't be scared to call the currently losing side if the RSI data and other factors support it." When the composite
+# flip score says the side price is on now is in trouble AND RSI + momentum point the other way, the early / sealed call
+# goes to the LOSING side (that is where the 3x+ Kalshi payouts are). Graded like every other call, and tracked
+# separately in the round history so you can see whether these actually pay.
+REVERSAL_MIN_SCORE = 55         # composite flip risk of the current favorite must be HIGH
+REVERSAL_MIN_VOTES = 3          # at least 3 of: RSI stretched, flow against, candles against, trend against, price moving at the line
+REVERSAL_RSI_HI, REVERSAL_RSI_LO = 68, 32
+
+
+def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_multi, sig, kalshi_yes, ticker=None):
+    """None, or {"call", "tier", "why", "score", "votes", "payout"} - call the side that is LOSING right now."""
+    if not spot or not line or abs(spot - line) / line < CROSS_BAND_PCT:
+        return None
+    fav = 1 if spot > line else -1                       # the side price is on now
+    ls = line_stats or {}
+    fr = flip_risk_core(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
+    if not fr or fr["score"] < REVERSAL_MIN_SCORE:
+        return None
+    rm = rsi_multi or {}
+    r1, r5 = rm.get("rsi1"), rm.get("rsi5")
+    votes = []
+    if r1 is not None and ((fav > 0 and r1 >= REVERSAL_RSI_HI) or (fav < 0 and r1 <= REVERSAL_RSI_LO)):
+        votes.append(f"RSI {r1:.0f} {'overbought' if fav > 0 else 'oversold'}" + (f" (5m {r5:.0f})" if r5 is not None else ""))
+    if fr["opp_share"] is not None and fr["opp_share"] >= 0.58:
+        votes.append(f"{fr['opp_share']:.0%} of 10s-1m flow against")
+    sig = sig or {}
+    if sig.get("candles") == -fav:
+        votes.append("candles turning")
+    if sig.get("trend") == -fav:
+        votes.append("trend (EMA / SuperTrend / DMI) against")
+    if fr["toward"]:
+        votes.append("price moving at the line")
+    rsi_ok = bool(votes) and votes[0].startswith("RSI")
+    if len(votes) < REVERSAL_MIN_VOTES or not (rsi_ok or len(votes) >= 4):
+        return None
+    call = "NO" if fav > 0 else "YES"
+    kp = None
+    if kalshi_yes is not None:
+        kp = kalshi_yes if call == "YES" else 1 - kalshi_yes
+    payout = (1 / kp) if kp and kp > 0 else None
+    tier = "GOOD" if (len(votes) >= 4 and fr["score"] >= 65) else "WEAK"
+    why = (f"REVERSAL - calling the losing side: flip risk {fr['score']:.0f}% + " + ", ".join(votes)
+           + (f" &middot; pays ~{payout:.1f}x at {kp * 100:.0f}c" if payout else ""))
+    return {"call": call, "tier": tier, "why": why, "score": round(fr["score"], 1), "votes": votes,
+            "payout": round(payout, 2) if payout else None, "kp": kp}
+
+
 @_never_break
 def build_flip_radar(name, d):
-    """ONE simple flip read: the chance the call on screen (sealed, else early) flips before the close - straight from
-    Kalshi's own price - plus any warning signs right now (RSI stretched against the call, a fake breakout against it,
-    a choppy round)."""
-    kp = d.get("kalshi_price")
+    """FLIP RADAR tile: the composite flip-risk score for the call on screen (sealed, else early, else the side price is on
+    now), its tier, and the exact drivers. Kalshi's own odds are shown underneath only as a reference."""
     key, call = _stage_ref(d)
-    if call is None:
-        call = d.get("locked_call")
-        which = "the bot's call"
-    else:
-        which = "the sealed call" if key == "sealed" else "the early call"
-    if kp is None:
+    which = "the sealed call" if key == "sealed" else ("the early call" if key == "early" else None)
+    spot, line = d.get("spot_price"), d.get("target_price")
+    if call not in ("YES", "NO"):
+        call = d.get("locked_call") if d.get("locked_call") in ("YES", "NO") else None
+        which = which or ("the bot's call" if call else None)
+    if call is None and spot and line:
+        call = "YES" if spot >= line else "NO"
+        which = "the side price is on now"
+    if not (spot and line and call):
         return '<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div><div class="fr-big flat">--</div></div>'
-    if call in ("YES", "NO"):
-        pct = (1 - kp) * 100 if call == "YES" else kp * 100
-        other = "DOWN" if call == "YES" else "UP"
-        line = f'Kalshi gives {other} {pct:.0f}% - that is the chance {which} ({"UP" if call == "YES" else "DOWN"}) flips.'
-    else:
-        pct = (1 - max(kp, 1 - kp)) * 100
-        line = "No call yet - this is the chance Kalshi&#39;s current favorite flips."
-    signs = []
+    ls = d.get("line_stats") or {}
+    fr = flip_risk_core(name, 1 if call == "YES" else -1, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"),
+                        ls.get("crosses") or 0, ls.get("events"), d.get("ticker"))
+    if not fr:
+        return '<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div><div class="fr-big flat">--</div></div>'
+    pct, level, cls = fr["score"], fr["tier"], fr["cls"]
     rm = d.get("rsi_multi") or {}
     r1 = rm.get("rsi1")
+    extra = []
     if r1 is not None and call == "YES" and r1 >= 70:
-        signs.append("RSI overbought")
+        extra.append(f"RSI {r1:.0f} overbought")
     if r1 is not None and call == "NO" and r1 <= 30:
-        signs.append("RSI oversold")
-    if call in ("YES", "NO") and _ENG.recent_kind(name, ("stoprun",), side=("sell" if call == "YES" else "buy"), within=240):
-        signs.append("fake breakout against it")
-    ls = d.get("line_stats") or {}
-    if (ls.get("crosses") or 0) >= 2:
-        signs.append(f'{ls["crosses"]} line crosses')
-    level, cls = ("LOW", "up") if pct < 20 else (("MEDIUM", "warn") if pct < 40 else ("HIGH", "down"))
-    if signs and level == "LOW":
-        level, cls = "WATCH", "warn"
-    sig = ("warning signs: " + ", ".join(signs)) if signs else "no warning signs right now"
+        extra.append(f"RSI {r1:.0f} oversold")
+    if _ENG.recent_kind(name, ("stoprun",), side=("sell" if call == "YES" else "buy"), within=240):
+        extra.append("fake breakout against it")
+    drv = extra + fr["drivers"][:4]
+    kp = d.get("kalshi_price")
+    kal = ""
+    if kp is not None:
+        k_opp = (1 - kp) if call == "YES" else kp
+        kal = f'<div class="fr-txt hint">Kalshi still prices the other side at {k_opp * 100:.0f}% - reference only, it lags the tape</div>'
+    p = fr["parts"]
+    tip = (f'momentum {p["momentum"]:+.0f} &middot; cushion {p["cushion"]:+.0f} &middot; crosses {p["crosses"]:+.0f} &middot; '
+           f'book walls {p["book"]:+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
     marker = (f'<span class="flip-chance-value" data-flip-chance-key="{name}::{d.get("ticker", "")}{("::" + key) if key else ""}" '
               f'data-flip-chance-pct="{pct:.2f}" style="display:none;"></span>')
-    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
+    return (f'<div class="rs-tile flip-radar" title="{_html_attr(tip.replace("&middot;", "|"))}"><div class="rs-title">FLIP RADAR</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
-            f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct * 2):.0f}%"></i></div>'
-            f'<div class="fr-txt">{line}</div><div class="fr-txt hint">{sig}</div>{marker}</div>')
+            f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
+            f'<div class="fr-txt">Chance {which} ({"UP" if call == "YES" else "DOWN"}) flips</div>'
+            + (f'<div class="fr-txt">&#9888; {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
+               f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
+            + f'{kal}{marker}</div>')
 
 
 def _mmss_words(sec):
@@ -8545,6 +8923,7 @@ def _wr_rows(name, call):
             continue
         t = _window_close_utc(h.get("ticker"))
         out.append({"t": t, "ok": bool(h[field]), "call": h.get(cfield), "actual": h.get("actual_side"),
+                    "rev": bool(h.get(f"{call}_reversal")), "payout": h.get(f"{call}_payout"),
                     "final": h.get("final_price"), "strike": h.get("strike"), "tier": h.get(f"{call}_tier") if call != "bot" else None,
                     "ticker": h.get("ticker")})
     return out
@@ -8617,6 +8996,15 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
                       f'<td>{sum(agg[k])}</td></tr>' for k in keys)
         return (f'<details class="wr-more"><summary>{title}</summary><table class="press-table"><tr><th>{title.split()[0]}</th>'
                 f'<th>W-L</th><th>win %</th><th>rounds</th></tr>{trs}</table></details>')
+    rv = [r for r in sel if r.get("rev")]
+    if rv:
+        rw = sum(r["ok"] for r in rv)
+        pays = [r["payout"] for r in rv if r.get("payout")]
+        # $1 on every reversal at its locked price: a win returns payout x, a loss loses the $1
+        ret = sum((r["payout"] - 1) if r["ok"] else -1 for r in rv if r.get("payout"))
+        grid += (f'<div class="wr-rev">&#8634; Reversal calls (losing side): <b class="skw">{rw}W</b> - <b class="skl">{len(rv) - rw}L</b> '
+                 f'({rw / len(rv):.0%})' + (f' &middot; avg payout {sum(pays) / len(pays):.1f}x &middot; '
+                 f'<span class="{"up" if ret >= 0 else "down"}">{ret:+.1f} units</span> on 1 unit each' if pays else "") + '</div>')
     daily = bucket_table(lambda t: t.date(), lambda k: k.strftime("%a %b %d"), 60, "Day by day (last 60)")
     weekly = bucket_table(lambda t: (t - dt.timedelta(days=t.weekday())).date(), lambda k: "wk of " + k.strftime("%b %d"),
                           52, "Week by week (last 52)")
@@ -8629,7 +9017,7 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
         px = (fmt_price(r["final"], dec) if r["final"] is not None else "")
         if r.get("strike"):
             px += f' vs {fmt_price(r["strike"], dec)}'
-        lst.append(f'<div class="wr-row"><span>{tm}</span><span>{call_txt} &rarr; {act}{(" &middot; " + r["tier"]) if r.get("tier") else ""}'
+        lst.append(f'<div class="wr-row"><span>{tm}</span><span>{"&#8634; " if r.get("rev") else ""}{call_txt} &rarr; {act}{(" &middot; " + r["tier"]) if r.get("tier") else ""}'
                    f'<span class="hint"> {px}</span></span><b class="{"skw" if r["ok"] else "skl"}">{"W" if r["ok"] else "L"}</b></div>')
     more = (f'<button class="wr-btn" onclick="loadWr({{limit:{limit + 300}}})">Show more ({len(sel) - limit:,} older)</button>'
             if limit and len(sel) > limit else "")
@@ -9979,6 +10367,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # silence default request logging
 
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        n_ = 0
+        ok = False
+        if parsed.path == "/restore_history":
+            try:
+                ln = int(self.headers.get("Content-Length") or 0)
+                if 0 < ln <= 40_000_000:
+                    j = json.loads(self.rfile.read(ln).decode("utf-8"))
+                    n_ = history_restore(j.get("asset"), j.get("rows"))
+                    ok = True
+            except Exception as _pe:
+                print(f"[history] restore failed: {_pe!r}")
+        body = json.dumps({"ok": ok, "added": n_}).encode()
+        self.send_response(200 if ok else 400); self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body))); self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         global _live_armed, _live_last_error, _live_size_mode, _live_size_dollars, _live_size_percent
         global _live_flip_profit_target, _live_flip_max_entry_price, _live_max_entry_price
@@ -10044,6 +10450,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif parsed.path in ("/history_meta", "/history_export"):
+            qs = urllib.parse.parse_qs(parsed.query)
+            if parsed.path == "/history_meta":
+                payload = history_meta()
+            else:
+                try:
+                    aft = float((qs.get("after") or ["0"])[0])
+                except ValueError:
+                    aft = 0.0
+                payload = {"rows": history_export((qs.get("asset") or [""])[0], aft)}
+            body = json.dumps(payload).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(body)
         elif parsed.path == "/round_history":
             qs = urllib.parse.parse_qs(parsed.query)
             try:
@@ -10071,7 +10491,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     _wr[_a] = winrate_badge_html(_a)
                 except Exception as _we:
                     _wr[_a] = ""
-            body = json.dumps({"html": render_html(), "build": BUILD_ID, "wr": _wr}).encode()
+            body = json.dumps({"html": render_html(), "build": BUILD_ID, "wr": _wr,
+                               "vol_warn": bool(ON_RAILWAY and not HISTORY_ON_VOLUME)}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -10541,6 +10962,9 @@ def main():
     _load_rounds()
     _load_live_trading_state()
     _load_bought_tickers()
+    if ON_RAILWAY and not HISTORY_ON_VOLUME:
+        print("[history] WARNING: no DATA_DIR volume on Railway - data_cache is wiped on every redeploy. "
+              "Browsers that have the dashboard open will push their backup copy back. Add a volume at /data + DATA_DIR=/data.")
     total = sum(len(v) for v in _history.values())
     if total:
         print(f"Loaded {total} past graded windows from disk ({HISTORY_FILE}).")

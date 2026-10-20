@@ -46,3 +46,19 @@ UPDATE 3 (same day) - patch on top of the streak tile (nothing reset; streak + h
   Tap it for full round history: BTC / XRP, sealed / early / bot call, today / this week / all-time, day-by-day (60 days)
   and week-by-week (52 weeks) tables, and every graded round 300 at a time. Read from the saved history file
   (data_cache/kalshi_dashboard_history.json, up to 50,000 rounds) - the same one the streak tile uses.
+
+UPDATE 4 (same day)
+- ROUND HISTORY SAFETY NET: Railway wipes data_cache on every redeploy unless a volume is mounted, which erased the
+  round history + streak on each code push. Now every browser that opens the dashboard keeps a full backup (IndexedDB)
+  and pushes back any rounds the server lost - automatically, a few seconds after the page loads. A yellow banner shows
+  while history is not on a volume. Permanent fix (2 minutes): Railway -> service -> Settings -> Volumes -> mount at /data,
+  then Variables -> DATA_DIR=/data.
+- FLIP RADAR rebuilt: no longer mirrors Kalshi's price. 0-99% composite flip risk for the call on screen from
+  opposing 10s/30s/1m taker flow (+ net dollars while price moves at the line), cushion to the line + line crosses,
+  every exchange's bid/ask walls, market pace, and the final-minute 60s settlement average. LOW / WATCH / HIGH / CRITICAL
+  with the exact drivers listed. Kalshi's number is shown underneath as a reference only.
+- REVERSAL CALLS: the early / sealed call now goes to the LOSING side when the flip score of the current favorite is 55%+
+  and at least 3 of (RSI stretched 68+/32-, 58%+ of short-window flow against, candles turning, trend against, price
+  moving at the line) agree - RSI required unless 4+ agree. Shown as "REVERSAL ~4.5x" with the Kalshi payout, graded like
+  every call, and tracked separately in the round history (record, avg payout, units won/lost). The bot's own real-money
+  auto-buy is unchanged - reversal calls never place a trade on their own.
