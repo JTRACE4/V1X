@@ -6595,10 +6595,10 @@ function checkStageAlerts() {
       // 2026-10-20: both calls are read out loud, in full
       playCallChime(stage);
       const coin = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
-      const conf = { SUPER: 'super confident', GOOD: 'good confidence', WEAK: 'weak confidence' }[tier] || tier.toLowerCase();
-      const line = stage === 'sealed'
-        ? coin + '. Call locked. ' + dir + '. ' + conf + (sure ? ', ' + sure + ' percent sure' : '') + '.' + (rev ? ' This is a reversal call.' : '')
-        : coin + '. Early call. ' + dir + '. ' + conf + (sure ? ', ' + sure + ' percent' : '') + '.' + (rev ? ' Reversal.' : '');
+      const conf = { SUPER: 'Super confidence', GOOD: 'Good confidence', WEAK: 'Weak confidence' }[tier] || 'Confidence';
+      const d2 = dir === 'UP' ? 'up' : 'down';
+      const line = (stage === 'sealed' ? coin + '. Call locked: ' + d2 + '. ' : coin + '. Early call: ' + d2 + '. ')
+        + conf + (sure ? ', ' + sure + ' percent sure.' : '.') + (rev ? ' This is a reversal call.' : '');
       speakUrgent(line, 650);
     }
   });
@@ -6750,7 +6750,8 @@ function checkWhaleAlerts() {
       }
       if (soundEnabled && assetSoundEnabled[name] !== false) {
         playWhaleSound(wside);
-        speakDelayed(name + '. Whale ' + wside + (wusd >= 1e6 ? '. ' + (wusd / 1e6).toFixed(1) + ' million dollars.' : (wusd >= 1e3 ? '. ' + Math.round(wusd / 1e3) + ' thousand dollars.' : '.')));
+        const wcoin = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
+        speakDelayed(wcoin + '. Whale ' + wside + (wusd >= 1e6 ? ': ' + (wusd / 1e6).toFixed(1) + ' million dollars.' : (wusd >= 1e3 ? ': ' + Math.round(wusd / 1e3) + ' thousand dollars.' : '.')));
       }
     }
   });
@@ -7289,9 +7290,9 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playWhaleSound('sell'); showWhaleCrossing('BTC','sell')">Test whale SELL</button>
       <button onclick="speakRaw('Bitcoin. A flip might be happening.')">Test flip warning</button>
       <button onclick="speakRaw('Bitcoin. A flip is happening.')">Test flip alert</button>
-      <button onclick="speakRaw('Voice check. Whale buy. 2.4 million dollars.')">Test voice</button>
-      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin. Early call. UP. good confidence, 68 percent.'),650)">Test early call</button>
-      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('Bitcoin. Call locked. DOWN. super confident, 84 percent sure.'),650)">Test call locked</button>
+      <button onclick="speakRaw('Voice check. Whale buy: 2.4 million dollars.')">Test voice</button>
+      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin. Early call: up. Good confidence, 68 percent sure.'),650)">Test early call</button>
+      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('Bitcoin. Call locked: down. Super confidence, 84 percent sure.'),650)">Test call locked</button>
       <button onclick="playWallAlert('sell'); showWhaleCrossing('XRP','sell')">Test SELL wall</button>
       <button onclick="playWallAlert('buy'); showWhaleCrossing('XRP','buy')">Test BUY wall</button>
       <button onclick="playReversalAlarm('XRP'); speakRaw('XRP. Swinging down, against your call.')">Test voice alert</button>
