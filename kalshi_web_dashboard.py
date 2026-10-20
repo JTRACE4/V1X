@@ -5723,7 +5723,7 @@ function toggleAssetSound(assetName) {
   updateAssetToggleButtons();
   if (assetSoundEnabled[assetName]) {
     ensureAudioCtx();
-    playAlienSound(assetName); // confirmation beep so you can hear it's back on
+    speakRaw((assetName === 'BTC' ? 'Bitcoin' : assetName) + ' alerts on.');
   }
 }
 
@@ -5922,16 +5922,31 @@ function updateVoiceToggleButton() {
   btn.classList.toggle('asset-sound-off', !voiceAlertsEnabled);
 }
 
-// 2026-10-20: a warm female US-English voice. Picks the best one the phone / computer has (names differ per device).
-const VOICE_PREFS = ['Samantha', 'Ava', 'Allison', 'Susan', 'Zoe', 'Nicky', 'Microsoft Aria', 'Microsoft Jenny', 'Microsoft Michelle',
-  'Google US English', 'Microsoft Zira', 'Karen', 'Moira'];
+// ---- 2026-10-20 (b): ONE natural female voice. The server turns each line into speech with a neural voice
+// (/tts - Microsoft "Ava" by default, cached on disk so repeat lines are instant); if that ever fails the browser's own
+// best female voice reads it instead. Lines play one after another in a queue - two coins locking at the same second
+// no longer cut each other off.
+// Only these alerts make sound now: flip warnings, the early + sealed calls, whale trades (cha-ching / denied).
+const LEGACY_SOUNDS = false;
+const NEURAL_VOICES = { ava: 'Ava', jenny: 'Jenny', aria: 'Aria', emma: 'Emma', michelle: 'Michelle' };
+let neuralVoice = 'ava';
+try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VOICES || nv === 'device')) neuralVoice = nv; } catch (e) {}
+function setNeuralVoice(v) {
+  neuralVoice = v; neuralBroken = false;
+  try { localStorage.setItem('neuralVoice', v); } catch (e) {}
+  speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is ' + NEURAL_VOICES[v] + '. Bitcoin sealed call: up, 84 percent sure.');
+}
+// browser fallback: the most natural-sounding female voices first (premium / enhanced / natural before the old robotic ones)
+const VOICE_PREFS = ['Ava (Premium)', 'Zoe (Premium)', 'Ava (Enhanced)', 'Zoe (Enhanced)', 'Allison (Enhanced)', 'Samantha (Enhanced)',
+  'Microsoft Ava Online', 'Microsoft Aria Online', 'Microsoft Jenny Online', 'Microsoft Emma Online', 'Google US English',
+  'Ava', 'Zoe', 'Allison', 'Samantha', 'Microsoft Aria', 'Microsoft Jenny', 'Microsoft Zira', 'Karen'];
 let _voice = null;
 function pickVoice() {
   if (_voice) return _voice;
   try {
     const vs = window.speechSynthesis.getVoices() || [];
     for (const name of VOICE_PREFS) {
-      const v = vs.find(x => x.name.indexOf(name) === 0 && /^en(-|_)?US/i.test(x.lang)) || vs.find(x => x.name.indexOf(name) === 0);
+      const v = vs.find(x => x.name.indexOf(name) === 0 && /^en(-|_)?(US|GB|AU)/i.test(x.lang));
       if (v) { _voice = v; return v; }
     }
     _voice = vs.find(x => /^en(-|_)?US/i.test(x.lang) && /female|woman/i.test(x.name)) || vs.find(x => /^en(-|_)?US/i.test(x.lang)) || null;
@@ -5940,53 +5955,57 @@ function pickVoice() {
 }
 try { if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = () => { _voice = null; pickVoice(); }; } catch (e) {}
 
-function speakRaw(text) {
-  // unconditional - no toggle checks. Used by speak() below AND directly by
-  // the "Test voice alert" button, so the test proves the actual mechanism
-  // works regardless of whether voice/sound happen to be toggled off right
-  // now - same "test buttons work regardless" convention every other test
-  // button on this page already follows.
-  if (!('speechSynthesis' in window)) return;
+const voiceQ = [];
+let voiceBusy = false, neuralBroken = false, voiceEl = null;
+function _voiceEl() {
+  if (!voiceEl) { voiceEl = new Audio(); voiceEl.preload = 'auto'; }
+  return voiceEl;
+}
+function _deviceSay(text, done) {
+  if (!('speechSynthesis' in window)) { done(); return; }
   try {
-    // said once (was twice for a short stretch on 2026-09-25, reverted same
-    // day per user request - the extra repeat was adding real delay on top
-    // of the alert's own lag, which made it feel out of sync with the chart)
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(text.replace(/\bXRP\b/g, 'X R P'));
     const v = pickVoice();
     if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-US'; }
-    u.rate = 1.0;
-    u.pitch = 1.12;
-    // boosted 2026-09-28 per user request ("make it a little bit louder") -
-    // raises the floor and applies a 1.3x multiplier, capped at the Web
-    // Speech API's hard ceiling of 1.0
+    u.rate = 1.0; u.pitch = 1.05;
     u.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
+    u.onend = done; u.onerror = done;
     window.speechSynthesis.speak(u);
-  } catch (e) { /* speech synthesis unavailable/blocked - the sound alert already played, fine */ }
+    setTimeout(done, 9000);                                   // safety net - some browsers never fire onend
+  } catch (e) { done(); }
 }
-
-function speak(text) {
+function _voiceNext() {
+  if (voiceBusy) return;
+  const now = Date.now();
+  while (voiceQ.length && voiceQ[0].until < now) voiceQ.shift();  // too old to still be useful - drop it
+  const item = voiceQ.shift();
+  if (!item) return;
+  voiceBusy = true;
+  let finished = false;
+  const done = () => { if (finished) return; finished = true; voiceBusy = false; setTimeout(_voiceNext, 120); };
+  if (neuralVoice === 'device' || neuralBroken) { _deviceSay(item.text, done); return; }
+  const a = _voiceEl();
+  const fallback = () => { if (finished) return; try { a.onended = null; a.onerror = null; a.pause(); } catch (e) {} neuralBroken = true; _deviceSay(item.text, done); setTimeout(() => { neuralBroken = false; }, 120000); };
+  a.onended = done; a.onerror = fallback;
+  a.src = '/tts?v=' + neuralVoice + '&t=' + encodeURIComponent(item.text);
+  a.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
+  const pr = a.play();
+  if (pr && pr.catch) pr.catch(fallback);
+  setTimeout(() => { if (!finished && a.paused && a.currentTime === 0) fallback(); }, 6000);   // server too slow - read it locally
+  setTimeout(done, 15000);
+}
+function _voicePush(text, urgent, ttlMs) {
+  const item = { text: text, until: Date.now() + (ttlMs || 20000) };
+  if (urgent) voiceQ.unshift(item); else voiceQ.push(item);
+  _voiceNext();
+}
+function speakRaw(text) { _voicePush(text, true, 60000); }   // test buttons: always speak, no toggle checks
+function speak(text, urgent, ttlMs) {
   if (!voiceAlertsEnabled || !soundEnabled) return;
-  speakRaw(text);
+  _voicePush(text, urgent, ttlMs);
 }
-
-// speak() a beat AFTER the sound already played, so they don't talk over
-// each other - the delay is deliberately shorter than most alert sounds'
-// own duration so the voice lands right as the sound tail fades.
-// the flip itself outranks everything: drop any queued "building" speech and say it right away
-function speakUrgent(text, delayMs) {
-  setTimeout(() => {
-    try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
-    setTimeout(() => speak(text), 80);
-  }, delayMs === undefined ? 300 : delayMs);
-}
-
-function speakDelayed(text, delayMs) {
-  // shortened from 900ms 2026-09-25 - real lag on top of an already-lagging
-  // 60s swing detector made alerts feel stale/out of sync by the time they
-  // were heard, especially on a fast-reverting asset. Still enough of a gap
-  // to not talk over the alert sound's own tail.
-  setTimeout(() => speak(text), delayMs === undefined ? 400 : delayMs);
-}
+function speakUrgent(text, delayMs) { setTimeout(() => speak(text, true), delayMs === undefined ? 300 : delayMs); }
+function speakDelayed(text, delayMs) { setTimeout(() => speak(text, false, 10000), delayMs === undefined ? 400 : delayMs); }
 
 function updateAssetToggleButtons() {
   ['BTC', 'XRP'].forEach(name => {
@@ -6027,19 +6046,11 @@ function enableSound(quiet) {
   if (quiet === true) {
     // auto re-enable after a page reload: warm up speech silently, no beep
     try { const w = new SpeechSynthesisUtterance(' '); w.volume = 0; window.speechSynthesis.speak(w); } catch (e) {}
+    try { if (!voiceBusy) { const a = _voiceEl(); a.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='; const p = a.play(); if (p && p.catch) p.catch(() => {}); } } catch (e) {}
     return;
   }
-  playAlienSound('BTC'); // quick confirmation beep so you know it worked
-  // warm up speech synthesis on this same click gesture - some browsers
-  // need the FIRST speak() call to happen inside a user gesture before
-  // later programmatic ones (from the 1s refresh loop) are allowed through
-  if (voiceAlertsEnabled && 'speechSynthesis' in window) {
-    try {
-      const warmup = new SpeechSynthesisUtterance('Voice alerts on.');
-      warmup.volume = Math.max(0, Math.min(1, masterVolume));
-      window.speechSynthesis.speak(warmup);
-    } catch (e) {}
-  }
+  // one spoken line, played inside this click so phones unlock audio for the rest of the visit
+  if (voiceAlertsEnabled) speakRaw('Voice alerts on.');
 }
 
 function playAlienSound(assetName) {
@@ -6069,7 +6080,7 @@ function playAlienSound(assetName) {
 }
 
 function checkFlipAlerts() {
-  if (!soundEnabled) return;
+  if (!LEGACY_SOUNDS || !soundEnabled) return;
   const flips = document.querySelectorAll('.flip-alert');
   flips.forEach(el => {
     const key = el.getAttribute('data-flip-key');
@@ -6200,8 +6211,8 @@ function checkBuildingAlerts() {
     if (why === 'crit') flipFired.add(key + '::jump');
     if (!soundEnabled || assetSoundEnabled[name] === false) return;
     // 2026-10-20: voice only, no sound effect
-    const coin = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
-    speakUrgent(coin + '. ' + (why === 'crit' ? 'A flip is happening.' : 'A flip might be happening.'), 0);
+    const coin = name === 'BTC' ? 'Bitcoin' : name;
+    speakUrgent(why === 'crit' ? 'A flip is happening on ' + coin + '.' : 'Heads up: a flip might be happening on ' + coin + '.', 0);
   });
 }
 
@@ -6282,7 +6293,7 @@ const alertedWhales = new Set();
 const alertedWalls = new Set();
 
 function checkReversalAlerts() {
-  if (!soundEnabled) return;
+  if (!LEGACY_SOUNDS || !soundEnabled) return;
   const els = document.querySelectorAll('.boom-alert');
   els.forEach(el => {
     const name = el.getAttribute('data-boom-name');
@@ -6335,7 +6346,7 @@ function checkCertainFlipAlerts() {
     if (!name || !side || !key || alertedCertainFlips.has(key)) return;
     alertedCertainFlips.add(key);
     showBigFlipAlert(name, side);
-    if (soundEnabled && assetSoundEnabled[name] !== false) {
+    if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       playSirenAlert(name);
       speakUrgent(name + '. Siren. Flip, for sure, ' + side + '.');
     }
@@ -6435,7 +6446,7 @@ function checkWinAlerts() {
     if (!name || !key || alertedWins.has(key) || isNaN(amount)) return;
     alertedWins.add(key);
     showMoneyBanner(name, amount);
-    if (soundEnabled && assetSoundEnabled[name] !== false) {
+    if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       playChaChing();
       speakDelayed(name + '. Cha-ching! Won $' + amount.toFixed(2) + '.');
     }
@@ -6491,7 +6502,7 @@ function checkLossAlerts() {
     if (!name || !key || alertedLosses.has(key) || isNaN(amount)) return;
     alertedLosses.add(key);
     showLossBanner(name, amount);
-    if (soundEnabled && assetSoundEnabled[name] !== false) {
+    if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       playLossBuzz();
       speakDelayed(name + '. Lost $' + Math.abs(amount).toFixed(2) + '. Fuck you, Kalshi!');
     }
@@ -6554,7 +6565,7 @@ function checkRsiAlerts() {
     if (z !== prev) {
       rsiZone[name] = z; rsiDismissed[name] = false;
       try { sessionStorage.setItem('rsiZone', JSON.stringify(rsiZone)); } catch (e) {}
-      if (z && soundEnabled && assetSoundEnabled[name] !== false) {
+      if (z && LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
         playRsiAlert(z);
         speakDelayed(name + '. Warning. ' + (z === 'under' ? 'Oversold.' : 'Overbought.'), 600);
       }
@@ -6613,7 +6624,7 @@ function checkIncomingAlerts() {
     showIncomingBanner(name, side, usd, 'INCOMING ' + side.toUpperCase(),
       fmtUsdShort(usd) + ' of aggressive ' + (side === 'buy' ? 'BUYING' : 'SELLING') + ' in the last 10 seconds across ' +
       el.getAttribute('data-venues') + ' exchanges (biggest: ' + el.getAttribute('data-top') + ') - ahead of the chart');
-    if (soundEnabled && assetSoundEnabled[name] !== false) {
+    if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       playWhaleSound(side); playWallAlert(side);
       speakUrgent(name + '. Incoming ' + side + '. ' + spokenUsd(usd) + '.');
     }
@@ -6629,7 +6640,7 @@ function checkLockAlerts() {
     if (!name || !call || !key || alertedLocks.has(key)) return;
     alertedLocks.add(key);
     showLockToast(name, call, el.getAttribute('data-lock-kp'));
-    if (soundEnabled && assetSoundEnabled[name] !== false) {
+    if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       speakDelayed(name + '. Locked ' + call + '.', 100);
     }
   });
@@ -6667,7 +6678,8 @@ function checkStageAlerts() {
     try { sessionStorage.setItem('alertedStages', JSON.stringify(Array.from(alertedStages).slice(-40))); } catch (e) {}
     const tier = el.getAttribute('data-tier') || '', why = el.getAttribute('data-why') || '';
     const what = stage === 'sealed' ? 'SEALED 8-min' : 'EARLY 4-min';
-    const coinName = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
+    const coinName = name === 'BTC' ? 'Bitcoin' : name;
+    const callName = stage === 'sealed' ? 'sealed call' : 'early call';
     if (!call) {
       const lean = el.getAttribute('data-lean');
       const sit = el.getAttribute('data-sitout') === '1';
@@ -6675,10 +6687,9 @@ function checkStageAlerts() {
       showLockToast(name, what + (sit ? ' - SIT THIS ONE OUT' : ' call SKIPPED'), why);
       if (soundEnabled && assetSoundEnabled[name] !== false) {
         playCallChime('early');
-        const label = stage === 'sealed' ? 'Call' : 'Early call';
         speakUrgent(sit && lean
-          ? coinName + '. ' + label + ': leaning ' + (lean === 'YES' ? 'up' : 'down') + ', but ' + why2 + '. Sit this one out.'
-          : coinName + '. ' + label + ' skipped. ' + why + '.', 650);
+          ? coinName + ' ' + callName + ': leaning ' + (lean === 'YES' ? 'up' : 'down') + ', but sit this one out.'
+          : coinName + ' ' + callName + ': skipped this round.', 650);
       }
       return;
     }
@@ -6687,7 +6698,7 @@ function checkStageAlerts() {
       showLockToast(name, 'LATE CALL - price has decided: ' + dirL.toUpperCase(), '');
       if (soundEnabled && assetSoundEnabled[name] !== false) {
         playCallChime('sealed');
-        speakUrgent(coinName + '. Late call. Price has decided: ' + dirL + '.', 650);
+        speakUrgent(coinName + ' late call: ' + dirL + '. The price has decided.', 650);
       }
       return;
     }
@@ -6697,11 +6708,11 @@ function checkStageAlerts() {
     if (soundEnabled && assetSoundEnabled[name] !== false) {
       // 2026-10-20: both calls are read out loud, in full
       playCallChime(stage);
-      const coin = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
-      const conf = { SUPER: 'Super confidence', GOOD: 'Good confidence', WEAK: 'Weak confidence' }[tier] || 'Confidence';
+      // e.g. "Bitcoin sealed call: up, 84 percent sure. Super confidence."
       const d2 = dir === 'UP' ? 'up' : 'down';
-      const line = (stage === 'sealed' ? coin + '. Call locked: ' + d2 + '. ' : coin + '. Early call: ' + d2 + '. ')
-        + conf + (sure ? ', ' + sure + ' percent sure.' : '.') + (rev ? ' This is a reversal call.' : '');
+      const conf = { SUPER: ' Super confidence.', GOOD: ' Good confidence.', WEAK: ' Weak confidence.' }[tier] || '';
+      const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent sure.' : '.') + conf
+        + (rev ? ' This one is a reversal.' : '');
       speakUrgent(line, 650);
     }
   });
@@ -6730,7 +6741,7 @@ function checkFlowAlerts() {
       const det = el.querySelector('.fa-detail');
       showIncomingBanner(name, side, usd, title, det ? det.textContent : '');
     }
-    if (soundEnabled && assetSoundEnabled[name] !== false && sev >= 2) {
+    if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false && sev >= 2) {
       if (kind === 'liq' || kind === 'liqcascade') playWhaleSound(side); else playWallAlert(side === 'buy' ? 'buy' : 'sell');
       speakDelayed(name + '. ' + (FLOW_SPOKEN[kind] || 'Alert') + (side === 'buy' ? ', up.' : (side === 'sell' ? ', down.' : '.'))
         + (usd >= 1e5 ? ' ' + spokenUsd(usd) + '.' : ''), 200);
@@ -6747,7 +6758,7 @@ function checkRegimeAlerts() {
     const target = FAVORABLE_REGIME[name];
     if (!name || !target || !regime) return;
     const prev = lastRegimeSeen[name];
-    if (regime === target && prev !== target && soundEnabled && assetSoundEnabled[name] !== false) {
+    if (regime === target && prev !== target && LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       playOpportunityChime(name);
       speakDelayed(name + '. Chime. Favorable conditions now.');
     }
@@ -6758,46 +6769,64 @@ function checkRegimeAlerts() {
 // whale-song sound - a slow, deep, resonant two-part moan (down-glide then
 // up-glide), distinct from every other alert. Rises in pitch a bit for a
 // whale BUY, drops for a whale SELL, so you can tell direction by ear.
-function playWhaleSound(side) {
-  // 2026-10-20: whale BUY = cash-register "cha-ching", whale SELL = a "denied" double beep
+function playWhaleSound(side) { if (side === 'buy') playChaChingBig(); else playDenied(); }   // test buttons / old callers
+// 2026-10-20 (b): BIG cash-register cha-ching - drawer slam, bright bell, then a spill of coins
+function playChaChingBig() {
   try {
     const ctx = ensureAudioCtx();
     const now = ctx.currentTime;
-    if (side === 'buy') {
-      // "cha" - short noisy drawer slide
-      const len = Math.floor(ctx.sampleRate * 0.09);
+    const out = ctx.createGain(); out.gain.value = 1; out.connect(ctx.destination);
+    const noise = (t, dur, f, type, amp) => {
+      const len = Math.floor(ctx.sampleRate * dur);
       const buf = ctx.createBuffer(1, len, ctx.sampleRate);
       const d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-      const nz = ctx.createBufferSource(); nz.buffer = buf;
-      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
-      const ng = ctx.createGain(); ng.gain.value = vol(0.35);
-      nz.connect(hp); hp.connect(ng); ng.connect(ctx.destination);
-      nz.start(now);
-      // "ching" - bright bell: two partials, long shimmering tail
-      [[2093, 0.5], [3136, 0.35], [4186, 0.18], [2637, 0.25]].forEach(([f, a], i) => {
-        const o = ctx.createOscillator(); const g = ctx.createGain();
-        o.type = 'sine'; o.frequency.setValueAtTime(f, now + 0.11);
-        g.gain.setValueAtTime(0.0001, now + 0.11);
-        g.gain.linearRampToValueAtTime(vol(a), now + 0.115);
-        g.gain.exponentialRampToValueAtTime(0.0008, now + 0.11 + 0.9 + i * 0.1);
-        o.connect(g); g.connect(ctx.destination);
-        o.start(now + 0.11); o.stop(now + 1.2);
-      });
-    } else {
-      // denied: two short low square beeps
-      [0, 0.22].forEach(t => {
-        const o = ctx.createOscillator(); const g = ctx.createGain();
-        o.type = 'square'; o.frequency.setValueAtTime(196, now + t);
-        g.gain.setValueAtTime(0.0001, now + t);
-        g.gain.linearRampToValueAtTime(vol(0.28), now + t + 0.01);
-        g.gain.setValueAtTime(vol(0.28), now + t + 0.14);
-        g.gain.linearRampToValueAtTime(0.0001, now + t + 0.16);
-        o.connect(g); g.connect(ctx.destination);
-        o.start(now + t); o.stop(now + t + 0.18);
-      });
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f;
+      const g = ctx.createGain(); g.gain.value = vol(amp);
+      src.connect(fl); fl.connect(g); g.connect(out); src.start(t);
+    };
+    // "cha" - the drawer: a scrape and a solid thunk
+    noise(now, 0.12, 3000, 'bandpass', 0.55);
+    noise(now + 0.10, 0.10, 400, 'lowpass', 0.9);
+    // "ching" - a loud bell with bright overtones and a long ring
+    [[1568, 0.55, 1.6], [3136, 0.35, 1.2], [4699, 0.22, 0.9], [2349, 0.30, 1.4], [6272, 0.10, 0.5]].forEach(([f, a, len]) => {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(f, now + 0.18);
+      g.gain.setValueAtTime(0.0001, now + 0.18);
+      g.gain.linearRampToValueAtTime(vol(a), now + 0.185);
+      g.gain.exponentialRampToValueAtTime(0.0006, now + 0.18 + len);
+      o.connect(g); g.connect(out); o.start(now + 0.18); o.stop(now + 0.2 + len);
+    });
+    // coins spilling
+    for (let i = 0; i < 9; i++) {
+      const t = now + 0.35 + i * 0.055 + Math.random() * 0.03;
+      const f = 3500 + Math.random() * 2500;
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(vol(0.18), t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.12);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.14);
     }
-  } catch (e) { /* autoplay may be blocked until first interaction - fine */ }
+  } catch (e) { /* audio blocked until the page is clicked once */ }
+}
+// 2026-10-20 (b): "denied" - the low two-buzz "can't go through" sound
+function playDenied() {
+  try {
+    const ctx = ensureAudioCtx();
+    const now = ctx.currentTime;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.connect(ctx.destination);
+    [[0, 0.20], [0.27, 0.34]].forEach(([t, len]) => {
+      [110, 116.5].forEach(f => {                                   // two slightly-off tones = a harsh buzz
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(f, now + t);
+        g.gain.setValueAtTime(0.0001, now + t);
+        g.gain.linearRampToValueAtTime(vol(0.42), now + t + 0.012);
+        g.gain.setValueAtTime(vol(0.42), now + t + len - 0.03);
+        g.gain.linearRampToValueAtTime(0.0001, now + t + len);
+        o.connect(g); g.connect(lp); o.start(now + t); o.stop(now + t + len + 0.02);
+      });
+    });
+  } catch (e) {}
 }
 
 // whale swims across THAT COIN'S card only (not the whole screen) when a
@@ -6852,9 +6881,13 @@ function checkWhaleAlerts() {
         showIncomingBanner(name, wside, wusd, 'HUGE ' + wside.toUpperCase() + ' PRINT', fmtUsdShort(wusd) + ' just went through on ' + (el.getAttribute('data-whale-venue') || 'an exchange'));
       }
       if (soundEnabled && assetSoundEnabled[name] !== false) {
-        playWhaleSound(wside);
-        const wcoin = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
-        speakDelayed(wcoin + '. Whale ' + wside + (wusd >= 1e6 ? ': ' + (wusd / 1e6).toFixed(1) + ' million dollars.' : (wusd >= 1e3 ? ': ' + Math.round(wusd / 1e3) + ' thousand dollars.' : '.')));
+        // WITH the move (or a buy when there is no clear move yet) = cha-ching; AGAINST the move = denied
+        const trend = el.getAttribute('data-whale-trend') || '';
+        const withMove = trend ? ((wside === 'buy') === (trend === 'up')) : wside === 'buy';
+        if (withMove) playChaChingBig(); else playDenied();
+        const wcoin = name === 'BTC' ? 'Bitcoin' : name;
+        const amt = wusd >= 1e6 ? (wusd / 1e6).toFixed(1) + ' million dollar ' : (wusd >= 1e3 ? Math.round(wusd / 1e3) + ' thousand dollar ' : '');
+        speakDelayed(amt.charAt(0).toUpperCase() + amt.slice(1) + (amt ? 'whale ' : 'Whale ') + wside + ' on ' + wcoin + (withMove ? '.' : ', against the move.'), 1300);
       }
     }
   });
@@ -6895,7 +6928,7 @@ function checkWallAlerts() {
       if (wu > 0) {
         showIncomingBanner(name, wside, wu, 'INCOMING ' + wside.toUpperCase() + ' WALL', fmtUsdShort(wu) + ' resting ' + (wside === 'sell' ? 'offer' : 'bid') + ' parked at ' + el.getAttribute('data-wall-price') + ' (Coinbase book) - ahead of the chart');
       }
-      if (soundEnabled && assetSoundEnabled[name] !== false) {
+      if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
         playWallAlert(wside);
         speakDelayed(name + '. ' + (wside === 'sell' ? 'Sell wall.' : 'Buy wall.'));
       }
@@ -7337,7 +7370,7 @@ function toggleWr() {
 }
 setInterval(refresh, 1000);
 window.onload = function() {
-  updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton();
+  updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); try { const vp = document.getElementById('voice-pick'); if (vp) vp.value = neuralVoice; } catch (e) {}
   let wantedSound = false;
   try { wantedSound = localStorage.getItem('soundWanted') === '1'; } catch (e) {}
   if (wantedSound && !soundEnabled) {
@@ -7381,29 +7414,22 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       </span>
       <button id="toggle-BTC" onclick="toggleAssetSound('BTC')">BTC alerts: ON</button>
       <button id="toggle-XRP" onclick="toggleAssetSound('XRP')">XRP alerts: ON</button>
-      <button id="toggle-building" onclick="toggleBuildingAlerts()">Building-alert beeps: OFF</button>
       <button id="toggle-voice" onclick="toggleVoiceAlerts()">Voice alerts: ON</button>
+      <label style="color:#bcaaa1; font-size:13px; margin:0 6px 0 4px;">Voice
+        <select id="voice-pick" onchange="setNeuralVoice(this.value)" style="background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit;">
+          <option value="ava">Ava (natural)</option><option value="jenny">Jenny (natural)</option><option value="aria">Aria (natural)</option>
+          <option value="emma">Emma (natural)</option><option value="michelle">Michelle (natural)</option><option value="device">This device's voice</option>
+        </select></label>
       <br>
-      <button onclick="playAlienSound('BTC')">Test BTC sound</button>
-      <button onclick="playAlienSound('ETH')">Test ETH sound</button>
-      <button onclick="playAlienSound('XRP')">Test XRP sound</button>
-      <button onclick="playAlienSound('NEAR')">Test NEAR sound</button>
-      <button onclick="playAlienSound('BNB')">Test BNB sound</button>
-      <button onclick="playWhaleSound('buy'); showWhaleCrossing('BTC','buy')">Test whale BUY</button>
-      <button onclick="playWhaleSound('sell'); showWhaleCrossing('BTC','sell')">Test whale SELL</button>
-      <button onclick="speakRaw('Bitcoin. A flip might be happening.')">Test flip warning</button>
-      <button onclick="speakRaw('Bitcoin. A flip is happening.')">Test flip alert</button>
-      <button onclick="speakRaw('Voice check. Whale buy: 2.4 million dollars.')">Test voice</button>
-      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin. Early call: up. Good confidence, 68 percent sure.'),650)">Test early call</button>
-      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('Bitcoin. Call locked: down. Super confidence, 84 percent sure.'),650)">Test call locked</button>
-      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('X R P. Call: leaning down, but line flips are active. Sit this one out.'),650)">Test sit out</button>
-      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('Bitcoin. Late call. Price has decided: up.'),650)">Test late call</button>
-      <button onclick="playWallAlert('sell'); showWhaleCrossing('XRP','sell')">Test SELL wall</button>
-      <button onclick="playWallAlert('buy'); showWhaleCrossing('XRP','buy')">Test BUY wall</button>
-      <button onclick="playReversalAlarm('XRP'); speakRaw('XRP. Swinging down, against your call.')">Test voice alert</button>
-      <button onclick="playWallAlert('sell'); showIncomingBanner('BTC','sell',2500000,'FAKE BREAKOUT ABOVE THE 15-MIN HIGH','test banner - the price poked above the high and came right back'); speakRaw('BTC. Fake breakout, down.')">Test fake-breakout alert</button>
-      <button onclick="showLockToast('BTC','SEALED 8-min: UP - SUPER',''); speakRaw('BTC. Sealed call locked. UP. super.')">Test sealed-call voice</button>
-      <div class="hint">Browsers block audio until you click something on the page first - click "enable" once per visit. Test buttons work regardless, so you can learn each one ahead of time. Whale sound = a big single trade just hit the tape (rises for a buy, drops for a sell). Voice alerts only speak during a real fast move, whale or big-order event - the test button here plays one on demand so you can check it works without waiting for one.</div>
+      <button onclick="speakRaw('Heads up: a flip might be happening on Bitcoin.')">Test flip warning</button>
+      <button onclick="speakRaw('A flip is happening on XRP.')">Test flip alert</button>
+      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure. Good confidence.'),650)">Test early call</button>
+      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure. Super confidence.'),650)">Test sealed call</button>
+      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('2.4 million dollar whale buy on Bitcoin.'),1300)">Test whale WITH the move</button>
+      <button onclick="playDenied(); setTimeout(()=>speakRaw('850 thousand dollar whale sell on XRP, against the move.'),1300)">Test whale AGAINST the move</button>
+      <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
+        the early (4:00) and sealed (8:00) calls, and whale trades - a cha-ching when the whale pushes price further the way it is
+        already going, a "denied" buzz when it trades against the move.</div>
     </div>
   </details>
 </div>
@@ -9911,7 +9937,13 @@ def render_html():
                            f'data-venues="{_inc["venues"]}" data-top="{_inc["top"]}" data-key="{name}::{_inc["ts"]:.0f}" style="display:none;"></span>'
                            if _inc else "")
         whale_alert_side = whale.get("alert_side")
+        # 2026-10-20 (b): which way price is heading right now (last 30s, else where it sits vs the line) - a whale trading WITH
+        # that move plays the cha-ching, one trading AGAINST it plays the 'denied' buzzer
+        _wt = d.get("micro_dir") if d.get("micro_dir") in ("up", "down") else None
+        if _wt is None and d.get("spot_price") is not None and d.get("target_price"):
+            _wt = "up" if d["spot_price"] >= d["target_price"] else "down"
         whale_marker = (f'<span class="whale-alert" data-whale-name="{name}" data-whale-usd="{whale.get("alert_usd") or 0:.0f}" '
+                        f'data-whale-trend="{_wt or ""}" '
                         f'data-whale-venue="{_vname(whale.get("alert_venue") or "")}" '
                         f'data-whale-side="{whale_alert_side}" data-whale-key="{name}::{whale.get("alert_ts")}" '
                         f'style="display:none;"></span>'
@@ -10821,6 +10853,72 @@ def render_html():
     return "".join(parts) if parts else "<p>Waiting for first poll...</p>"
 
 
+# ================================================================ natural voice (2026-10-20 b)
+# The dashboard's spoken alerts are turned into speech here with a neural female voice (Microsoft's Edge read-aloud voices via
+# the edge-tts package - no key needed) and cached on the data volume, so a line like "Bitcoin sealed call: up, 84 percent
+# sure." is generated once and then served instantly. If anything fails the page falls back to the browser's own voice.
+_TTS_VOICES = {"ava": "en-US-AvaNeural", "jenny": "en-US-JennyNeural", "aria": "en-US-AriaNeural",
+               "emma": "en-US-EmmaNeural", "michelle": "en-US-MichelleNeural"}
+_TTS_DIR = os.path.join(_DATA_ROOT, "tts_cache")
+_TTS_OK = re.compile(r"^[A-Za-z0-9 .,:;'!?%$&()\-]{1,220}$")
+_tts_locks = {}
+_tts_locks_guard = threading.Lock()
+_tts_fail_until = [0.0]
+
+
+def _tts_mp3(text, voice_key):
+    text = " ".join((text or "").split())
+    if not _TTS_OK.match(text):
+        return None
+    voice = _TTS_VOICES.get(voice_key, _TTS_VOICES["ava"])
+    key = hashlib.sha1(f"{voice}|{text}".encode()).hexdigest()
+    fp = os.path.join(_TTS_DIR, key + ".mp3")
+    if os.path.isfile(fp):
+        with open(fp, "rb") as f_:
+            return f_.read()
+    if time.time() < _tts_fail_until[0]:
+        return None
+    with _tts_locks_guard:
+        lk = _tts_locks.setdefault(key, threading.Lock())
+    with lk:
+        if os.path.isfile(fp):
+            with open(fp, "rb") as f_:
+                return f_.read()
+        try:
+            import asyncio
+            import edge_tts
+            os.makedirs(_TTS_DIR, exist_ok=True)
+            tmp = fp + ".part"
+
+            async def _gen():
+                await edge_tts.Communicate(text.replace("XRP", "X R P"), voice, rate="+4%").save(tmp)
+            asyncio.run(asyncio.wait_for(_gen(), timeout=12))
+            if os.path.getsize(tmp) < 500:
+                raise RuntimeError("empty audio")
+            os.replace(tmp, fp)
+            _tts_trim_cache()
+            with open(fp, "rb") as f_:
+                return f_.read()
+        except Exception as e:
+            print(f"[tts] {voice} failed: {e!r}")
+            _tts_fail_until[0] = time.time() + 60          # back off for a minute; the page uses the device voice meanwhile
+            return None
+        finally:
+            with _tts_locks_guard:
+                _tts_locks.pop(key, None)
+
+
+def _tts_trim_cache(keep=3000):
+    try:
+        files = [os.path.join(_TTS_DIR, f) for f in os.listdir(_TTS_DIR) if f.endswith(".mp3")]
+        if len(files) > keep:
+            files.sort(key=os.path.getmtime)
+            for f in files[:len(files) - keep]:
+                os.remove(f)
+    except Exception:
+        pass
+
+
 # ================================================================ accounts + public site (2026-10-20)
 # "/" is the public welcome page (free live chart, news, money habits). The dashboard lives at "/app" and needs an approved
 # account; a device that logged in once stays recognized. Trading controls are owner-only.
@@ -11108,6 +11206,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(403, "Owner only.", "text/plain")
         if parsed.path == "/guide":
             return self._send(200, _site.guide_html(user))
+        if parsed.path == "/tts":
+            qs_t = urllib.parse.parse_qs(parsed.query)
+            mp3 = _tts_mp3((qs_t.get("t") or [""])[0], (qs_t.get("v") or ["ava"])[0])
+            if not mp3:
+                return self._send(503, "voice unavailable", "text/plain")
+            return self._send(200, mp3, "audio/mpeg", [("Cache-Control", "private, max-age=86400")])
         if parsed.path == "/admin":
             return self._send(200, _site.admin_page(user, _auth.DB, _auth.email_ready(), "", _admin_reset_links))
         if parsed.path in ("/debug_poll", "/debug_threads") and self.client_address[0] not in ("127.0.0.1", "::1"):
