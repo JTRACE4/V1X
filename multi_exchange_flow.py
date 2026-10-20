@@ -796,6 +796,10 @@ def _feeds():
 # exchange's last trade price vs Coinbase. Same numbers aggr.trade / Bookmap / TradingView show, straight from the source.
 # A venue counting wildly more than its own average (a units bug, or double counting) is flagged on the page.
 VOL24 = {}            # venue -> {"btc": 24h volume in BTC, "ts": fetched at}
+# 2026-10-20 patch: venues whose buy / sell volume is judged ONLY from their own WebSocket trade ticks (taker side flag, summed
+# in the hub's rolling per-second buffer, de-duplicated across reconnects) - never against their 24h ticker snapshot. Kraken's
+# ticker volume and its trade feed drift apart after reconnect gaps, which tripped a false "looks off" warning.
+TICK_ONLY_VENUES = ("kraken",)
 
 
 def _v24_fetchers():
@@ -849,25 +853,28 @@ def math_check(asset="BTC"):
     with HUB.lock:
         got = {}
         first = {}
+        side_q = {}
         for s_, vd in HUB.buckets.get(asset, {}).items():
             if s_ < now - 899:
                 continue
             for v, x in vd.items():
                 got[v] = got.get(v, 0.0) + x[3] + x[4]
+                bq = side_q.setdefault(v, [0.0, 0.0])
+                bq[0] += x[3]; bq[1] += x[4]
                 first[v] = min(first.get(v, s_), s_)
         px = {v: p for (v, a), p in HUB.last_price.items() if a == asset}
     ref = px.get("coinbase")
     rows = []
     paces = []
     for v, q in got.items():
-        vv = VOL24.get(v)
+        vv = VOL24.get(v) if v not in TICK_ONLY_VENUES else None
         if vv:
             paces.append(q / (vv["btc"] / 86400 * max(60, now - first[v] + 1)))
     paces.sort()
     med = paces[len(paces) // 2] if paces else None
     for v, q in got.items():
         span = max(60, now - first[v] + 1)
-        vv = VOL24.get(v)
+        vv = VOL24.get(v) if v not in TICK_ONLY_VENUES else None
         norm = vv["btc"] / 86400 * span if vv else None
         ratio = (q / norm) if norm else None
         pdiff = ((px[v] / ref - 1) * 100) if (ref and px.get(v)) else None
@@ -877,7 +884,8 @@ def math_check(asset="BTC"):
                 or (settled and rel is not None and norm >= 5 and rel < 0.15)
                 or (pdiff is not None and abs(pdiff) > 0.5))
         rows.append({"venue": v, "label": VENUES.get(v, (v, ""))[0], "kind": VENUES.get(v, ("", "spot"))[1], "counted": q, "span": span,
-                     "normal": norm, "ratio": ratio, "pdiff": pdiff, "flag": flag})
+                     "normal": norm, "ratio": ratio, "pdiff": pdiff, "flag": flag,
+                     "tick_only": v in TICK_ONLY_VENUES, "buy_q": side_q.get(v, [0, 0])[0], "sell_q": side_q.get(v, [0, 0])[1]})
     rows.sort(key=lambda r: -r["counted"])
     tot_c = sum(r["counted"] for r in rows if r["normal"])
     tot_n = sum(r["normal"] for r in rows if r["normal"])

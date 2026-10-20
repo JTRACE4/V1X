@@ -31,3 +31,18 @@ UPDATE 2 (same day)
   dots on every cross, 4:00 / 8:00 marks, result and call check marks. First start backfills from your existing log.
 - Chart patterns: AMD (accumulation-manipulation-distribution) added; bull/bear flags and cup-with-handle now also
   show the confirmed BREAKOUT; rising / falling wedges unchanged (already detected, with breakout confirmation).
+
+UPDATE 3 (same day) - patch on top of the streak tile (nothing reset; streak + history carry on)
+- WALL MOVED vs PULLED: a big Coinbase wall that disappears and re-appears within 2s on the same side at +/-15% size is
+  logged as "WALL MOVED UP/DOWN ($old -> $new)" - repeat moves of the same wall update ONE alert with a move count.
+  Only a wall that is never re-quoted is "PULLED / SPOOF", and only if it sat within 0.15% of price when it vanished.
+- Live price + line crosses use the CF Benchmarks spot constituents only (Coinbase, Kraken, Bitstamp, Gemini; LMAX if a
+  feed is added). Perps keep feeding the buy-pressure bar but can never fake a line cross.
+- Final minute: PROJECTED SETTLEMENT (the running 60-second average Kalshi settles on) under the target, plus the average
+  the remaining seconds need to flip it (LOCKED when that is 0.25%+ away from live price).
+- Kraken: judged on its own WebSocket trade ticks only (taker b/s side, rolling buffer, de-duplicated) - no longer compared
+  with Kraken's 24h ticker snapshot, which caused the false "Kraken looks off" math-check warning.
+- WIN RATE badge top-right (sits in the empty corner on phones): current streak, all-time win %, today's record.
+  Tap it for full round history: BTC / XRP, sealed / early / bot call, today / this week / all-time, day-by-day (60 days)
+  and week-by-week (52 weeks) tables, and every graded round 300 at a time. Read from the saved history file
+  (data_cache/kalshi_dashboard_history.json, up to 50,000 rounds) - the same one the streak tile uses.

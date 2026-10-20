@@ -2362,6 +2362,9 @@ _ticks_lock = threading.Lock()
 # returns None so the caller falls back to a fresh REST price instead of a
 # frozen tick.
 VENUE_STALE_SECONDS = 45
+# CF Benchmarks BRTI / XRP_RTI constituent spot exchanges - the ONLY venues allowed into the live price / line-cross blend.
+# Perps (Bybit, Binance futures, ...) still drive the buy-pressure bar, just never the settlement-style price.
+SPOT_INDEX_VENUES = ("coinbase", "kraken", "bitstamp", "gemini", "lmax")
 LIVE_PRICE_STALE_SECONDS = 30
 
 COINBASE_WS_URL = "wss://ws-feed.exchange.coinbase.com"
@@ -2563,6 +2566,12 @@ def _flow_to_legacy(venue, asset, usd, side, price):
     size = usd / price
     with _ticks_lock:
         _record_trade_volume(symbol, price, size, side)
+        # 2026-10-20 patch: the live price + line crosses track the CF Benchmarks settlement-index SPOT constituents only.
+        # Coinbase + Kraken feed the blend directly; Bitstamp and Gemini (and LMAX, if a feed is ever added) join here.
+        # Perps / USDT venues never enter the blend, so funding / basis gaps can't fake a line cross.
+        if venue in SPOT_INDEX_VENUES:
+            _exchange_last.setdefault(symbol, {})[venue] = (price, size, time.time())
+            _update_blended(symbol)
 
 
 def _print_to_legacy(pr):
@@ -3996,6 +4005,7 @@ def poll_loop():
                             "locked_momentum_ratio": prev_lock.get("locked_momentum_ratio"),
                             "locked_wall_usd": prev_lock.get("locked_wall_usd"),
                             "locked_wall_dist_pct": prev_lock.get("locked_wall_dist_pct"),
+                            "strike": prev_lock.get("target"),
                         })
                         try:
                             _rs = round_line_stats(asset["symbol"], prev_lock["target"], prev_lock.get("open_ts"),
@@ -5142,6 +5152,35 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .sc-pct { font-size:30px; font-weight:800; color:#fbf4ec; line-height:1; }
 .sc-wl { font-size:14px; line-height:1.35; }
 .sc-cur { margin:8px 0 6px; }
+.twap-lock { margin-top:4px; padding:4px 6px; border:1px dashed #4a3c43; border-radius:8px; }
+.twap-avg { font-weight:800; font-size:18px; line-height:1.2; }
+.twap-need { font-size:12px; line-height:1.3; }
+.g-top { position:relative; }
+.wr-badge { margin-left:auto; cursor:pointer; text-align:right; padding:5px 10px; border-radius:12px; border:1px solid #4a3c43;
+  background:rgba(20,16,20,0.85); min-width:96px; line-height:1.2; -webkit-tap-highlight-color:transparent; }
+.wr-badge:empty { display:none; }
+.wr-streak { font-weight:800; font-size:18px; } .wr-streak span { font-size:11px; font-weight:600; opacity:0.7; }
+.wr-streak.wr-w { color:#e5b85c; } .wr-streak.wr-l { color:#a99be0; }
+.wr-sub { font-size:11px; opacity:0.85; white-space:nowrap; }
+.wr-panel { display:none; position:fixed; z-index:9000; top:calc(env(safe-area-inset-top,0px) + 70px); right:8px; left:auto; bottom:8px;
+  width:min(460px, calc(100vw - 16px)); overflow:auto; background:#171217; border:1px solid #4a3c43; border-radius:14px; padding:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.55); }
+.wr-panel.open { display:block; }
+.wr-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.wr-tabs { display:flex; gap:4px; margin-bottom:5px; flex-wrap:wrap; }
+.wr-btn { flex:1; background:#211a21; color:#e8dfe3; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit; font-size:12px; cursor:pointer; }
+.wr-btn.on { background:#e9a5bb; color:#1a1218; border-color:#e9a5bb; font-weight:700; }
+.wr-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; margin:6px 0; }
+.wr-grid div { background:#211a21; border-radius:8px; padding:6px; text-align:center; font-size:11px; }
+.wr-grid b { display:block; font-size:16px; }
+.wr-more { margin:4px 0; } .wr-more summary { cursor:pointer; font-size:12px; }
+.wr-list { border-top:1px solid #33282f; margin-top:6px; }
+.wr-row { display:flex; justify-content:space-between; gap:8px; padding:5px 2px; border-bottom:1px solid #261e25; font-size:12px; }
+@media (max-width:760px) {
+  .wr-badge { position:absolute; top:2px; right:0; min-width:0; padding:4px 8px; }
+  .wr-streak { font-size:16px; }
+  .wr-panel { top:calc(env(safe-area-inset-top,0px) + 60px); }
+}
 .sc-streak { display:inline-block; padding:4px 12px; border-radius:8px; font-size:14px; font-weight:800; letter-spacing:0.5px; }
 .sc-streak.win { color:#3dd69c; background:rgba(90,209,160,0.12); border:1px solid #26a878; }
 .sc-streak.loss { color:#f05454; background:rgba(240,84,84,0.12); border:1px solid #cf3b3b; }
@@ -6288,7 +6327,7 @@ const alertedFlow = new Set();
 let flowAlertsPrimed = false;
 try { JSON.parse(sessionStorage.getItem('alertedFlow') || '[]').forEach(k => alertedFlow.add(k)); } catch (e) {}
 const FLOW_SPOKEN = { sweep: 'Big order', xsweep: 'Rush on every exchange', stoprun: 'Fake breakout', liq: 'Forced sale',
-  liqcascade: 'Wave of forced selling', absorbed: 'Big order filled', pulled: 'Big order canceled', sweep1m: 'New high or low', breakout: 'Breakout' };
+  liqcascade: 'Wave of forced selling', absorbed: 'Big order filled', pulled: 'Order pulled', moved: 'Wall moved', sweep1m: 'New high or low', breakout: 'Breakout' };
 function checkFlowAlerts() {
   const now = Date.now() / 1000;
   document.querySelectorAll('.fa-item').forEach(el => {
@@ -6736,6 +6775,7 @@ async function refresh() {
     }
   }
   contentEl.innerHTML = data.html;
+  try { updateWrBadge(data.wr); } catch (e) {}
   if (savedId) {
     const restored = document.getElementById(savedId);
     if (restored && (restored.tagName === 'INPUT' || restored.tagName === 'TEXTAREA')) {
@@ -6767,6 +6807,43 @@ async function refresh() {
   applyOverlays();
   applyMkt();
 }
+// ---- win rate badge + round history panel (2026-10-20)
+let wrData = null, wrState = {asset: null, call: 'sealed', range: 'all', limit: 300}, wrOpen = false, wrTimer = null;
+function wrAsset() {
+  let v = 'both'; try { v = localStorage.getItem('assetView') || 'both'; } catch (e) {}
+  return (v === 'XRP' || v === 'BTC') ? v : 'BTC';
+}
+function updateWrBadge(wr) {
+  if (!wr) return;
+  wrData = wr;
+  const el = document.getElementById('wr-badge');
+  if (!el) return;
+  const a = wrAsset();
+  const h = wr[a] || wr[Object.keys(wr)[0]] || '';
+  if (el.innerHTML !== h) el.innerHTML = h;
+}
+async function loadWr(p) {
+  Object.assign(wrState, p || {});
+  if (!wrState.asset) wrState.asset = wrAsset();
+  const q = new URLSearchParams(wrState).toString();
+  try {
+    const r = await fetch('/round_history?' + q, {cache: 'no-store'});
+    const j = await r.json();
+    const panel = document.getElementById('wr-panel');
+    const keep = Array.from(panel.querySelectorAll('details.wr-more')).map(d => d.open);
+    const sc = panel.querySelector('.wr-list') ? panel.querySelector('.wr-list').scrollTop : 0;
+    panel.innerHTML = j.html;
+    panel.querySelectorAll('details.wr-more').forEach((d, i) => { if (keep[i]) d.open = true; });
+    const lst = panel.querySelector('.wr-list'); if (lst) lst.scrollTop = sc;
+  } catch (e) {}
+}
+function toggleWr() {
+  const panel = document.getElementById('wr-panel');
+  wrOpen = !wrOpen;
+  panel.classList.toggle('open', wrOpen);
+  clearInterval(wrTimer);
+  if (wrOpen) { wrState.asset = wrAsset(); wrState.limit = 300; loadWr(); wrTimer = setInterval(() => loadWr(), 30000); }
+}
 setInterval(refresh, 1000);
 window.onload = function() {
   updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton();
@@ -6790,7 +6867,8 @@ window.onload = function() {
 };
 </script>
 </head><body>
-<header class="g-top"><div class="g-brand"><svg class="b-logo" viewBox="0 0 64 56" width="52" height="46" aria-hidden="true"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7c3d3"/><stop offset="1" stop-color="#e595b0"/></linearGradient><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3e0c8"/><stop offset="1" stop-color="#d2ae86"/></linearGradient></defs><path d="M31 6 C25 2 17 4 15 10 C9 10 5 15 7 21 C2 24 2 32 7 35 C5 41 10 47 16 46 C18 51 26 53 31 49 Z" fill="url(#bg1)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M33 6 C39 2 47 4 49 10 C55 10 59 15 57 21 C62 24 62 32 57 35 C59 41 54 47 48 46 C46 51 38 53 33 49 Z" fill="url(#bg2)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M15 16 C19 15 21 18 24 17 M10 27 C15 25 17 29 22 27 M14 38 C18 36 21 40 25 38 M24 9 C24 13 27 14 27 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path d="M49 16 C45 15 43 18 40 17 M54 27 C49 25 47 29 42 27 M50 38 C46 36 43 40 39 38 M40 9 C40 13 37 14 37 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path class="b-spark" d="M58 2 L59.4 5.6 L63 7 L59.4 8.4 L58 12 L56.6 8.4 L53 7 L56.6 5.6 Z" fill="#ffd36e"/></svg><div class="g-logo">Brain</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div></header>
+<header class="g-top"><div class="g-brand"><svg class="b-logo" viewBox="0 0 64 56" width="52" height="46" aria-hidden="true"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7c3d3"/><stop offset="1" stop-color="#e595b0"/></linearGradient><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3e0c8"/><stop offset="1" stop-color="#d2ae86"/></linearGradient></defs><path d="M31 6 C25 2 17 4 15 10 C9 10 5 15 7 21 C2 24 2 32 7 35 C5 41 10 47 16 46 C18 51 26 53 31 49 Z" fill="url(#bg1)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M33 6 C39 2 47 4 49 10 C55 10 59 15 57 21 C62 24 62 32 57 35 C59 41 54 47 48 46 C46 51 38 53 33 49 Z" fill="url(#bg2)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M15 16 C19 15 21 18 24 17 M10 27 C15 25 17 29 22 27 M14 38 C18 36 21 40 25 38 M24 9 C24 13 27 14 27 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path d="M49 16 C45 15 43 18 40 17 M54 27 C49 25 47 29 42 27 M50 38 C46 36 43 40 39 38 M40 9 C40 13 37 14 37 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path class="b-spark" d="M58 2 L59.4 5.6 L63 7 L59.4 8.4 L58 12 L56.6 8.4 L53 7 L56.6 5.6 Z" fill="#ffd36e"/></svg><div class="g-logo">Brain</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
+<div id="wr-panel" class="wr-panel"></div>
 <div class="view-bar"><span class="hint">Show:</span>
   <button class="size-mode-btn" data-view="BTC" onclick="setAssetView('BTC')">BTC only</button>
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
@@ -7887,7 +7965,13 @@ def _alert_line(a, dec):
     if k == "absorbed":
         return f"FILLED: BIG {'SELL' if sd == 'buy' else 'BUY'} ORDER {usd}", where
     if k == "pulled":
-        return f"CANCELED: BIG {'SELL' if sd == 'buy' else 'BUY'} ORDER {usd}", where + " &middot; never filled"
+        dist = (f" &middot; {fmt_price(a['dist_usd'], dec)} ({a['dist_pct']:.3f}%) from price" if a.get("dist_usd") is not None else "")
+        return f"PULLED / SPOOF: BIG {'SELL' if sd == 'buy' else 'BUY'} ORDER {usd}", where + dist + " &middot; not re-quoted"
+    if k == "moved":
+        fp = fmt_price(a["from_price"], dec) if a.get("from_price") else ""
+        n = a.get("moves") or 1
+        return (f"&#10227; WALL MOVED {a.get('dir', '')}: {usd} {a.get('wall', '')} {ven}",
+                f"{fp} &rarr; {px}" + (f" &middot; {n} moves" if n > 1 else ""))
     if k == "wall":
         return f"BIG {'SELL' if sd == 'sell' else 'BUY'} ORDER WAITING {usd}", ("Coinbase @ " + px) if px else "Coinbase"
     return a["title"], ""
@@ -7900,7 +7984,7 @@ def build_alert_box(name):
     for a in rows:
         void = a["kind"] == "pulled"          # canceled / never filled: shown in white, not green / red
         side_cls = "void" if void else ("up" if a["side"] == "buy" else ("down" if a["side"] == "sell" else "flat"))
-        arrow = "&#10005;" if void else ("&#9650;" if a["side"] == "buy" else ("&#9660;" if a["side"] == "sell" else "&#9679;"))
+        arrow = "&#10005;" if void else "&#10227;" if a["kind"] == "moved" else ("&#9650;" if a["side"] == "buy" else ("&#9660;" if a["side"] == "sell" else "&#9679;"))
         fresh = " fa-fresh" if time.time() - a["ts"] < 20 else ""
         head, where = _alert_line(a, dec)
         items.append(
@@ -8240,6 +8324,69 @@ def build_streak_box(name, d):
             f'<div class="sk-zone">{zone}</div><div class="sk-sub">{sub}</div><div class="sk-chips">{chips}</div></div>')
 
 
+TWAP_WINDOW_S = 60          # CF Benchmarks / Kalshi settle on the average of the final 60 one-second index values
+TWAP_LOCK_PCT = 0.25        # the average still needed sits this % (or more) from live price = effectively LOCKED
+
+
+def twap_lock(name, d):
+    """Final-minute settlement projection (2026-10-20). Kalshi settles the 15-min round on the 60-second average of the
+    CF Benchmarks index over the last minute, so a spike with 10s left barely moves it. Samples the spot-only blended
+    price once a second from the tick tape over the final minute and returns the running average, how many seconds are
+    left, and the average the REMAINING seconds need to finish exactly on the line."""
+    strike = d.get("target_price")
+    close = _window_close_utc(d.get("ticker"))
+    if not strike or close is None:
+        return None
+    close_ts = close.timestamp()
+    now = time.time()
+    if now < close_ts - TWAP_WINDOW_S or now > close_ts + 30:
+        return None
+    sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
+    ticks = get_tick_history(sym) if sym else []
+    if not ticks:
+        return None
+    samples, i, last = [], 0, None
+    start = int(close_ts) - TWAP_WINDOW_S + 1
+    for sec in range(start, int(min(now, close_ts)) + 1):
+        while i < len(ticks) and ticks[i][0] <= sec:
+            last = ticks[i][1]
+            i += 1
+        if last is not None:
+            samples.append(last)
+    if not samples:
+        return None
+    n = len(samples)
+    total = sum(samples)
+    avg = total / n
+    remaining = max(0, TWAP_WINDOW_S - n)
+    need = (strike * TWAP_WINDOW_S - total) / remaining if remaining else None
+    spot = d.get("spot_price") or samples[-1]
+    reach = abs(need - spot) / spot * 100 if (need is not None and spot) else None
+    return {"avg": avg, "n": n, "remaining": remaining, "need": need, "strike": strike, "spot": spot,
+            "side": "UP" if avg >= strike else "DOWN", "reach": reach,
+            "locked": reach is not None and reach >= TWAP_LOCK_PCT, "final": remaining == 0}
+
+
+@_never_break
+def build_twap_lock(name, d):
+    t = twap_lock(name, d)
+    if not t:
+        return ""
+    dec = 4 if name == "XRP" else 2
+    up = t["side"] == "UP"
+    cls = "up" if up else "down"
+    head = (f'<div class="lbl" style="margin-top:4px;">PROJECTED SETTLEMENT (60s avg) &middot; {t["n"]}/{TWAP_WINDOW_S}s</div>'
+            f'<div class="twap-avg {cls}">{fmt_price(t["avg"], dec)} {"&#9650; UP" if up else "&#9660; DOWN"}</div>')
+    if t["final"]:
+        sub = '<div class="twap-need hint">final average - settling now</div>'
+    else:
+        lock = ' <b class="warn">LOCKED</b>' if t["locked"] else ""
+        sub = (f'<div class="twap-need" title="the average price the remaining seconds need for the 60s average to land exactly on the line">'
+               f'next {t["remaining"]}s must average {"under" if up else "over"} <b>{fmt_price(t["need"], dec)}</b> to flip '
+               f'<span class="hint">({t["reach"]:.2f}% from live)</span>{lock}</div>')
+    return f'<div class="twap-lock">{head}{sub}</div>'
+
+
 @_never_break
 def build_flip_radar(name, d):
     """ONE simple flip read: the chance the call on screen (sealed, else early) flips before the close - straight from
@@ -8380,6 +8527,121 @@ def _streak_stats(results):
         else:
             best_l = max(best_l, run)
     return cur_t, cur_n, best_w, best_l
+
+
+# ---------------------------------------------------------------- WIN RATE BADGE + ROUND HISTORY (2026-10-20)
+# Reads the SAME saved history (data_cache/kalshi_dashboard_history.json, up to HISTORY_CAP rounds) the streak tile and
+# scoreboard use - nothing is reset or re-counted, so the current streak simply carries on.
+WR_CALLS = {"sealed": ("Sealed 8:00", "sealed_correct", "sealed_call"),
+            "early": ("Early 4:00", "early_correct", "early_call"),
+            "bot": ("Bot call", "correct", "call")}
+
+
+def _wr_rows(name, call):
+    lab, field, cfield = WR_CALLS.get(call, WR_CALLS["sealed"])
+    out = []
+    for h in _history.get(name, []):
+        if h.get(field) is None:
+            continue
+        t = _window_close_utc(h.get("ticker"))
+        out.append({"t": t, "ok": bool(h[field]), "call": h.get(cfield), "actual": h.get("actual_side"),
+                    "final": h.get("final_price"), "strike": h.get("strike"), "tier": h.get(f"{call}_tier") if call != "bot" else None,
+                    "ticker": h.get("ticker")})
+    return out
+
+
+def _wr_stats(rows):
+    res = [r["ok"] for r in rows]
+    n, w = len(res), sum(res)
+    if not n:
+        return {"n": 0, "w": 0, "l": 0, "pct": None, "cur": (None, 0), "best": 0, "worst": 0}
+    ct, cn, bw, bl = _streak_stats(res)
+    return {"n": n, "w": w, "l": n - w, "pct": w / n * 100, "cur": (ct, cn), "best": bw, "worst": bl}
+
+
+def winrate_badge_html(name):
+    """The small top-right badge: current sealed-call streak (falls back to the early call), all-time win %, today."""
+    call = "sealed"
+    rows = _wr_rows(name, call)
+    if not rows:
+        call, rows = "early", _wr_rows(name, "early")
+    st = _wr_stats(rows)
+    if not st["n"]:
+        return (f'<div class="wr-streak flat">--</div><div class="wr-sub">{name} &middot; no graded rounds</div>')
+    ct, cn = st["cur"]
+    et = ZoneInfo("America/New_York")
+    day0 = dt.datetime.now(dt.timezone.utc).astimezone(et).replace(hour=0, minute=0, second=0, microsecond=0)
+    today = [r["ok"] for r in rows if r["t"] and r["t"] > day0]
+    fire = "&#128293; " if ct and cn >= 3 else ""
+    return (f'<div class="wr-streak {"wr-w" if ct else "wr-l"}">{fire}{cn}{"W" if ct else "L"} <span>streak</span></div>'
+            f'<div class="wr-sub"><b>{st["pct"]:.0f}%</b> win &middot; {st["n"]:,} rnds</div>'
+            f'<div class="wr-sub">today {sum(today)}-{len(today) - sum(today)} &middot; {name} {WR_CALLS[call][0].split()[0].lower()}</div>')
+
+
+def round_history_html(name, call="sealed", rng="all", limit=300):
+    """The panel behind the badge: win rate / record / streaks for today, this week or all time, a day-by-day and a
+    week-by-week table, and every graded round (newest first, 300 at a time)."""
+    if name not in LIVE_ASSETS:
+        name = next(iter(LIVE_ASSETS))
+    call = call if call in WR_CALLS else "sealed"
+    rows = _wr_rows(name, call)
+    et = ZoneInfo("America/New_York")
+    now_et = dt.datetime.now(dt.timezone.utc).astimezone(et)
+    day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
+    week0 = day0 - dt.timedelta(days=day0.weekday())
+    since = {"today": day0, "week": week0}.get(rng)
+    sel = [r for r in rows if since is None or (r["t"] and r["t"] > since)]
+    st = _wr_stats(sel)
+    allst = _wr_stats(rows)
+
+    def pct(x):
+        return "-" if x is None else f'<span class="{"up" if x >= 60 else ("down" if x < 50 else "flat")}">{x:.1f}%</span>'
+    ct, cn = allst["cur"]
+    cur = (f'<b class="{"skw" if ct else "skl"}">{cn}{"W" if ct else "L"}</b>' if allst["n"] else "-")
+    grid = (f'<div class="wr-grid"><div><b>{pct(st["pct"])}</b>win rate</div><div><b>{st["w"]}-{st["l"]}</b>won-lost</div>'
+            f'<div><b>{st["n"]:,}</b>rounds</div><div><b>{cur}</b>current streak</div>'
+            f'<div><b class="skw">{st["best"]}W</b>best run</div><div><b class="skl">{st["worst"]}L</b>worst run</div></div>')
+
+    def bucket_table(keyfn, labfn, count, title):
+        agg = {}
+        for r in rows:
+            if not r["t"]:
+                continue
+            k = keyfn(r["t"].astimezone(et))
+            a = agg.setdefault(k, [0, 0])
+            a[0 if r["ok"] else 1] += 1
+        keys = sorted(agg, reverse=True)[:count]
+        if not keys:
+            return ""
+        trs = "".join(f'<tr><td>{labfn(k)}</td><td>{agg[k][0]}-{agg[k][1]}</td><td>{pct(agg[k][0] / sum(agg[k]) * 100)}</td>'
+                      f'<td>{sum(agg[k])}</td></tr>' for k in keys)
+        return (f'<details class="wr-more"><summary>{title}</summary><table class="press-table"><tr><th>{title.split()[0]}</th>'
+                f'<th>W-L</th><th>win %</th><th>rounds</th></tr>{trs}</table></details>')
+    daily = bucket_table(lambda t: t.date(), lambda k: k.strftime("%a %b %d"), 60, "Day by day (last 60)")
+    weekly = bucket_table(lambda t: (t - dt.timedelta(days=t.weekday())).date(), lambda k: "wk of " + k.strftime("%b %d"),
+                          52, "Week by week (last 52)")
+    lst = []
+    for r in reversed(sel[-limit:] if limit else sel):
+        tm = r["t"].astimezone(et).strftime("%b %d %I:%M %p").replace(" 0", " ") if r["t"] else "?"
+        call_txt = {"YES": "UP", "NO": "DOWN"}.get(r["call"], r["call"] or "-")
+        act = {"YES": "UP", "NO": "DOWN"}.get(r["actual"], r["actual"] or "-")
+        dec = 4 if name == "XRP" else 2
+        px = (fmt_price(r["final"], dec) if r["final"] is not None else "")
+        if r.get("strike"):
+            px += f' vs {fmt_price(r["strike"], dec)}'
+        lst.append(f'<div class="wr-row"><span>{tm}</span><span>{call_txt} &rarr; {act}{(" &middot; " + r["tier"]) if r.get("tier") else ""}'
+                   f'<span class="hint"> {px}</span></span><b class="{"skw" if r["ok"] else "skl"}">{"W" if r["ok"] else "L"}</b></div>')
+    more = (f'<button class="wr-btn" onclick="loadWr({{limit:{limit + 300}}})">Show more ({len(sel) - limit:,} older)</button>'
+            if limit and len(sel) > limit else "")
+    def btn(k, v, lab, cur_):
+        return f'<button class="wr-btn{" on" if v == cur_ else ""}" onclick="loadWr({{{k}:&#39;{v}&#39;,limit:300}})">{lab}</button>'
+    assets = "".join(btn("asset", a, a, name) for a in LIVE_ASSETS)
+    calls = "".join(btn("call", k, v[0], call) for k, v in WR_CALLS.items())
+    rngs = "".join(btn("range", k, lab, rng) for k, lab in (("today", "Today"), ("week", "This week"), ("all", "All-time")))
+    return (f'<div class="wr-head"><b>ROUND HISTORY</b><button class="wr-btn" onclick="toggleWr()">Close</button></div>'
+            f'<div class="wr-tabs">{assets}</div><div class="wr-tabs">{calls}</div><div class="wr-tabs">{rngs}</div>{grid}'
+            f'{daily}{weekly}<div class="wr-list">{"".join(lst) or "<div class=hint>No graded rounds in this range yet.</div>"}</div>{more}'
+            f'<div class="hint" style="margin-top:6px;">{allst["n"]:,} graded rounds saved for {name} (kept up to {HISTORY_CAP:,}).</div>')
 
 
 @_never_break
@@ -8644,6 +8906,11 @@ def build_pressure_bar(asset_name, d=None, part="all"):
             trs.append(f'<tr class="{"mc-bad" if r["flag"] else ""}"><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td>'
                        f'<td>{r["normal"]:,.2f}</td><td>{ratio}</td><td>{pd_}</td><td>{"&#9888; check" if r["flag"] else "&#10003;"}</td></tr>'
                        if r["normal"] is not None else
+                       f'<tr class="{"mc-bad" if r["flag"] else ""}"><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td>'
+                       f'<td class="hint" colspan="2">trade ticks only: <span class="up">{r["buy_q"]:,.2f} bought</span> / '
+                       f'<span class="down">{r["sell_q"]:,.2f} sold</span> (taker side)</td><td>{pd_}</td>'
+                       f'<td>{"&#9888; check" if r["flag"] else "&#10003;"}</td></tr>'
+                       if r.get("tick_only") else
                        f'<tr><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td><td>-</td><td>-</td><td>{pd_}</td><td class="hint">no 24h figure</td></tr>')
         mc_html = (f'<div class="press-health">{head_}</div><details class="press-more" data-pat="MATH|{asset_name}"><summary class="hint">'
                    f'math check by exchange (BTC we counted in the last 15 min vs each exchange&#39;s own average 15 min, and its price vs Coinbase)'
@@ -9660,6 +9927,7 @@ def render_html():
               <div class="lbl" style="margin-top:4px;">{target_label}</div>
               <div class="big">{fmt_price(d["target_price"], decimals) if d.get("target_price") is not None else "--"}</div>
               {line_diff_html}
+              {build_twap_lock(name, d)}
               <div class="lbl" style="margin-top:2px;">{', '.join(d.get("live_venues") or []) or 'connecting...'}</div>
               {_kalshi_line(d)}
             </div>
@@ -9776,6 +10044,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif parsed.path == "/round_history":
+            qs = urllib.parse.parse_qs(parsed.query)
+            try:
+                lim = max(0, min(HISTORY_CAP, int((qs.get("limit") or ["300"])[0])))
+                html_ = round_history_html((qs.get("asset") or [""])[0], (qs.get("call") or ["sealed"])[0],
+                                           (qs.get("range") or ["all"])[0], lim)
+            except Exception as _he:
+                html_ = f'<div class="hint">history error: {_html_attr(repr(_he))}</div>'
+            body = json.dumps({"html": html_}).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(body)
         elif parsed.path == "/build":
             body = BUILD_ID.encode()
             self.send_response(200)
@@ -9785,7 +10065,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif parsed.path == "/data":
-            body = json.dumps({"html": render_html(), "build": BUILD_ID}).encode()
+            _wr = {}
+            for _a in LIVE_ASSETS:
+                try:
+                    _wr[_a] = winrate_badge_html(_a)
+                except Exception as _we:
+                    _wr[_a] = ""
+            body = json.dumps({"html": render_html(), "build": BUILD_ID, "wr": _wr}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

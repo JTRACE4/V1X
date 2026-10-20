@@ -56,6 +56,11 @@ STOPRUN_POKE_BPS = {"BTC": 1.5, "XRP": 4.0}       # how far past the level count
 WALL_MIN_USD = {"BTC": 400_000, "XRP": 80_000}    # resting order size that counts as a wall (Coinbase book)
 WALL_NEAR_PCT = 0.002                  # only walls within 0.2% of price matter for pulled / absorbed
 WALL_MIN_AGE_S = 4                     # a wall must have stood at least this long (flickering quotes are ignored)
+# ---- moving walls vs real pulls (2026-10-20 patch) ----
+WALL_REQUOTE_S = 2.0                   # a wall that vanishes and re-appears (same exchange, same side) within 2s ...
+WALL_REQUOTE_TOL = 0.15                # ... at a size within +/-15% is the SAME wall MOVED, not a cancel
+WALL_PULL_NEAR_PCT = 0.0015            # PULLED / SPOOF only if the wall was within 0.15% of price when it vanished
+WALL_MOVE_CHAIN_S = 90                 # repeat moves of one wall inside 90s update ONE alert instead of adding new ones
 WHALE_FALLBACK = {"BTC": (50_000, 250_000), "XRP": (10_000, 50_000)}   # (show, alert) until there is history
 
 REF_VENUES = ("coinbase", "kraken", "bitstamp", "gemini")   # real-dollar venues used for the price path (no USDT basis)
@@ -63,7 +68,7 @@ REF_VENUES = ("coinbase", "kraken", "bitstamp", "gemini")   # real-dollar venues
 KIND_LABEL = {
     "whale": "WHALE", "sweep": "BIG ORDER", "xsweep": "RUSH", "stoprun": "FAKE BREAKOUT",
     "breakout": "BREAKOUT", "liq": "FORCED SALE", "liqcascade": "FORCED-SALE WAVE", "absorbed": "BIG ORDER FILLED",
-    "pulled": "BIG ORDER CANCELED", "wall": "BIG ORDER WAITING", "burst": "SURGE", "boom": "FAST MOVE",
+    "pulled": "PULLED / SPOOF", "moved": "WALL MOVED", "wall": "BIG ORDER WAITING", "burst": "SURGE", "boom": "FAST MOVE",
     "sweep1m": "NEW HIGH/LOW", "rapid": "CRYPTOMETER", "flip": "FLIP WARNING",
 }
 
@@ -99,6 +104,7 @@ class Engine:
         self.run_state = {a: {} for a in ASSETS}
         self.walls = {}                                     # (asset, venue) -> {(side, price): {...}}
         self.px_range = {}                                  # (asset, venue) -> [lo, hi] traded since the last book check
+        self.wall_pending = {}                              # (asset, venue) -> walls that vanished untouched, waiting for a re-quote
         self.listeners = []                                 # fn(print_dict) for every finished print
         self.whale_threshold_fn = None                      # fn(asset) -> (show_usd, alert_usd); dashboard sets it
         self.kinds = {}                                     # venue -> "spot" / "perp"
@@ -241,17 +247,22 @@ class Engine:
             if w is None:
                 nxt[wk] = {"first": now, "last": now, "max": u, "usd": u}
             else:
-                nxt[wk] = {"first": w["first"], "last": now, "max": max(w["max"], u), "usd": u}
+                nxt[wk] = {"first": w["first"], "last": now, "max": max(w["max"], u), "usd": u, "chain": w.get("chain")}
         with self.lock:
             self.walls[key] = nxt
         if len(vanished) > 3:          # many walls gone at once = the book feed reconnected / reset, not a real event
+            with self.lock:
+                self.wall_pending.pop(key, None)
             return
+        vname = _venue_label(venue)
+        pend = []
         for (side, p), w in vanished:
-            if now - w["first"] < WALL_MIN_AGE_S or abs(p - ref_price) / ref_price > WALL_NEAR_PCT:
+            if now - w["first"] < WALL_MIN_AGE_S:
                 continue
             traded = rng is not None and ((side == "ask" and rng[1] >= p) or (side == "bid" and rng[0] <= p))
-            vname = _venue_label(venue)
             if traded:
+                if abs(p - ref_price) / ref_price > WALL_NEAR_PCT:
+                    continue
                 # an ask wall eaten = buyers took all of it (bullish); a bid wall eaten = sellers hit all of it (bearish)
                 aside = "buy" if side == "ask" else "sell"
                 self.add_alert(asset, "absorbed", aside, f"BIG {'SELL' if side == 'ask' else 'BUY'} ORDER ({_usd(w['max'])} at {_px(asset, p)}) GOT FULLY FILLED",
@@ -259,12 +270,85 @@ class Engine:
                                f"(it sat there {int(now - w['first'])}s) - {'that ceiling is gone' if side == 'ask' else 'that floor is gone'}",
                                usd=w["max"], price=p, sev=2, venue=vname, cooldown_key=("wallx", asset, side, round(p, 4)), cooldown=60)
             else:
-                # pulled ask = sellers stepped away (less resistance above); pulled bid = support stepped away
-                aside = "buy" if side == "ask" else "sell"
-                self.add_alert(asset, "pulled", aside, f"BIG {'SELL' if side == 'ask' else 'BUY'} ORDER ({_usd(w['max'])} at {_px(asset, p)}) WAS CANCELED",
-                               f"A resting {'offer' if side == 'ask' else 'bid'} on {vname} was canceled before the price reached it (it sat there {int(now - w['first'])}s) - "
-                               f"it may have been a fake order meant to scare traders", usd=w["max"], price=p, sev=1, venue=vname,
+                # untouched: could be a cancel OR the same wall being re-quoted at a new price - decide over the next 2s
+                pend.append({"side": side, "price": p, "max": w["max"], "first": w["first"], "gone": now, "ref": ref_price,
+                             "chain": w.get("chain")})
+        with self.lock:
+            pend = self.wall_pending.get(key, []) + pend
+        new_walls = [(wk, u) for wk, u in cur.items() if wk not in prev]
+        used = set()
+        still = []
+        for c in pend:
+            best, best_d = None, None
+            for wk, u in new_walls:
+                if wk in used or wk[0] != c["side"] or wk[1] == c["price"]:
+                    continue
+                if abs(u - c["max"]) / c["max"] > WALL_REQUOTE_TOL:
+                    continue
+                d = abs(wk[1] - c["price"])
+                if best_d is None or d < best_d:
+                    best, best_d = (wk, u), d
+            if best is not None:
+                used.add(best[0])
+                chain = self._wall_moved(asset, vname, c, best[0][1], best[1], now)
+                with self.lock:
+                    nw = self.walls.get(key, {}).get(best[0])
+                    if nw is not None:
+                        nw["first"] = c["first"]          # the moved wall keeps its age - it is the same order
+                        nw["chain"] = chain
+                continue
+            if now - c["gone"] < WALL_REQUOTE_S:
+                still.append(c)                           # keep waiting for a re-quote
+                continue
+            # never re-quoted: a real pull. Only matters if it sat close to price when it vanished.
+            dist = abs(c["price"] - c["ref"]) / c["ref"]
+            if dist > WALL_PULL_NEAR_PCT:
+                continue                                  # far from price = noise, no alert
+            side, p, w_max = c["side"], c["price"], c["max"]
+            aside = "buy" if side == "ask" else "sell"
+            a = self.add_alert(asset, "pulled", aside, f"PULLED / SPOOF: BIG {'SELL' if side == 'ask' else 'BUY'} ORDER ({_usd(w_max)} at {_px(asset, p)})",
+                               f"A resting {'offer' if side == 'ask' else 'bid'} on {vname} vanished {_px(asset, abs(p - c['ref'])).lstrip('$')} "
+                               f"({dist * 100:.3f}%) from price and was NOT re-quoted anywhere nearby (it sat there {int(c['gone'] - c['first'])}s) - "
+                               f"liquidity pulled, possibly a fake order meant to scare traders", usd=w_max, price=p, sev=1, venue=vname,
                                cooldown_key=("wallp", asset, side, round(p, 4)), cooldown=60)
+            if a is not None:
+                a["dist_pct"] = dist * 100
+                a["dist_usd"] = abs(p - c["ref"])
+        with self.lock:
+            self.wall_pending[key] = still
+
+    def _wall_moved(self, asset, vname, c, new_px, new_usd, now):
+        """Same wall, new price. Repeat moves of one wall update ONE alert (origin price -> latest price, move count)."""
+        side = c["side"]
+        ch = c.get("chain")
+        with self.lock:
+            a = None
+            if ch and now - ch["ts"] <= WALL_MOVE_CHAIN_S:
+                a = next((x for x in self.alerts if x["id"] == ch["id"]), None)
+        origin = ch["origin"] if (a is not None) else c["price"]
+        moves = (ch["moves"] + 1) if (a is not None) else 1
+        up = new_px > origin
+        direction = "UP" if up else "DOWN"
+        wall = "Sell" if side == "ask" else "Buy"
+        # a sell wall chasing price down / a buy wall stepping down = bearish; the mirror image = bullish
+        aside = "buy" if up else "sell"
+        title = f"\u27f3 WALL MOVED {direction}: {_usd(new_usd)} {wall} {vname} ({_px(asset, origin)} \u2192 {_px(asset, new_px)})"
+        detail = (f"The same {_usd(new_usd)} {'offer' if side == 'ask' else 'bid'} on {vname} was canceled and re-placed "
+                  f"{'higher' if up else 'lower'} {moves} time{'s' if moves != 1 else ''} - "
+                  + ("a whale chasing price DOWN to sell (bearish)" if (side == "ask" and not up) else
+                     "a whale chasing price UP to buy (bullish)" if (side == "bid" and up) else
+                     "support stepping back (bearish)" if side == "bid" else "resistance stepping back (bullish)"))
+        if a is not None:
+            with self.lock:
+                a.update({"ts": now, "title": title, "detail": detail, "price": new_px, "usd": new_usd, "side": aside})
+                a.update({"from_price": origin, "moves": moves, "dir": direction, "wall": wall})
+            return {"id": a["id"], "origin": origin, "moves": moves, "ts": now}
+        a = self.add_alert(asset, "moved", aside, title, detail, usd=new_usd, price=new_px, sev=1, sound=False, venue=vname)
+        if a is None:
+            return None
+        with self.lock:
+            a.update({"from_price": origin, "moves": moves, "dir": direction, "wall": wall})
+        return {"id": a["id"], "origin": origin, "moves": moves, "ts": now}
 
     def walls_now(self, asset, venue="coinbase"):
         with self.lock:
