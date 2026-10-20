@@ -787,6 +787,93 @@ def _feeds():
     ]
 
 
+# ====================================================================== MATH CHECK vs each exchange's own numbers
+# 2026-10-20 per user request ("do one more math check ... to ensure that it's correct"): every 5 minutes, ask each exchange
+# for ITS OWN 24-hour BTC volume and compare it with what we counted from that exchange over the last 15 minutes, plus each
+# exchange's last trade price vs Coinbase. Same numbers aggr.trade / Bookmap / TradingView show, straight from the source.
+# A venue counting wildly more than its own average (a units bug, or double counting) is flagged on the page.
+VOL24 = {}            # venue -> {"btc": 24h volume in BTC, "ts": fetched at}
+
+
+def _v24_fetchers():
+    def hl():
+        j = _get("https://api.hyperliquid.xyz/info", json.dumps({"type": "metaAndAssetCtxs"}).encode(), {"Content-Type": "application/json"})
+        names = [u["name"] for u in j[0]["universe"]]
+        x = j[1][names.index("BTC")]
+        return _f(x["dayNtlVlm"]) / max(_f(x["markPx"]), 1.0)
+    return {
+        "coinbase": lambda: _f(_get("https://api.exchange.coinbase.com/products/BTC-USD/stats")["volume"]),
+        "kraken": lambda: _f(next(iter(_get("https://api.kraken.com/0/public/Ticker?pair=XBTUSD")["result"].values()))["v"][1]),
+        "bitstamp": lambda: _f(_get("https://www.bitstamp.net/api/v2/ticker/btcusd/")["volume"]),
+        "gemini": lambda: _f(_get("https://api.gemini.com/v1/pubticker/btcusd")["volume"]["BTC"]),
+        "bitfinex": lambda: abs(_f(_get("https://api-pub.bitfinex.com/v2/ticker/tBTCUSD")[7])),
+        "cryptocom": lambda: _f(_get("https://api.crypto.com/exchange/v1/public/get-tickers?instrument_name=BTC_USD")["result"]["data"][0]["v"]),
+        "okx": lambda: _f(_get("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT")["data"][0]["vol24h"]),
+        "okx_perp": lambda: _f(_get("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT-SWAP")["data"][0]["volCcy24h"]),
+        "bybit": lambda: _f(_get("https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT")["result"]["list"][0]["volume24h"]),
+        "bybit_perp": lambda: _f(_get("https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT")["result"]["list"][0]["volume24h"]),
+        "gate": lambda: _f(_get("https://api.gateio.ws/api/v4/spot/tickers?currency_pair=BTC_USDT")[0]["base_volume"]),
+        "bitget": lambda: _f(_get("https://api.bitget.com/api/v2/spot/market/tickers?symbol=BTCUSDT")["data"][0]["baseVolume"]),
+        "bitget_perp": lambda: _f(_get("https://api.bitget.com/api/v2/mix/market/ticker?symbol=BTCUSDT&productType=USDT-FUTURES")["data"][0]["baseVolume"]),
+        "kucoin": lambda: _f(_get("https://api.kucoin.com/api/v1/market/stats?symbol=BTC-USDT")["data"]["vol"]),
+        "binance": lambda: _f(_get("https://data-api.binance.vision/api/v3/ticker/24hr?symbol=BTCUSDT")["volume"]),
+        "binanceus": lambda: _f(_get("https://api.binance.us/api/v3/ticker/24hr?symbol=BTCUSDT")["volume"]),
+        "binance_perp": lambda: _f(_get("https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT")["volume"]),
+        "deribit": lambda: _f(_get("https://www.deribit.com/api/v2/public/ticker?instrument_name=BTC-PERPETUAL")["result"]["stats"]["volume"]),
+        "hyperliquid": hl,
+    }
+
+
+def _v24_loop():
+    time.sleep(15)
+    while True:
+        for v, fn in _v24_fetchers().items():
+            try:
+                x = fn()
+                if x and x > 0:
+                    VOL24[v] = {"btc": x, "ts": time.time()}
+            except Exception:
+                pass
+            time.sleep(0.3)
+        time.sleep(300)
+
+
+def math_check(asset="BTC"):
+    """Per exchange: BTC we counted in the last 15 min vs that exchange's own average 15 min (its 24h volume / 96), and its
+    last price vs Coinbase. ratio 0.2x-6x is normal (markets are busier at some hours and in fast moves); above 10x on a
+    calm market points to a counting / units bug, which the page flags."""
+    now = int(time.time())
+    with HUB.lock:
+        got = {}
+        first = {}
+        for s_, vd in HUB.buckets.get(asset, {}).items():
+            if s_ < now - 899:
+                continue
+            for v, x in vd.items():
+                got[v] = got.get(v, 0.0) + x[3] + x[4]
+                first[v] = min(first.get(v, s_), s_)
+        px = {v: p for (v, a), p in HUB.last_price.items() if a == asset}
+    ref = px.get("coinbase")
+    rows = []
+    for v, q in got.items():
+        span = max(60, now - first[v] + 1)
+        vv = VOL24.get(v)
+        norm = vv["btc"] / 86400 * span if vv else None
+        ratio = (q / norm) if norm else None
+        pdiff = ((px[v] / ref - 1) * 100) if (ref and px.get(v)) else None
+        settled = span >= 300                                     # judge only after 5+ minutes of counting
+        flag = ((settled and ratio is not None and ratio > 10 and q > 2)
+                or (settled and ratio is not None and norm >= 5 and ratio < 0.05)
+                or (pdiff is not None and abs(pdiff) > 0.5))
+        rows.append({"venue": v, "label": VENUES.get(v, (v, ""))[0], "kind": VENUES.get(v, ("", "spot"))[1], "counted": q, "span": span,
+                     "normal": norm, "ratio": ratio, "pdiff": pdiff, "flag": flag})
+    rows.sort(key=lambda r: -r["counted"])
+    tot_c = sum(r["counted"] for r in rows if r["normal"])
+    tot_n = sum(r["normal"] for r in rows if r["normal"])
+    return {"rows": rows, "ratio": (tot_c / tot_n) if tot_n else None, "checked": sum(1 for r in rows if r["normal"]),
+            "flags": [r for r in rows if r["flag"]]}
+
+
 # ====================================================================== perp-market extras (funding, open interest, liquidations)
 _OKX_CT = {"BTC": 0.01, "XRP": 100.0}
 
@@ -1050,6 +1137,7 @@ def start():
         threading.Thread(target=_book_loop, args=(v, fn), daemon=True, name=f"book-{v}").start()
     threading.Thread(target=_binanceus_poll_loop, daemon=True, name="flow-binanceus").start()
     threading.Thread(target=_deriv_loop, daemon=True, name="flow-deriv").start()
+    threading.Thread(target=_v24_loop, daemon=True, name="flow-mathcheck").start()
     threading.Thread(target=_seed_history, daemon=True, name="flow-seed").start()
     if not os.environ.get("FLOW_NO_LOG"):      # tests set this so they never write into the real log
         threading.Thread(target=_log_loop, daemon=True, name="pressure-log").start()

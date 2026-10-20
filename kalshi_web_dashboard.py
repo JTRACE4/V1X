@@ -4984,6 +4984,41 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .sc-empty { font-size:12px; color:#93a0bf; }
 .sc-more { margin-top:8px; } .sc-more > summary { cursor:pointer; font-size:12px; }
 .streak-arrow { display:none; }
+/* ---- 2026-10-20 (4): price on top, thin Kalshi line, compact calls row, one flip radar, one RSI box ---- */
+.head-row { margin-bottom:10px; align-items:center; }
+.live-price-inline { min-width:260px; }
+.live-price-inline .big { font-size:30px; }
+.k-line { margin-top:6px; width:100%; min-width:240px; }
+.k-nums { display:flex; justify-content:space-between; gap:8px; font-size:12px; font-weight:700; }
+.k-lean { color:#c9d3f0; font-weight:600; }
+.k-bar { position:relative; height:6px; border-radius:3px; background:#d94a63; overflow:hidden; margin-top:3px; }
+.k-bar i { position:absolute; left:0; top:0; bottom:0; background:#2a9d74; transition:width 0.5s ease; }
+.k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#e3e9f7; }
+.press-top { border-bottom:none; margin-bottom:10px; }
+.calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(190px,1.1fr) minmax(110px,0.55fr); }
+@media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr; } }
+.calls-row .stage-box { padding:9px 10px 8px; }
+.calls-row .sb-title { font-size:11px; margin-bottom:3px; }
+.calls-row .sb-dir { font-size:26px; }
+.calls-row .sb-tier { font-size:12px; padding:2px 12px; margin:4px 0 2px; }
+.calls-row .sb-line { font-size:12px; margin-top:2px; }
+.calls-row .sb-rec { margin-top:5px; font-size:11px; }
+.rsi-box { text-align:center; }
+.rsi-num { font-size:34px; font-weight:800; line-height:1.05; }
+.rsi-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
+.rsi-sub { font-size:11px; color:#93a0bf; margin-top:3px; }
+.rz-ob { border-color:#ff4dd2; } .rz-ob .rsi-num, .rz-ob .rsi-zone { color:#ff4dd2; }
+.rz-bull { border-color:#2a9d74; } .rz-bull .rsi-num, .rz-bull .rsi-zone { color:#5ad1a0; }
+.rz-norm .rsi-num, .rz-norm .rsi-zone { color:#c9d3f0; }
+.rz-bear { border-color:#d94a63; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#ff6f86; }
+.rz-os { border-color:#00e5ff; } .rz-os .rsi-num, .rz-os .rsi-zone { color:#00e5ff; }
+.flip-radar .fr-big { font-size:30px; font-weight:800; line-height:1.05; }
+.flip-radar .fr-big span { font-size:13px; letter-spacing:1px; vertical-align:middle; }
+.fr-track2 { height:6px; background:#1a2440; border-radius:3px; overflow:hidden; margin:6px 0 5px; }
+.fr-track2 i { display:block; height:100%; background:currentColor; border-radius:3px; }
+.fr-txt { font-size:12px; line-height:1.35; margin-top:2px; }
+.alerts-only { grid-template-columns:1fr !important; }
+.mc-bad td { color:#e3b341; }
 /* "FLIP" tag next to the calls (added 2026-09-25) - marks this window's
    real position as the flip-scalp entry, not the original locked call */
 .flip-badge { display:inline-block; background:#3d1a00; border:1px solid #d29922; color:#d29922;
@@ -7531,7 +7566,7 @@ def build_top_strip(name, d):
         alert_w = build_alert_box(name)
     except Exception as e:
         alert_w = f'<div class="top-w hint">alert box error: {e!r}</div>'
-    return f'<div class="top-strip">{rsi_w}{flip_w}{alert_w}</div>'
+    return f'<div class="top-strip alerts-only">{alert_w}</div>'
 
 
 def _never_break(fn):
@@ -7696,6 +7731,18 @@ def _kalshi_spark(pts, w=300, h=54):
             f'<circle cx="{X(pts[-1][0]):.1f}" cy="{Y(last):.1f}" r="3.5" fill="{col}"/></svg>')
 
 
+def _kalshi_line(d):
+    kp = d.get("kalshi_price")
+    if kp is None:
+        return ""
+    up = round(kp * 100)
+    edge = abs(kp - 0.5)
+    side = "UP" if kp >= 0.5 else "DOWN"
+    lean = "50/50" if edge < 0.02 else (f"leaning {side}" if edge < 0.25 else f"strongly {side}")
+    return (f'<div class="k-line"><div class="k-nums"><span class="up">UP {up}%</span><span class="k-lean">Kalshi live &middot; {lean}</span>'
+            f'<span class="down">{100 - up}% DOWN</span></div><div class="k-bar"><i style="width:{up}%"></i><b></b></div></div>')
+
+
 @_never_break
 def build_kalshi_tile(name, d):
     kp = d.get("kalshi_price")
@@ -7732,9 +7779,78 @@ def build_kalshi_tile(name, d):
 
 
 @_never_break
+def build_rsi_box(name, d):
+    """One small RSI(14) box: the number, colour-coded - OVERSOLD (30 or less), BEARISH (30-45), NORMAL (45-55), BULLISH (55-70),
+    OVERBOUGHT (70 or more). 1-minute candles, every exchange combined."""
+    rm = d.get("rsi_multi") or {}
+    r = rm.get("rsi1")
+    if r is None:
+        return '<div class="rs-tile rsi-box"><div class="rs-title">RSI (14)</div><div class="rsi-num flat">--</div><div class="rsi-zone flat">warming up</div></div>'
+    if r >= 70:
+        z, c = "OVERBOUGHT", "rz-ob"
+    elif r >= 55:
+        z, c = "BULLISH", "rz-bull"
+    elif r > 45:
+        z, c = "NORMAL", "rz-norm"
+    elif r > 30:
+        z, c = "BEARISH", "rz-bear"
+    else:
+        z, c = "OVERSOLD", "rz-os"
+    r5 = rm.get("rsi5")
+    return (f'<div class="rs-tile rsi-box {c}"><div class="rs-title">RSI (14)</div><div class="rsi-num">{r:.0f}</div>'
+            f'<div class="rsi-zone">{z}</div><div class="rsi-sub">1-min{f" &middot; 5-min {r5:.0f}" if r5 is not None else ""}</div>'
+            f'<span class="rsi-marker" data-rsi-name="{name}" data-rsi="{r:.1f}" style="display:none;"></span></div>')
+
+
+@_never_break
+def build_flip_radar(name, d):
+    """ONE simple flip read: the chance the call on screen (sealed, else early) flips before the close - straight from
+    Kalshi's own price - plus any warning signs right now (RSI stretched against the call, a fake breakout against it,
+    a choppy round)."""
+    kp = d.get("kalshi_price")
+    key, call = _stage_ref(d)
+    if call is None:
+        call = d.get("locked_call")
+        which = "the bot's call"
+    else:
+        which = "the sealed call" if key == "sealed" else "the early call"
+    if kp is None:
+        return '<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div><div class="fr-big flat">--</div></div>'
+    if call in ("YES", "NO"):
+        pct = (1 - kp) * 100 if call == "YES" else kp * 100
+        other = "DOWN" if call == "YES" else "UP"
+        line = f'Kalshi gives {other} {pct:.0f}% - that is the chance {which} ({"UP" if call == "YES" else "DOWN"}) flips.'
+    else:
+        pct = (1 - max(kp, 1 - kp)) * 100
+        line = "No call yet - this is the chance Kalshi&#39;s current favorite flips."
+    signs = []
+    rm = d.get("rsi_multi") or {}
+    r1 = rm.get("rsi1")
+    if r1 is not None and call == "YES" and r1 >= 70:
+        signs.append("RSI overbought")
+    if r1 is not None and call == "NO" and r1 <= 30:
+        signs.append("RSI oversold")
+    if call in ("YES", "NO") and _ENG.recent_kind(name, ("stoprun",), side=("sell" if call == "YES" else "buy"), within=240):
+        signs.append("fake breakout against it")
+    ls = d.get("line_stats") or {}
+    if (ls.get("crosses") or 0) >= 2:
+        signs.append(f'{ls["crosses"]} line crosses')
+    level, cls = ("LOW", "up") if pct < 20 else (("MEDIUM", "warn") if pct < 40 else ("HIGH", "down"))
+    if signs and level == "LOW":
+        level, cls = "WATCH", "warn"
+    sig = ("warning signs: " + ", ".join(signs)) if signs else "no warning signs right now"
+    marker = (f'<span class="flip-chance-value" data-flip-chance-key="{name}::{d.get("ticker", "")}{("::" + key) if key else ""}" '
+              f'data-flip-chance-pct="{pct:.2f}" style="display:none;"></span>')
+    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
+            f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
+            f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct * 2):.0f}%"></i></div>'
+            f'<div class="fr-txt">{line}</div><div class="fr-txt hint">{sig}</div>{marker}</div>')
+
+
+@_never_break
 def build_round_strip(name, d):
-    return (f'<div class="round-strip">{build_kalshi_tile(name, d)}{build_stage_box(name, d, "early")}'
-            f'{build_stage_box(name, d, "sealed")}</div>')
+    return (f'<div class="round-strip calls-row">{build_stage_box(name, d, "early")}{build_stage_box(name, d, "sealed")}'
+            f'{build_flip_radar(name, d)}{build_rsi_box(name, d)}</div>')
 
 
 def _streak_stats(results):
@@ -7882,7 +7998,7 @@ def _cvd_svg(series, coin):
             f'<polyline points="{path}" fill="none" stroke="{col}" stroke-width="2"/></svg>')
 
 
-def build_pressure_bar(asset_name, d=None):
+def build_pressure_bar(asset_name, d=None, part="all"):
     """BTC BOUGHT vs SOLD - every exchange we can reach, each trade counted ONCE (exchange trade-id de-dupe), taker
     (aggressor) side, in coins and dollars: the last minute as the big bar, 10s / 30s / 1m / 5m / this round as chips,
     spot vs perpetual futures split, the round's cumulative volume delta, the biggest aggregated prints (aggr.trade
@@ -8000,6 +8116,56 @@ def build_pressure_bar(asset_name, d=None):
             f'<td>{v["n"] or "-"}</td><td>{bk}</td><td class="hint">{v.get("dupes") or ""}</td></tr>')
     table = (f'<table class="press-table"><tr><th>Exchange</th><th>buy vs sell (1m)</th><th>buy %</th><th>{coin} bought</th><th>{coin} sold</th>'
              '<th>$ traded 1m</th><th>trades</th><th>book bids %</th><th>repeats dropped</th></tr>' + "".join(rows) + '</table>')
+    try:
+        mc = _flow.math_check(asset_name)
+    except Exception:
+        mc = None
+    mc_html = ""
+    if mc and mc["checked"]:
+        bad = mc["flags"]
+        if bad:
+            head_ = (f'<span class="warn">&#9888; Math check: {", ".join(r["label"] for r in bad[:4])} '
+                     f'{"look" if len(bad) > 1 else "looks"} off compared with {"their" if len(bad) > 1 else "its"} own numbers - see the table</span>')
+        else:
+            head_ = (f'<span class="up">&#10003; Math check passed:</span> {mc["checked"]} exchanges match their own 24h volume and price '
+                     f'(right now the market is trading at {mc["ratio"]:.1f}x its normal pace)')
+        trs = []
+        for r in mc["rows"]:
+            ratio = f'{r["ratio"]:.1f}x' if r["ratio"] is not None else "-"
+            pd_ = f'{r["pdiff"]:+.3f}%' if r["pdiff"] is not None else "-"
+            trs.append(f'<tr class="{"mc-bad" if r["flag"] else ""}"><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td>'
+                       f'<td>{r["normal"]:,.2f}</td><td>{ratio}</td><td>{pd_}</td><td>{"&#9888; check" if r["flag"] else "&#10003;"}</td></tr>'
+                       if r["normal"] is not None else
+                       f'<tr><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td><td>-</td><td>-</td><td>{pd_}</td><td class="hint">no 24h figure</td></tr>')
+        mc_html = (f'<div class="press-health">{head_}</div><details class="press-more" data-pat="MATH|{asset_name}"><summary class="hint">'
+                   f'math check by exchange (BTC we counted in the last 15 min vs each exchange&#39;s own average 15 min, and its price vs Coinbase)'
+                   f'</summary><table class="press-table"><tr><th>exchange</th><th>BTC we counted</th><th>its normal</th><th>pace</th>'
+                   f'<th>price vs Coinbase</th><th></th></tr>{"".join(trs)}</table><div class="hint">Normal pace is 0.2x to 6x (busier in fast moves '
+                   f'and at the US open). Above 10x on a calm market would mean a counting mistake. USDT markets usually sit within '
+                   f'&plusmn;0.1% of Coinbase&#39;s dollar price.</div></details>')
+    elif mc is not None:
+        mc_html = '<div class="press-health hint">Math check: fetching each exchange&#39;s own 24h numbers (first check about 30 seconds after start)...</div>'
+    top_html = (
+        f'<div class="row press-row press-top" data-asset-press="{asset_name}">'
+        f'<div class="press-head"><b>{coin} BOUGHT vs SOLD</b> <span class="hint">{s["live_n"]} exchanges live &middot; last minute &middot; '
+        f'aggressor side, each trade once</span> <span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
+        f'<div class="press-qty"><span class="up">&#9650; <b>{_coin_amt(coin, m["buy_qty"])} {coin}</b> bought <span class="hint">({_usd_short(m["buy"])})</span></span>'
+        f'<span class="press-net {"up" if net_q >= 0 else "down"}">net {"+" if net_q >= 0 else ""}{_coin_amt(coin, net_q)} {coin} '
+        f'({"+" if net_usd >= 0 else "-"}{_usd_short(net_usd)})</span>'
+        f'<span class="down"><b>{_coin_amt(coin, m["sell_qty"])} {coin}</b> sold <span class="hint">({_usd_short(m["sell"])})</span> &#9660;</span></div>'
+        f'<div class="press-bar"><div class="press-buy" style="width:{buy:.1f}%">{buy:.0f}% buy</div>'
+        f'<div class="press-sell" style="width:{sell:.1f}%">{sell:.0f}% sell</div><span class="press-mid"></span></div>'
+        f'<div class="press-chips">{"".join(chips)}{book}</div>{mc_html.split("<details")[0] if mc_html else ""}</div>')
+    detail_html = (
+        f'<div class="row press-row" data-asset-press="{asset_name}"><div class="press-head"><b>{coin} ORDER FLOW DETAIL</b></div>'
+        f'{"".join(split)}{cvd_html}{deriv_html}{tape}{health}{("<details" + mc_html.split("<details", 1)[1]) if "<details" in mc_html else ""}'
+        f'<details class="press-more" data-pat="PRESS|{asset_name}"><summary class="hint">by exchange (information only - never used for buying)</summary>'
+        f'{table}</details></div>')
+    if part == "top":
+        return top_html
+    if part == "detail":
+        return detail_html
+    return top_html + detail_html
     return (
         f'<div class="row press-row" data-asset-press="{asset_name}">'
         f'<div class="press-head"><b>{coin} BOUGHT vs SOLD</b> <span class="hint">{s["live_n"]} exchanges live &middot; last minute &middot; '
@@ -8595,7 +8761,7 @@ def render_html():
         flip_meter_html = f'<div class="row flip-combo">{flip_counts_html}</div>'      # the streak moved to the scoreboard
         flip_counts_html = ""
         try:
-            pressure_html = build_pressure_bar(name, d)
+            pressure_html = build_pressure_bar(name, d, part="detail")
         except Exception as _pe:
             pressure_html = ""
             print(f"[pressure] bar failed: {_pe!r}")
@@ -8992,9 +9158,6 @@ def render_html():
         parts.append(f'''
         <div class="card" data-asset="{name}">
           {experimental_html}
-          {build_round_strip(name, d)}
-          {build_scoreboard(name, d)}
-          {build_top_strip(name, d)}
           <div class="head-row">
             <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{clock_html}{boom_html}{win_alert_html}{lock_alert_html}</div>
             <div class="live-price-inline">
@@ -9004,7 +9167,7 @@ def render_html():
               <div class="big">{fmt_price(d["target_price"], decimals) if d.get("target_price") is not None else "--"}</div>
               {line_diff_html}
               <div class="lbl" style="margin-top:2px;">{', '.join(d.get("live_venues") or []) or 'connecting...'}</div>
-              {(f'<div class="kalshi-mini">Kalshi <span class="up">UP {round((d["kalshi_price"]) * 100)}c</span> &middot; <span class="down">DOWN {round((1 - d["kalshi_price"]) * 100)}c</span></div>') if d.get("kalshi_price") is not None else ""}
+              {_kalshi_line(d)}
             </div>
             <div class="callbox">
               <div class="lbl">My call</div>
@@ -9014,6 +9177,10 @@ def render_html():
               {bias_html}
             </div>
           </div>
+          {build_pressure_bar(name, d, part="top")}
+          {build_round_strip(name, d)}
+          {build_scoreboard(name, d)}
+          {build_top_strip(name, d)}
           <div class="row bot-calls"><span class="label">Bot&#39;s own calls (these drive the real-money auto-buy, unchanged)</span>
             <span class="value">first validated call {locked_call_html} <span class="hint">{locked_when_html} @ {locked_price_html}</span>
             &nbsp;|&nbsp; late call (~4.5 min left) {late_call_html} <span class="hint">{late_pct_html}</span></span></div>
@@ -9030,7 +9197,6 @@ def render_html():
           <div class="row"><span class="label">Right now (last 30s)</span><span class="value">{micro_html}</span></div>
           {vs_btc_window_html}
           <div class="row"><span class="label">Spot momentum (1min)</span><span class="value">{f'{d["spot_ret"]:+.4%}' if d.get("spot_ret") is not None else '--'}</span></div>
-          <div class="row"><span class="label">RSI (14, 1-min, {d.get("rsi_src", "Coinbase")}) - watch only, NOT used for calls (tested backwards here)</span><span class="value">{rsi_html}</span></div>
           <div class="row"><span class="label">Recent high / low break</span><span class="value">{sweep_html}</span></div>
           {choppiness_row_html}
           {whale_row_html}
