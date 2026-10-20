@@ -5237,7 +5237,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .round-strip .sb-dir { font-size:36px; }
 .sb-tier { font-size:15px; letter-spacing:1.5px; }
 .scoreboard { background:#272024; border:1px solid #4a3c43; border-radius:14px; padding:12px 14px; margin-bottom:12px; }
-.sc-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+.sc-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
 @media (max-width:760px) { .sc-grid { grid-template-columns:1fr; } }
 .sc-col { background:#2a2226; border:1px solid #2e333c; border-radius:10px; padding:10px 12px; min-width:0; }
 .sc-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#eee2d7; margin-bottom:6px; }
@@ -8986,9 +8986,13 @@ def _streak_stats(results):
 # ---------------------------------------------------------------- WIN RATE BADGE + ROUND HISTORY (2026-10-20)
 # Reads the SAME saved history (data_cache/kalshi_dashboard_history.json, up to HISTORY_CAP rounds) the streak tile and
 # scoreboard use - nothing is reset or re-counted, so the current streak simply carries on.
+# 2026-10-20: auto-buy isn't in use, so the bot's own call record / streak is hidden everywhere (still saved in the
+# history file - set SHOW_BOT_RECORD = True to bring it back).
+SHOW_BOT_RECORD = False
 WR_CALLS = {"sealed": ("Sealed 8:00", "sealed_correct", "sealed_call"),
-            "early": ("Early 4:00", "early_correct", "early_call"),
-            "bot": ("Bot call", "correct", "call")}
+            "early": ("Early 4:00", "early_correct", "early_call")}
+if SHOW_BOT_RECORD:
+    WR_CALLS["bot"] = ("Bot call", "correct", "call")
 
 
 def _wr_rows(name, call):
@@ -9125,8 +9129,8 @@ def build_scoreboard(name, d):
     now_et = dt.datetime.now(dt.timezone.utc).astimezone(et)
     day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
     cols = []
-    for key, label, field in (("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"),
-                              ("bot", "BOT CALL (auto-buy)", "correct")):
+    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"))
+                              + ((("bot", "BOT CALL (auto-buy)", "correct"),) if SHOW_BOT_RECORD else ())):
         rows = [h for h in hist if h.get(field) is not None]
         res = [bool(h[field]) for h in rows]
         n, w = len(res), sum(res)
@@ -9163,7 +9167,7 @@ def build_scoreboard(name, d):
     except Exception:
         pull = ""
     return (f'<div class="scoreboard"><div class="rs-title">SCOREBOARD &middot; since launch ({since}) &middot; '
-            f'<b>{len(hist):,}</b> round{"s" if len(hist) != 1 else ""} tracked{f' <span class="hint">(the bot made no call in {no_call:,} of them)</span>' if no_call else ''}</div>'
+            f'<b>{len(hist):,}</b> round{"s" if len(hist) != 1 else ""} tracked{f' <span class="hint">(the bot made no call in {no_call:,} of them)</span>' if (no_call and SHOW_BOT_RECORD) else ''}</div>'
             f'<div class="sc-grid">{"".join(cols)}</div>'
             + (f'<details class="sc-more" data-pat="SCORE|{name}"><summary class="hint">Hour-by-hour and today breakdown</summary>{pull}</details>' if pull else "")
             + '</div>')
@@ -10430,12 +10434,12 @@ def render_html():
           {book_walls_row_html}
           {volume_recent_row_html}
           {daily_range_row_html}
-          <div class="row"><span class="label">Track record (locked calls)</span><span class="value">{track_html}</span></div>
+          {f'<div class="row"><span class="label">Track record (locked calls)</span><span class="value">{track_html}</span></div>' if SHOW_BOT_RECORD else ''}
           {best_hours_row_html}
           {bet_pnl_row_html}
           {bet_pnl_windowed_html}
           {checkpoint_html}
-          {last_html}
+          {last_html if SHOW_BOT_RECORD else ''}
           <div class="ranges"><b>Predicted range (median/typical move, empirical):</b>{ranges_html}</div>
           {near_footer_html}
           </details>
