@@ -211,7 +211,7 @@ def landing(user=None):
         hello = f'<p>Welcome back, {E(user["username"])}.</p>'
     else:
         cta = '<a class="btn pink" href="/login">Log in</a><a class="btn teal" href="/signup">Sign up</a>'
-        hello = '<p>Neural market analysis, in real time.</p>'
+        hello = '<p>Market intelligence, wired in.</p>'
     flies = "".join(f'<i class="ff" style="left:{l}%;top:{t}%;animation-delay:{dl}s"></i>'
                     for l, t, dl in ((14, 44, 0), (27, 40, 1.3), (39, 47, 2.6), (58, 42, 0.8), (71, 46, 3.1), (84, 41, 1.9), (49, 38, 4.2)))
     body = (
