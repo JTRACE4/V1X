@@ -2226,6 +2226,56 @@ def history_restore(name, rows):
     return len(add)
 
 
+def migrate_history_from_old_server():
+    """One-time hand-over (2026-10-20). The first version with a Railway volume starts on an EMPTY /data, while the previous
+    version - still serving the site during a deploy - holds today's rounds on its own (wiped-on-redeploy) disk. Before
+    this server starts listening (Railway keeps routing traffic to the old one until /health answers), pull every round
+    from the old server's public export and merge it in by ticker. Additive only; skipped when MIGRATE_FROM_URL is unset
+    or the other server is already a newer, login-protected version."""
+    base = (os.environ.get("MIGRATE_FROM_URL") or "").rstrip("/")
+    if not base:
+        return
+    try:
+        meta = _rq.get(base + "/history_meta", timeout=15, headers={"Accept": "application/json"})
+        if meta.status_code != 200:
+            print(f"[migrate] old server answered {meta.status_code} - nothing to hand over")
+            return
+        assets = list((meta.json().get("assets") or {}).keys())
+    except Exception as e:
+        print(f"[migrate] could not reach {base}: {e!r}")
+        return
+    total = 0
+    for name in assets:
+        try:
+            rows = _rq.get(base + "/history_export", params={"asset": name, "after": 0}, timeout=30).json().get("rows") or []
+        except Exception as e:
+            print(f"[migrate] {name}: {e!r}")
+            continue
+        clean = []
+        for r in rows:
+            if isinstance(r, dict) and isinstance(r.get("j"), str):
+                try:
+                    r = json.loads(r["j"])
+                except Exception:
+                    continue
+            if isinstance(r, dict) and isinstance(r.get("ticker"), str) and _TICKER_RE.match(r["ticker"]):
+                clean.append(r)
+        with _history_lock:
+            cur = _history.setdefault(name, [])
+            have = {h.get("ticker") for h in cur}
+            add = [r for r in clean if r["ticker"] not in have]
+            if add:
+                merged = cur + add
+                merged.sort(key=lambda h: _window_close_utc(h.get("ticker")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc))
+                del merged[:-HISTORY_CAP]
+                _history[name] = merged
+                total += len(add)
+        print(f"[migrate] {name}: {len(clean)} rounds on the old server, {len(add)} new here")
+    if total:
+        _save_history()
+    print(f"[migrate] hand-over done - {total} rounds copied from {base}")
+
+
 # in-flight lock persistence - added 2026-09-13 after a real report: a
 # restart mid-window (which happens often while iterating on this file)
 # used to silently wipe whatever call was already locked for the CURRENTLY
@@ -4829,7 +4879,7 @@ PAGE_TEMPLATE = r"""<!doctype html>
 })();
 </script><meta charset="utf-8"><title>Brain</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#211b1e">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="icon" type="image/png" href="/static/logo-64.png"><link rel="apple-touch-icon" href="/static/logo-180.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&family=Bungee&family=Bebas+Neue&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..900,0..100;1,9..144,400..900,0..100&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background:#211b1e; color:#fbf4ec; margin:0; padding:12px 24px 24px; }
@@ -7112,7 +7162,7 @@ window.onload = function() {
 };
 </script>
 </head><body>
-<header class="g-top"><div class="g-brand"><svg class="b-logo" viewBox="0 0 64 56" width="52" height="46" aria-hidden="true"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7c3d3"/><stop offset="1" stop-color="#e595b0"/></linearGradient><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3e0c8"/><stop offset="1" stop-color="#d2ae86"/></linearGradient></defs><path d="M31 6 C25 2 17 4 15 10 C9 10 5 15 7 21 C2 24 2 32 7 35 C5 41 10 47 16 46 C18 51 26 53 31 49 Z" fill="url(#bg1)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M33 6 C39 2 47 4 49 10 C55 10 59 15 57 21 C62 24 62 32 57 35 C59 41 54 47 48 46 C46 51 38 53 33 49 Z" fill="url(#bg2)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M15 16 C19 15 21 18 24 17 M10 27 C15 25 17 29 22 27 M14 38 C18 36 21 40 25 38 M24 9 C24 13 27 14 27 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path d="M49 16 C45 15 43 18 40 17 M54 27 C49 25 47 29 42 27 M50 38 C46 36 43 40 39 38 M40 9 C40 13 37 14 37 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path class="b-spark" d="M58 2 L59.4 5.6 L63 7 L59.4 8.4 L58 12 L56.6 8.4 L53 7 L56.6 5.6 Z" fill="#ffd36e"/></svg><div class="g-logo">Brain</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
+<header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">Brain</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
 <div id="vol-warn" class="vol-warn" style="display:none;">&#9888; Round history is NOT on a Railway volume - every redeploy wipes it.
 This page keeps a backup on this device and puts it back after a wipe, but add a volume to fix it for good:
@@ -10628,7 +10678,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/health":
             return self._send(200, "ok", "text/plain")
         if path == "/favicon.ico":
-            return self._send(204, "", "text/plain")
+            fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "logo-64.png")
+            with open(fp, "rb") as f_:
+                return self._send(200, f_.read(), "image/png", [("Cache-Control", "public, max-age=604800")])
         if path.startswith("/static/"):
             name_ = os.path.basename(path)
             fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", name_)
@@ -11396,6 +11448,7 @@ def main():
     sys.stdout = _TeeToFile(sys.stdout, _console_log)
     sys.stderr = _TeeToFile(sys.stderr, _console_log)
     _load_history()
+    migrate_history_from_old_server()       # before listening: Railway still routes visitors to the old server meanwhile
     _auth.load()
     _pub.configure(get_state=_public_state, get_ticks=get_tick_history)
     if not _auth.has_owner():

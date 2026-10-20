@@ -168,13 +168,13 @@ GYRI = [[(15, 16), ((19, 15), (21, 18), (24, 17))], [(10, 27), ((15, 25), (17, 2
         [(20, 45), ((22, 42), (26, 43), (27, 40))], [(8, 31), ((11, 33), (13, 31), (16, 33))]]
 
 
-def brain(img, cx, cy, size):
+def brain(img, cx, cy, size, aura_scale=1.0):
     """the BRAIN logo brain, scaled up: two hemispheres (rose / tan) with gradient shading, white gyri, rim light, aura"""
     k = size / 64.0
     tf = lambda pts, mir: [((64 - x if mir else x) * k + cx - 32 * k, y * k + cy - 28 * k) for x, y in pts]
     aura = layer(); da = ImageDraw.Draw(aura)
-    da.ellipse([cx - size * 0.62, cy - size * 0.56, cx + size * 0.62, cy + size * 0.56], fill=(233, 165, 187, 110))
-    comp(img, glow(aura, 34))
+    da.ellipse([cx - size * 0.62 * aura_scale, cy - size * 0.56 * aura_scale, cx + size * 0.62 * aura_scale, cy + size * 0.56 * aura_scale], fill=(233, 165, 187, 110))
+    comp(img, glow(aura, 34 * aura_scale * size / (330 * S)))
     for mir, top, bot, line in ((False, "#f7c3d3", "#d77d9b", "#7a3b52"), (True, "#f6e3cb", "#c99a6c", "#6b4a33")):
         poly = tf(_path(LEFT), mir)
         mask = Image.new("L", (W, H), 0)
@@ -184,20 +184,20 @@ def brain(img, cx, cy, size):
         grad = vgrad(x1 - x0, y1 - y0, [(0, top), (1, bot)])
         img.paste(grad, (x0, y0), mask.crop((x0, y0, x1, y1)))
         d = ImageDraw.Draw(img)
-        d.line(poly + [poly[0]], fill=hexc(line), width=int(4 * S), joint="curve")
+        d.line(poly + [poly[0]], fill=hexc(line), width=max(2, int(size / 82)), joint="curve")
         g = layer(); dg = ImageDraw.Draw(g)
         for gy in GYRI:
-            dg.line(tf(_path(gy), mir), fill=(255, 252, 248, 235), width=int(5 * S), joint="curve")
+            dg.line(tf(_path(gy), mir), fill=(255, 252, 248, 235), width=max(2, int(size / 66)), joint="curve")
         comp(img, g)
         # soft top highlight inside the hemisphere
         h = layer(); dh = ImageDraw.Draw(h)
         hx = cx + (8 if mir else -14) * k
         dh.ellipse([hx - 9 * k, cy - 24 * k, hx + 9 * k, cy - 16 * k], fill=(255, 255, 255, 110))
-        comp(img, glow(h, 5))
+        comp(img, glow(h, 5 * size / (330 * S)))
     # rim light from the screens (teal) on the top edge
     rim = layer(); dr = ImageDraw.Draw(rim)
-    dr.arc([cx - 30 * k, cy - 26 * k, cx + 30 * k, cy + 30 * k], 200, 340, fill=(120, 225, 210, 120), width=int(5 * S))
-    comp(img, glow(rim, 3))
+    dr.arc([cx - 30 * k, cy - 26 * k, cx + 30 * k, cy + 30 * k], 200, 340, fill=(120, 225, 210, 120), width=max(2, int(size / 66)))
+    comp(img, glow(rim, 3 * size / (330 * S)))
     d = ImageDraw.Draw(img)
     sx, sy = cx + 27 * k, cy - 26 * k
     st = [(sx, sy - 5 * k), (sx + 1.4 * k, sy - 1.4 * k), (sx + 5 * k, sy), (sx + 1.4 * k, sy + 1.4 * k), (sx, sy + 5 * k),

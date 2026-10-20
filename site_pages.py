@@ -11,15 +11,8 @@ FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="
 
 
 def brain_logo(size=44, p="l"):
-    w, h = size, int(size * 56 / 64)
-    return (f'<svg viewBox="0 0 64 56" width="{w}" height="{h}" aria-hidden="true"><defs>'
-            f'<linearGradient id="{p}1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7c3d3"/><stop offset="1" stop-color="#e595b0"/></linearGradient>'
-            f'<linearGradient id="{p}2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3e0c8"/><stop offset="1" stop-color="#d2ae86"/></linearGradient></defs>'
-            f'<path d="M31 6 C25 2 17 4 15 10 C9 10 5 15 7 21 C2 24 2 32 7 35 C5 41 10 47 16 46 C18 51 26 53 31 49 Z" fill="url(#{p}1)" stroke="#2a1630" stroke-width="2.6" stroke-linejoin="round"/>'
-            f'<path d="M33 6 C39 2 47 4 49 10 C55 10 59 15 57 21 C62 24 62 32 57 35 C59 41 54 47 48 46 C46 51 38 53 33 49 Z" fill="url(#{p}2)" stroke="#2a1630" stroke-width="2.6" stroke-linejoin="round"/>'
-            '<path d="M15 16 C19 15 21 18 24 17 M10 27 C15 25 17 29 22 27 M14 38 C18 36 21 40 25 38 M24 9 C24 13 27 14 27 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>'
-            '<path d="M49 16 C45 15 43 18 40 17 M54 27 C49 25 47 29 42 27 M50 38 C46 36 43 40 39 38 M40 9 C40 13 37 14 37 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>'
-            '<path d="M58 2 L59.4 5.6 L63 7 L59.4 8.4 L58 12 L56.6 8.4 L53 7 L56.6 5.6 Z" fill="#ffd36e"/></svg>')
+    """The BRAIN mark - the same brain as in the hero art (static/logo.png, rendered by tools/make_logo.py)."""
+    return f'<img class="mark" src="/static/logo.png" width="{size}" height="{size}" alt="">'
 
 
 # ------------------------------------------------------------------------------------------------ hero art
@@ -41,6 +34,7 @@ a{color:var(--rose)}
 .wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));position:relative;z-index:3}
 .brand{display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--cream)}
+.brand .mark{filter:drop-shadow(0 2px 10px rgba(233,165,187,.35))}
 .brand b{font-family:var(--serif);font-weight:700;font-size:21px;letter-spacing:.3px;font-variation-settings:"SOFT" 100}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(20,15,18,.55);
  border:1px solid var(--line);font-weight:700;font-size:13px;white-space:nowrap;color:var(--text);backdrop-filter:blur(6px);font-variant-numeric:tabular-nums}
@@ -66,7 +60,9 @@ label{display:block;font-weight:700;font-size:13px;margin:12px 0 5px;color:var(-
 def page(title, body, extra_css="", extra_head="", scripts=""):
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            f'<title>{E(title)}</title><meta name="theme-color" content="#211b1e">{FONTS}{extra_head}'
+            f'<title>{E(title)}</title><meta name="theme-color" content="#211b1e">'
+            '<link rel="icon" type="image/png" href="/static/logo-64.png"><link rel="apple-touch-icon" href="/static/logo-180.png">'
+            f'{FONTS}{extra_head}'
             f'<style>{BASE_CSS}{extra_css}</style></head><body>{body}{scripts}</body></html>')
 
 

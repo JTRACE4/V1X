@@ -89,3 +89,11 @@ UPDATE 6 (same day) - accounts, welcome page, How-to-use tab
 - First run: open /setup and use OWNER_SETUP_CODE (Railway variable) to create the owner account. One time only.
 - Email (optional): set RESEND_API_KEY + EMAIL_FROM, or SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS + EMAIL_FROM.
 - New tab inside the app: "How to use" - every tile, call and alert explained in plain words.
+
+UPDATE 7 (same day)
+- New logo everywhere (dashboard header, welcome / login pages, browser tab, phone home-screen icon): the brain from the
+  hero art (static/logo.png, rendered by tools/make_logo.py).
+- Streak-safe hand-over: on start, with MIGRATE_FROM_URL set, the server copies every graded round from the server that
+  is still running (the previous version) BEFORE it starts listening. Railway's /health check keeps the old one live until
+  the copy is done. Additive by ticker - nothing is ever overwritten or removed. Rounds then live on the /data volume, so
+  later updates keep them automatically.
