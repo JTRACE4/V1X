@@ -5362,7 +5362,6 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .sb-z80 { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#7be0b0; }
 .sb-line .k-agree, .sb-line .k-agree b { color:#ffffff !important; font-weight:800; }
 .sb-line .k-disagree, .sb-line .k-disagree b { color:#000000 !important; font-weight:800; }
-.sb-line .k-disagree { background:#fbf4ec; border-radius:6px; padding:0 6px; }
 .twap-lock { margin-top:4px; padding:4px 6px; border:1px dashed #4a3c43; border-radius:8px; }
 .twap-avg { font-weight:800; font-size:18px; line-height:1.2; }
 .twap-need { font-size:12px; line-height:1.3; }
@@ -8369,10 +8368,10 @@ def build_stage_box(name, d, key):
         hold_html = ""
         if holding is not None:
             # 2026-10-20 (user request): Kalshi's % is WHITE when Kalshi agrees with the call, BLACK when it disagrees -
-            # the same in every call box, BTC and XRP, early and sealed. Black sits on a cream chip so it stays readable.
+            # the same in every call box, BTC and XRP, early and sealed. Only the text + % change colour, no background.
             agree = holding >= 0.5
             hold_html = (f'<div class="sb-line">Kalshi now: <span class="{"k-agree" if agree else "k-disagree"}"><b>{holding:.0%}</b> - '
-                         f'{"agrees" if agree else "disagrees"}</span></div>')
+                         f'{"holding" if agree else "going AGAINST it"}</span></div>')
         z80 = (f'<div class="sb-z80">&#9733; 80% SETUP &middot; won {c["zone80"]:.0%} in backtest'
                + (f' &middot; {c["zone80_roi"] * 100:+.0f}% per $ at Kalshi prices' if c.get("zone80_roi") is not None else "")
                + '</div>' if c.get("zone80") else "")
