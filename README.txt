@@ -76,3 +76,16 @@ UPDATE 5 (same day)
   (also /backtest.txt, /backtest.json, /backtest_run to re-run now).
 - Live effect: reversal calls switch off for a stage whose reversals lost money in the backtest; calls matching a filter
   that held 80%+ on unseen rounds get a "★ 80% SETUP" tag showing its backtest win rate and money result.
+
+UPDATE 6 (same day) - accounts, welcome page, How-to-use tab
+- "/" is now a public WELCOME page: original cartoon island-town art, BRAIN logo, Log in / Sign up (or "Open BRAIN" on a
+  recognized device), a free live BTC / XRP chart (Round view with the round's line + 60s average, or 1m / 15m / 1H / 1D
+  candles), Fear & Greed, crypto headlines, smart-money habits, live Eastern date/time, and Terms (/terms).
+  No calls are shown on this page.
+- The dashboard moved to "/app" and needs an approved account. New sign-ups wait for the owner's approval (/admin, plus
+  an email with one-tap Approve / Deny once email is set up). A device that logged in once stays signed in for 180 days -
+  the login window only shows on devices it doesn't recognize. Reset password by email link (or the owner makes one on
+  /admin). Passwords are stored hashed. Real-money trading controls are owner-only.
+- First run: open /setup and use OWNER_SETUP_CODE (Railway variable) to create the owner account. One time only.
+- Email (optional): set RESEND_API_KEY + EMAIL_FROM, or SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS + EMAIL_FROM.
+- New tab inside the app: "How to use" - every tile, call and alert explained in plain words.

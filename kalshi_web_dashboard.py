@@ -6904,6 +6904,7 @@ async function refresh() {
   }
   const mySeq = ++refreshSeq;
   const res = await fetch('/data');
+  if (res.status === 401) { location.href = '/login?next=/app'; return; }
   const data = await res.json();
   if (mySeq !== refreshSeq) return; // a newer refresh already started - this one is stale, drop it
   // auto-reload when the server was restarted with new code, so an open tab
@@ -8028,6 +8029,9 @@ def flip_counts(records):
 # ====================================================================== 2026-10-20 additions: top strip, stage calls, alert box
 from orderflow_engine import ENGINE as _ENG, KIND_LABEL as _KIND_LABEL
 import backtest_engine as _bt
+import auth as _auth
+import public_data as _pub
+import site_pages as _site
 
 
 def _coin_amt(asset, q):
@@ -10504,18 +10508,219 @@ def render_html():
           <div class="ranges"><b>Predicted range (median/typical move, empirical):</b>{ranges_html}</div>
           {near_footer_html}
           </details>
-          {live_pull_html}
+          <!--OWNER-->{live_pull_html}<!--/OWNER-->
         </div>''')
 
     return "".join(parts) if parts else "<p>Waiting for first poll...</p>"
+
+
+# ================================================================ accounts + public site (2026-10-20)
+# "/" is the public welcome page (free live chart, news, money habits). The dashboard lives at "/app" and needs an approved
+# account; a device that logged in once stays recognized. Trading controls are owner-only.
+PUBLIC_GET = {"/", "/login", "/signup", "/forgot", "/reset", "/setup", "/logout", "/terms", "/auth/approve", "/auth/deny",
+              "/health", "/favicon.ico"}
+OWNER_ONLY = {"/admin", "/arm_live", "/set_live_size", "/set_flip_target", "/set_flip_max_price", "/set_main_max_price",
+              "/set_buy_delay", "/set_main_sell_price", "/set_flip_sell_mode", "/set_flip_hold_if_certain",
+              "/set_protect_threshold", "/backtest_run", "/locked", "/live_status"}
+_OWNER_RE = re.compile(r"<!--OWNER-->.*?<!--/OWNER-->", re.S)
+_admin_reset_links = {}
+
+
+def _public_state(name):
+    with _lock:
+        d = _state.get(name)
+        return dict(d) if isinstance(d, dict) else {}
+
+
+def _strip_owner_only(html_, user):
+    return html_ if (user and user.get("role") == "owner") else _OWNER_RE.sub("", html_)
+
+
+def _safe_next(n):
+    return n if (isinstance(n, str) and n.startswith("/") and not n.startswith("//") and len(n) < 200) else "/app"
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # silence default request logging
 
+    # ---------------------------------------------------------------- small helpers
+    def _ip(self):
+        xf = self.headers.get("X-Forwarded-For") or ""
+        return (xf.split(",")[0].strip() or self.client_address[0])[:64]
+
+    def _https(self):
+        return (self.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+
+    def _user(self):
+        try:
+            return _auth.user_from_cookie(self.headers.get("Cookie"))
+        except Exception:
+            return None
+
+    def _send(self, code, body, ctype="text/html; charset=utf-8", headers=None):
+        if isinstance(body, str):
+            body = body.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        if ctype.startswith("text/html"):
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "same-origin")
+        for k, v in (headers or []):
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _json(self, obj, code=200):
+        self._send(code, json.dumps(obj), "application/json")
+
+    def _redirect(self, loc, cookie=None):
+        h = [("Location", loc)]
+        if cookie:
+            h.append(("Set-Cookie", cookie))
+        self._send(302, "", "text/plain", h)
+
+    def _form(self):
+        try:
+            ln = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            ln = 0
+        if ln <= 0 or ln > 20000:
+            return {}
+        raw = self.rfile.read(ln).decode("utf-8", "replace")
+        return {k: v[0] for k, v in urllib.parse.parse_qs(raw, keep_blank_values=True).items()}
+
+    def _same_origin(self):
+        host = (self.headers.get("Host") or "").lower()
+        src = self.headers.get("Origin") or self.headers.get("Referer") or ""
+        if not src:
+            return True                       # old browsers / same-site form posts without the header
+        return urllib.parse.urlparse(src).netloc.lower() == host
+
+    # ---------------------------------------------------------------- public site + login pages
+    def _site_get(self, parsed, user):
+        path = parsed.path
+        qs = urllib.parse.parse_qs(parsed.query)
+        q = lambda k, d="": (qs.get(k) or [d])[0]
+        if path == "/":
+            return self._send(200, _site.landing(user))
+        if path == "/health":
+            return self._send(200, "ok", "text/plain")
+        if path == "/favicon.ico":
+            return self._send(204, "", "text/plain")
+        if path == "/terms":
+            return self._send(200, _site.terms_page())
+        if path == "/login":
+            if user:
+                return self._redirect(_safe_next(q("next")))
+            return self._send(200, _site.auth_page("login", values={"next": q("next")}))
+        if path == "/signup":
+            return self._send(200, _site.auth_page("signup"))
+        if path == "/forgot":
+            return self._send(200, _site.auth_page("forgot"))
+        if path == "/logout":
+            _auth.logout(self.headers.get("Cookie"))
+            return self._redirect("/", _auth.clear_cookie_header())
+        if path == "/setup":
+            if _auth.has_owner():
+                return self._send(200, _site.message_page("Already set up", "The owner account exists. Log in instead.", "/login", "Log in"))
+            return self._send(200, _site.auth_page("setup"))
+        if path == "/reset":
+            u = _auth.reset_user_from_token(q("t"))
+            if not u:
+                return self._send(200, _site.message_page("Link expired", "That reset link is old or was already used. Ask for a new one.",
+                                                          "/forgot", "Reset password", "err"))
+            return self._send(200, _site.auth_page("reset", values={"t": q("t")}))
+        if path in ("/auth/approve", "/auth/deny"):
+            kind = "approve" if path.endswith("approve") else "deny"
+            d = _auth.read_token(q("t"), kind)
+            if not d:
+                return self._send(200, _site.message_page("Link expired", "That link is old or not valid. Use the Admin page instead.",
+                                                          "/admin", "Open Admin", "err"))
+            u = _auth.set_status(d["u"], "approved" if kind == "approve" else "denied")
+            if u and kind == "approve":
+                _auth.notify_user_approved(u)
+            who = u["username"] if u else d["u"]
+            return self._send(200, _site.message_page("Done", f"{who} was {'approved' if kind == 'approve' else 'denied'}.", "/admin", "Open Admin"))
+        return None
+
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if not self._same_origin():
+            return self._send(403, "Blocked: request came from another site.", "text/plain")
+        user = self._user()
+        if path in ("/login", "/signup", "/forgot", "/reset", "/setup"):
+            f = self._form()
+            ip = self._ip()
+            if path == "/login":
+                tok, u, err = _auth.login(f.get("login", ""), f.get("password", ""), self.headers.get("User-Agent", ""), ip)
+                if err:
+                    return self._send(200, _site.auth_page("login", error=err, values={"login": f.get("login", ""), "next": f.get("next", "")}))
+                return self._redirect(_safe_next(f.get("next")), _auth.cookie_header(tok, self._https()))
+            if path == "/signup":
+                vals = {k: f.get(k, "") for k in ("username", "email", "note")}
+                if f.get("agree") != "1":
+                    return self._send(200, _site.auth_page("signup", error="Please agree to the terms.", values=vals))
+                err = _auth.validate_new(f.get("username", "").strip(), f.get("email", "").strip(), f.get("password", ""), f.get("password2", ""))
+                if err:
+                    return self._send(200, _site.auth_page("signup", error=err, values=vals))
+                u = _auth.create_user(f["username"].strip(), f["email"].strip(), f["password"], note=f.get("note", ""))
+                sent = _auth.notify_owner_signup(u, ip)
+                print(f"[auth] signup {u['username']} - owner {'emailed' if sent else 'not emailed (email not set up)'}")
+                return self._send(200, _site.message_page("Request sent",
+                                                          "Thanks! The owner will review it. You'll get an email when you're approved.", "/", "Back home"))
+            if path == "/forgot":
+                _auth.request_reset(f.get("email", ""), ip)
+                return self._send(200, _site.message_page("Check your email",
+                                                          "If that email has an account, a reset link is on its way (or the owner will send you one).",
+                                                          "/login", "Back to log in"))
+            if path == "/reset":
+                u = _auth.reset_user_from_token(f.get("t", ""))
+                if not u:
+                    return self._send(200, _site.message_page("Link expired", "That reset link is old or was already used.", "/forgot", "Try again", "err"))
+                pw, pw2 = f.get("password", ""), f.get("password2", "")
+                if len(pw) < 8 or pw != pw2:
+                    return self._send(200, _site.auth_page("reset", error="Use 8+ characters and type it the same twice.", values={"t": f.get("t", "")}))
+                _auth.set_password(u["username"], pw)
+                tok = _auth.new_device(u, self.headers.get("User-Agent", ""), ip)
+                return self._redirect("/app", _auth.cookie_header(tok, self._https()))
+            if path == "/setup":
+                code = os.environ.get("OWNER_SETUP_CODE") or ""
+                vals = {k: f.get(k, "") for k in ("username", "email")}
+                if _auth.has_owner():
+                    return self._redirect("/login")
+                if not code or not _hmac.compare_digest(f.get("code", "").strip(), code):
+                    return self._send(200, _site.auth_page("setup", error="Wrong setup code.", values=vals))
+                err = _auth.validate_new(f.get("username", "").strip(), f.get("email", "").strip(), f.get("password", ""), f.get("password2", ""))
+                if err:
+                    return self._send(200, _site.auth_page("setup", error=err, values=vals))
+                u = _auth.create_user(f["username"].strip(), f["email"].strip(), f["password"], role="owner", status="approved")
+                tok = _auth.new_device(u, self.headers.get("User-Agent", ""), ip)
+                return self._redirect("/app", _auth.cookie_header(tok, self._https()))
+        if not user:
+            return self._json({"ok": False, "error": "login required"}, 401)
+        if path == "/admin":
+            if user.get("role") != "owner":
+                return self._send(403, "Owner only.", "text/plain")
+            f = self._form()
+            a, un = f.get("a"), f.get("u", "")
+            flash = ""
+            if a in ("approve", "deny"):
+                u = _auth.set_status(un, "approved" if a == "approve" else "denied")
+                if u and a == "approve":
+                    _auth.notify_user_approved(u)
+                flash = f"{un} {'approved' if a == 'approve' else 'blocked'}." if u else ""
+            elif a == "remove":
+                flash = f"{un} removed." if _auth.remove_user(un) else ""
+            elif a == "resetlink":
+                u = _auth.DB["users"].get(un.lower())
+                if u:
+                    _admin_reset_links[un.lower()] = _auth.reset_link(u)
+                    flash = f"Reset link for {un} is ready below - send it to them (works once, for 1 hour)."
+            return self._send(200, _site.admin_page(user, _auth.DB, _auth.email_ready(), flash, _admin_reset_links))
         n_ = 0
         ok = False
         if parsed.path == "/restore_history":
@@ -10539,6 +10744,38 @@ class Handler(http.server.BaseHTTPRequestHandler):
         global _live_flip_sell_mode, _live_flip_sell_price_target, _live_flip_hold_if_certain
         global _live_protect_min_confidence
         parsed = urllib.parse.urlparse(self.path)
+        user = self._user()
+        if parsed.path in PUBLIC_GET:
+            return self._site_get(parsed, user)
+        if parsed.path.startswith("/public/"):
+            qs_ = urllib.parse.parse_qs(parsed.query)
+            a_ = (qs_.get("asset") or ["BTC"])[0].upper()
+            a_ = a_ if a_ in _pub.PRODUCTS else "BTC"
+            try:
+                if parsed.path == "/public/ticker":
+                    return self._json(_pub.ticker(a_))
+                if parsed.path == "/public/ticks":
+                    return self._json({"ticks": _pub.round_ticks(a_)})
+                if parsed.path == "/public/candles":
+                    return self._json({"candles": _pub.candles(a_, (qs_.get("tf") or ["1m"])[0])})
+                if parsed.path == "/public/news":
+                    return self._json({"items": _pub.news(a_)})
+                if parsed.path == "/public/fng":
+                    return self._json(_pub.fear_greed())
+            except Exception as _pe:
+                print(f"[public] {parsed.path}: {_pe!r}")
+                return self._json({})
+            return self._json({}, 404)
+        if not user:
+            if "text/html" in (self.headers.get("Accept") or ""):          # a page visit -> the login window
+                return self._redirect("/login?next=" + urllib.parse.quote(parsed.path))
+            return self._json({"error": "login required"}, 401)            # a background data request
+        if parsed.path in OWNER_ONLY and user.get("role") != "owner":
+            return self._send(403, "Owner only.", "text/plain")
+        if parsed.path == "/guide":
+            return self._send(200, _site.guide_html(user))
+        if parsed.path == "/admin":
+            return self._send(200, _site.admin_page(user, _auth.DB, _auth.email_ready(), "", _admin_reset_links))
         if parsed.path in ("/debug_poll", "/debug_threads") and self.client_address[0] not in ("127.0.0.1", "::1"):
             self.send_response(404); self.end_headers()      # diagnostics: this PC only, never other devices on the network
             return
@@ -10663,7 +10900,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     _wr[_a] = winrate_badge_html(_a)
                 except Exception as _we:
                     _wr[_a] = ""
-            body = json.dumps({"html": render_html(), "build": BUILD_ID, "wr": _wr,
+            body = json.dumps({"html": _strip_owner_only(render_html(), user), "build": BUILD_ID, "wr": _wr,
                                "vol_warn": bool(ON_RAILWAY and not HISTORY_ON_VOLUME)}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -11079,7 +11316,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         else:
-            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).encode()
+            _pend = sum(1 for u_ in _auth.DB["users"].values() if u_.get("status") == "pending") if user.get("role") == "owner" else 0
+            body = (PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json())
+                    .replace('</header>', '</header>' + _site.app_tabs(user, "live", _pend), 1)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
@@ -11130,6 +11369,10 @@ def main():
     sys.stdout = _TeeToFile(sys.stdout, _console_log)
     sys.stderr = _TeeToFile(sys.stderr, _console_log)
     _load_history()
+    _auth.load()
+    _pub.configure(get_state=_public_state, get_ticks=get_tick_history)
+    if not _auth.has_owner():
+        print("[auth] no owner account yet - open /setup and use OWNER_SETUP_CODE to create it")
     _load_locked_state()
     _load_rounds()
     _load_live_trading_state()
