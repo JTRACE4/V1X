@@ -5360,8 +5360,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .vol-warn { margin:4px 0 8px; padding:8px 10px; border-radius:10px; border:1px solid #d29922; background:rgba(210,153,34,0.12); color:#f3d28c; font-size:12px; line-height:1.4; }
 .hist-toast { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:9999; padding:10px 14px; border-radius:10px; background:#e5b85c; color:#1a1218; font-weight:700; }
 .sb-z80 { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#7be0b0; }
-.sb-line .k-agree, .sb-line .k-agree b { color:#ffffff !important; font-weight:800; }
-.sb-line .k-disagree, .sb-line .k-disagree b { color:#000000 !important; font-weight:800; }
+.sb-line.k-agree, .sb-line.k-agree * { color:#ffffff !important; font-weight:800; }
+.sb-line.k-disagree, .sb-line.k-disagree * { color:#000000 !important; font-weight:800; }
 .twap-lock { margin-top:4px; padding:4px 6px; border:1px dashed #4a3c43; border-radius:8px; }
 .twap-avg { font-weight:800; font-size:18px; line-height:1.2; }
 .twap-need { font-size:12px; line-height:1.3; }
@@ -8368,9 +8368,9 @@ def build_stage_box(name, d, key):
         hold_html = ""
         if holding is not None:
             # 2026-10-20 (user request): Kalshi's % is WHITE when Kalshi agrees with the call, BLACK when it disagrees -
-            # the same in every call box, BTC and XRP, early and sealed. Only the text + % change colour, no background.
+            # the same in every call box, BTC and XRP, early and sealed. The whole 'Kalshi now' row changes colour, no background.
             agree = holding >= 0.5
-            hold_html = (f'<div class="sb-line">Kalshi now: <span class="{"k-agree" if agree else "k-disagree"}"><b>{holding:.0%}</b> - '
+            hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}">Kalshi now: <span><b>{holding:.0%}</b> - '
                          f'{"holding" if agree else "going AGAINST it"}</span></div>')
         z80 = (f'<div class="sb-z80">&#9733; 80% SETUP &middot; won {c["zone80"]:.0%} in backtest'
                + (f' &middot; {c["zone80_roi"] * 100:+.0f}% per $ at Kalshi prices' if c.get("zone80_roi") is not None else "")
