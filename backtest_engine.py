@@ -577,8 +577,14 @@ def run(days=LOOKBACK_DAYS):
         RESULTS = res
         _save("backtest_results.json", res)
         STATE.update({"stage": "done", "finished": time.time()})
+        try:     # also into the server log, so it can be read from Railway's logs without logging in to the site
+            for ln in summary_text(res).splitlines():
+                print("[backtest] " + ln)
+        except Exception:
+            pass
     except Exception as e:
         STATE.update({"stage": "failed", "error": repr(e), "finished": time.time()})
+        print(f"[backtest] FAILED: {e!r}")
     finally:
         STATE["running"] = False
 
