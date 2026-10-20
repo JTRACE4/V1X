@@ -10582,7 +10582,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        if not any(k.lower() == "cache-control" for k, _v in (headers or [])):
+            self.send_header("Cache-Control", "no-store")
         if ctype.startswith("text/html"):
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Referrer-Policy", "same-origin")
@@ -10628,6 +10629,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, "ok", "text/plain")
         if path == "/favicon.ico":
             return self._send(204, "", "text/plain")
+        if path.startswith("/static/"):
+            name_ = os.path.basename(path)
+            fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", name_)
+            ctype = {".jpg": "image/jpeg", ".webp": "image/webp", ".png": "image/png", ".svg": "image/svg+xml"}.get(os.path.splitext(name_)[1])
+            if not ctype or not os.path.isfile(fp):
+                return self._send(404, "not found", "text/plain")
+            with open(fp, "rb") as f_:
+                return self._send(200, f_.read(), ctype, [("Cache-Control", "public, max-age=604800")])
         if path == "/terms":
             return self._send(200, _site.terms_page())
         if path == "/login":
@@ -10763,7 +10772,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         global _live_protect_min_confidence
         parsed = urllib.parse.urlparse(self.path)
         user = self._user()
-        if parsed.path in PUBLIC_GET:
+        if parsed.path in PUBLIC_GET or parsed.path.startswith("/static/"):
             return self._site_get(parsed, user)
         if parsed.path.startswith("/public/"):
             qs_ = urllib.parse.parse_qs(parsed.query)
