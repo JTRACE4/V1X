@@ -4489,10 +4489,7 @@ def poll_loop():
                         _rev = None
                     # 2026-10-20 (user): the 22-for-22 system decides. The only extra sit-out is a true coin flip - the
                     # call's own chance within 3 points of 50/50. No sit-outs for line crosses or low volume.
-                    _sitout = None
-                    _pc = (_use_p if _use_p is not None else stage_p_yes)
-                    if _call and not _rev and _pc is not None and abs(_pc - 0.5) < SITOUT_COINFLIP:
-                        _sitout = f"it's basically a coin flip ({max(_pc, 1 - _pc):.0%})"
+                    _sitout = None      # 2026-10-20 (user): no sit-outs at all - the 22-for-22 system calls every round
                     _lean = _call
                     if _sitout:
                         _why = f"leaning {'UP' if _call == 'YES' else 'DOWN'}, but {_sitout} - sit this one out"
