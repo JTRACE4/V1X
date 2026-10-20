@@ -328,6 +328,7 @@ def round_line_stats(symbol, line, open_ts, end_ts=None):
 
 
 # ---- sit-out rules + late call (2026-10-20, user request) ----
+SITOUT_COINFLIP = 0.03        # sit out ONLY when the call's chance is within 3 points of 50/50
 SITOUT_CROSSES = 4            # 4+ line crosses at the mark = the line is being fought over -> sit this one out
 SITOUT_LATE_CROSSES = 2       # or 2+ crosses after the 5:00 mark (still flipping deep into the round)
 SITOUT_PACE = 0.5             # volume under half its normal pace ...
@@ -4486,12 +4487,12 @@ def poll_loop():
                         _call, _tier, _why = _rev["call"], _rev["tier"], _rev["why"]
                     elif _rev:
                         _rev = None
+                    # 2026-10-20 (user): the 22-for-22 system decides. The only extra sit-out is a true coin flip - the
+                    # call's own chance within 3 points of 50/50. No sit-outs for line crosses or low volume.
                     _sitout = None
-                    if _call:
-                        try:
-                            _sitout = sitout_reason(asset["name"], elapsed_seconds, line_stats, live_price, target)
-                        except Exception as _se:
-                            print(f"[sit-out] {_se!r}")
+                    _pc = (_use_p if _use_p is not None else stage_p_yes)
+                    if _call and not _rev and _pc is not None and abs(_pc - 0.5) < SITOUT_COINFLIP:
+                        _sitout = f"it's basically a coin flip ({max(_pc, 1 - _pc):.0%})"
                     _lean = _call
                     if _sitout:
                         _why = f"leaning {'UP' if _call == 'YES' else 'DOWN'}, but {_sitout} - sit this one out"
@@ -9130,19 +9131,12 @@ REVERSAL_RSI_HI, REVERSAL_RSI_LO = 68, 32
 
 def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_multi, sig, kalshi_yes, ticker=None, stage=None):
     """None, or {"call", "tier", "why", "score", "votes", "payout"} - call the side that is LOSING right now.
-    Kept only if the backtest says it pays: once a backtest has finished, a stage whose reversal calls lost money over the
-    tested rounds stops making them (until the next daily re-test says otherwise)."""
+    Exactly as in the version that went 22 for 22 on XRP sealed calls (2026-10-20) - instant flip score, always on."""
     if not spot or not line or abs(spot - line) / line < CROSS_BAND_PCT:
         return None
-    try:
-        gate = (_bt.decisions().get("reversal_enabled") or {})
-        if stage in gate and not gate[stage]:
-            return None
-    except Exception:
-        pass
     fav = 1 if spot > line else -1                       # the side price is on now
     ls = line_stats or {}
-    fr = flip_risk_sustained(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
+    fr = flip_risk_core(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
     if not fr or fr["score"] < REVERSAL_MIN_SCORE:
         return None
     rm = rsi_multi or {}
