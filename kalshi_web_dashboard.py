@@ -8913,7 +8913,25 @@ def build_flip_radar(name, d):
     if not (spot and line and call):
         return '<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div><div class="fr-big flat">--</div></div>'
     ls = d.get("line_stats") or {}
-    fr = flip_risk_sustained(name, 1 if call == "YES" else -1, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"),
+    sc_ = ((d.get("stage_calls") or {}).get(key) or {}) if key else {}
+    csign = 1 if call == "YES" else -1
+    rev_waiting = bool(sc_.get("reversal")) and (spot - line) * csign < 0
+    if rev_waiting:
+        # a REVERSAL call starts on the losing side on purpose - so show how likely the cross it needs is (the flip risk of
+        # the side price is on now), not a scary "CRITICAL, it's losing"
+        fv = flip_risk_sustained(name, -csign, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"),
+                                 ls.get("crosses") or 0, ls.get("events"), d.get("ticker"))
+        if fv:
+            pc = fv["score"]
+            cls_ = "up" if pc >= 46 else ("warn" if pc >= 21 else "down")
+            lvl = "ON TRACK" if pc >= 46 else ("BUILDING" if pc >= 21 else "STALLED")
+            return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR &middot; REVERSAL</div>'
+                    f'<div class="fr-big {cls_}">{pc:.0f}% <span>{lvl}</span></div>'
+                    f'<div class="fr-track2"><i class="{cls_}" style="width:{min(100, pc):.0f}%"></i></div>'
+                    f'<div class="fr-txt">Chance price crosses back to {"UP" if call == "YES" else "DOWN"} - the cross this reversal needs</div>'
+                    + (f'<div class="fr-txt hint">{" &middot; ".join(fv["drivers"][:3])}</div>' if fv["drivers"] else "")
+                    + '</div>')
+    fr = flip_risk_sustained(name, csign, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"),
                              ls.get("crosses") or 0, ls.get("events"), d.get("ticker"))
     if not fr:
         return '<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div><div class="fr-big flat">--</div></div>'
