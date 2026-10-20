@@ -1,0 +1,153 @@
+// Auto support/resistance trend lines - connects swing highs and swing
+// lows (fractal pivots), keeps whichever candidate line the most OTHER
+// swing points actually land close to, same idea as drawing them by hand.
+// Works on any symbol/timeframe you have the chart set to - daily/weekly
+// "big mountain" swings included, since it just reads whatever candles
+// TradingView is already showing you.
+//@version=6
+indicator("Auto Support/Resistance", overlay = true, max_lines_count = 20, max_labels_count = 20)
+
+pivotLen   = input.int(5, "Pivot strength (bars each side)", minval = 2, maxval = 20,
+             tooltip = "Higher = only counts bigger swings (fewer, more significant pivots). Lower = catches smaller swings too.")
+lookback   = input.int(300, "Bars to scan back", minval = 50, maxval = 500)
+tolPct     = input.float(0.3, "Touch tolerance (% of price)", minval = 0.05, maxval = 3.0, step = 0.05,
+             tooltip = "How close a swing point has to be to a candidate line to count as 'touching' it.")
+minTouches = input.int(3, "Minimum touches to draw a line", minval = 2, maxval = 6)
+maxLines   = input.int(3, "Max support / resistance lines each", minval = 1, maxval = 6)
+
+// --- pivot detection ---------------------------------------------------
+ph = ta.pivothigh(high, pivotLen, pivotLen)
+pl = ta.pivotlow(low, pivotLen, pivotLen)
+
+var array<int>   highBar = array.new<int>()
+var array<float> highVal = array.new<float>()
+var array<int>   lowBar  = array.new<int>()
+var array<float> lowVal  = array.new<float>()
+
+if not na(ph)
+    array.push(highBar, bar_index - pivotLen)
+    array.push(highVal, ph)
+if not na(pl)
+    array.push(lowBar, bar_index - pivotLen)
+    array.push(lowVal, pl)
+
+trimOld(barArr, valArr) =>
+    while barArr.size() > 0 and bar_index - barArr.get(0) > lookback
+        barArr.remove(0)
+        valArr.remove(0)
+trimOld(highBar, highVal)
+trimOld(lowBar, lowVal)
+
+// --- find the best-fit line(s) through a set of pivots ------------------
+// Tries every pair as a candidate line, scores it by how many OTHER pivots
+// lie within tolerance, picks the top `maxLines` non-overlapping candidates.
+findLines(barArr, valArr, tol, minT, maxN) =>
+    var array<float> resultSlope = array.new<float>()
+    var array<float> resultInt   = array.new<float>()
+    var array<int>   resultTouch = array.new<int>()
+    array.clear(resultSlope)
+    array.clear(resultInt)
+    array.clear(resultTouch)
+    n = barArr.size()
+    if n >= 2
+        var array<float> candSlope = array.new<float>()
+        var array<float> candInt   = array.new<float>()
+        var array<int>   candTouch = array.new<int>()
+        array.clear(candSlope)
+        array.clear(candInt)
+        array.clear(candTouch)
+        for a = 0 to n - 2
+            for b = a + 1 to n - 1
+                x1 = barArr.get(a)
+                x2 = barArr.get(b)
+                y1 = valArr.get(a)
+                y2 = valArr.get(b)
+                if x2 != x1
+                    slope = (y2 - y1) / (x2 - x1)
+                    intercept = y1 - slope * x1
+                    touches = 0
+                    for c = 0 to n - 1
+                        xc = barArr.get(c)
+                        yc = valArr.get(c)
+                        predicted = slope * xc + intercept
+                        if math.abs(yc - predicted) <= tol
+                            touches += 1
+                    if touches >= minT
+                        array.push(candSlope, slope)
+                        array.push(candInt, intercept)
+                        array.push(candTouch, touches)
+        // pick the top maxN candidates by touch count, skipping near-duplicates
+        picked = 0
+        // simple selection: repeatedly take the best remaining candidate
+        used = array.new<bool>(candSlope.size(), false)
+        for k = 0 to maxN - 1
+            bestIdx = -1
+            bestTouch = -1
+            for c = 0 to candSlope.size() - 1
+                if not array.get(used, c) and array.get(candTouch, c) > bestTouch
+                    bestTouch := array.get(candTouch, c)
+                    bestIdx := c
+            if bestIdx >= 0
+                array.set(used, bestIdx, true)
+                array.push(resultSlope, array.get(candSlope, bestIdx))
+                array.push(resultInt, array.get(candInt, bestIdx))
+                array.push(resultTouch, array.get(candTouch, bestIdx))
+    [resultSlope, resultInt, resultTouch]
+
+tol = close * tolPct / 100.0
+
+var line[] resLines = array.new<line>()
+var label[] resLabels = array.new<label>()
+var line[] supLines = array.new<line>()
+var label[] supLabels = array.new<label>()
+
+if barstate.islast
+    // clear previously drawn lines/labels before redrawing
+    for l in resLines
+        line.delete(l)
+    for lb in resLabels
+        label.delete(lb)
+    for l in supLines
+        line.delete(l)
+    for lb in supLabels
+        label.delete(lb)
+    array.clear(resLines)
+    array.clear(resLabels)
+    array.clear(supLines)
+    array.clear(supLabels)
+
+    [rSlope, rInt, rTouch] = findLines(highBar, highVal, tol, minTouches, maxLines)
+    [sSlope, sInt, sTouch] = findLines(lowBar, lowVal, tol, minTouches, maxLines)
+
+    x0 = bar_index - lookback
+    x1 = bar_index + 20  // project a bit forward
+
+    for i = 0 to rSlope.size() - 1
+        slope = array.get(rSlope, i)
+        intercept = array.get(rInt, i)
+        y0 = slope * x0 + intercept
+        y1 = slope * x1 + intercept
+        ln = line.new(x0, y0, x1, y1, xloc.bar_index, extend.none, color.new(color.orange, 20), line.style_solid, 2)
+        array.push(resLines, ln)
+        lb = label.new(x1, y1, "R (" + str.tostring(array.get(rTouch, i)) + " touches)",
+                        xloc.bar_index, yloc.price, color.new(color.orange, 80), label.style_label_left,
+                        color.orange, size.small)
+        array.push(resLabels, lb)
+
+    for i = 0 to sSlope.size() - 1
+        slope = array.get(sSlope, i)
+        intercept = array.get(sInt, i)
+        y0 = slope * x0 + intercept
+        y1 = slope * x1 + intercept
+        ln = line.new(x0, y0, x1, y1, xloc.bar_index, extend.none, color.new(color.blue, 20), line.style_solid, 2)
+        array.push(supLines, ln)
+        lb = label.new(x1, y1, "S (" + str.tostring(array.get(sTouch, i)) + " touches)",
+                        xloc.bar_index, yloc.price, color.new(color.blue, 80), label.style_label_left,
+                        color.blue, size.small)
+        array.push(supLabels, lb)
+
+// optional: mark the raw pivot points themselves, small dots
+plotshape(not na(ph), style = shape.xcross, location = location.abovebar, color = color.orange,
+          size = size.tiny, offset = -pivotLen, title = "Swing high")
+plotshape(not na(pl), style = shape.xcross, location = location.belowbar, color = color.blue,
+          size = size.tiny, offset = -pivotLen, title = "Swing low")
