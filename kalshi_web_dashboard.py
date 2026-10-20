@@ -8479,9 +8479,8 @@ def build_stage_box(name, d, key):
                 f'{"" if c.get("crosses") == 1 else "es"} so far</div>'
                 + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line, locked at {c.get("elapsed", 0) // 60}:{c.get("elapsed", 0) % 60:02d}</div>' if diff is not None else "")
                 + hold_html + _sig_html(c.get("signals"))
-                + (f'<div class="sb-note">{c["why"]}</div>' if c.get("why") else ""))
-        tip = (f'chance of UP when it locked: {p_up:.1%} = blend of Kalshi {c.get("kalshi_yes")}, fair value {c.get("fair_yes")}, '
-               f'flow {c.get("flow_up")}')
+                + (f'<!--OWNER--><div class="sb-note">{c["why"]}</div><!--/OWNER-->' if c.get("why") else ""))
+        tip = "locked call - graded when the round settles"
     elif c.get("skipped"):
         cls += " stage-skip"
         body = (f'<div class="sb-dir flat">NO CALL</div><div class="sb-tier tier-skip">SKIPPED</div>'
@@ -8525,7 +8524,7 @@ def build_stage_box(name, d, key):
     alert = ""
     if (c.get("call") or c.get("skipped")) and (d.get("stage_just") == key or time.time() - (c.get("ts") or 0) < 25):
         alert = (f'<span class="stage-alert" data-name="{name}" data-stage="{key}" data-call="{c.get("call") or ""}" '
-                 f'data-tier="{c.get("tier") or ""}" data-why="{_html_attr(c.get("why") or "")}" data-rev="{1 if c.get("reversal") else 0}" '
+                 f'data-tier="{c.get("tier") or ""}" data-why="{_html_attr(c.get("why") or "") if not c.get("call") else ""}" data-rev="{1 if c.get("reversal") else 0}" '
                  f'data-sure="{round(max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)) * 100)}" '
                  f'data-key="{name}::{d.get("ticker", "")}::{key}" style="display:none;"></span>')
     return (f'<div class="{cls}" title="{_html_attr(tip)}"><div class="sb-title">{title}</div>{body}{rec_html}{alert}</div>')
@@ -8541,7 +8540,7 @@ def _sig_html(sig):
         bits.append(f'<span class="{"up" if v > 0 else ("down" if v < 0 else "flat")}">{lab} {"&#9650;" if v > 0 else ("&#9660;" if v < 0 else "&#8211;")}</span>')
     cs, agree, oppose = signal_consensus(sig)
     tail = (f' &middot; <b>{agree} of {len(sig)} {"UP" if cs > 0 else "DOWN"}</b>' if cs else " &middot; <b>mixed</b>")
-    return f'<div class="sb-sig">{" ".join(bits)}{tail}</div>'
+    return f'<!--OWNER--><div class="sb-sig">{" ".join(bits)}{tail}</div><!--/OWNER-->'
 
 
 def stage_summary_row(name, d):
@@ -9081,7 +9080,7 @@ def build_flip_radar(name, d):
                     f'<div class="fr-big {cls_}">{pc:.0f}% <span>{lvl}</span></div>'
                     f'<div class="fr-track2"><i class="{cls_}" style="width:{min(100, pc):.0f}%"></i></div>'
                     f'<div class="fr-txt">Chance price crosses back to {"UP" if call == "YES" else "DOWN"} - the cross this reversal needs</div>'
-                    + (f'<div class="fr-txt hint">{" &middot; ".join(fv["drivers"][:3])}</div>' if fv["drivers"] else "")
+                    + (f'<!--OWNER--><div class="fr-txt hint">{" &middot; ".join(fv["drivers"][:3])}</div><!--/OWNER-->' if fv["drivers"] else "")
                     + '</div>')
     fr = flip_risk_sustained(name, csign, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"),
                              ls.get("crosses") or 0, ls.get("events"), d.get("ticker"))
@@ -9112,12 +9111,13 @@ def build_flip_radar(name, d):
            f'book walls {p["book"]:+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
     marker = (f'<span class="flip-chance-value" data-flip-src="radar" data-flip-chance-key="{name}::{d.get("ticker", "")}{("::" + key) if key else ""}" '
               f'data-flip-chance-pct="{pct:.2f}" style="display:none;"></span>')
-    return (f'<div class="rs-tile flip-radar" title="{_html_attr(tip.replace("&middot;", "|"))}"><div class="rs-title">FLIP RADAR</div>'
+    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
             f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
             f'<div class="fr-txt">Chance {which} ({"UP" if call == "YES" else "DOWN"}) flips</div>'
-            + (f'<div class="fr-txt">&#9888; {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
+            + '<!--OWNER-->' + (f'<div class="fr-txt">&#9888; {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
+            + f'<div class="fr-txt hint">{_html_attr(tip).replace("&amp;middot;", "&middot;")}</div><!--/OWNER-->'
             + f'{spike}{kal}{marker}</div>')
 
 
@@ -9350,7 +9350,7 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
             f'<div class="wr-tabs">{assets}</div><div class="wr-tabs">{calls}</div><div class="wr-tabs">{rngs}</div>{grid}'
             f'{daily}{weekly}<div class="wr-list">{"".join(lst) or "<div class=hint>No graded rounds in this range yet.</div>"}</div>{more}'
             f'<div class="hint" style="margin-top:6px;">{allst["n"]:,} graded rounds saved for {name} (kept up to {HISTORY_CAP:,}). '
-            f'<a href="/backtest" target="_blank" style="color:#e9a5bb;">Backtest report &rarr;</a></div>')
+            f'<!--OWNER--><a href="/backtest" target="_blank" style="color:#e9a5bb;">Backtest report &rarr;</a><!--/OWNER--></div>')
 
 
 @_never_break
@@ -9639,10 +9639,10 @@ def build_pressure_bar(asset_name, d=None, part="all"):
         f'<span class="down"><b>{_coin_amt(coin, m["sell_qty"])} {coin}</b> sold <span class="hint">({_usd_short(m["sell"])})</span> &#9660;</span></div>'
         f'<div class="press-bar"><div class="press-buy" style="width:{buy:.1f}%">{buy:.0f}% buy</div>'
         f'<div class="press-sell" style="width:{sell:.1f}%">{sell:.0f}% sell</div><span class="press-mid"></span></div>'
-        f'<div class="press-chips">{"".join(chips)}{book}</div>{mc_html.split("<details")[0] if mc_html else ""}</div>')
+        f'<div class="press-chips">{"".join(chips)}{book}</div><!--OWNER-->{mc_html.split("<details")[0] if mc_html else ""}<!--/OWNER--></div>')
     detail_html = (
         f'<div class="row press-row" data-asset-press="{asset_name}"><div class="press-head"><b>{coin} ORDER FLOW DETAIL</b></div>'
-        f'{"".join(split)}{cvd_html}{deriv_html}{tape}{health}{("<details" + mc_html.split("<details", 1)[1]) if "<details" in mc_html else ""}'
+        f'{"".join(split)}{cvd_html}{deriv_html}{tape}{health}{("<!--OWNER--><details" + mc_html.split("<details", 1)[1] + "<!--/OWNER-->") if "<details" in mc_html else ""}'
         f'<details class="press-more" data-pat="PRESS|{asset_name}"><summary class="hint">by exchange (information only - never used for buying)</summary>'
         f'{table}</details></div>')
     if part == "top":
@@ -10649,7 +10649,7 @@ def render_html():
           {stage_summary_row(name, d)}
           {pattern_window_html}
           {build_rounds_panel(name, d)}
-          <details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
+          <!--OWNER--><details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
           {tug_html}
           {pressure_html}
           <div class="row bot-calls"><span class="label">Bot&#39;s own calls (drive the real-money auto-buy)</span>
@@ -10677,7 +10677,7 @@ def render_html():
           {last_html if SHOW_BOT_RECORD else ''}
           <div class="ranges"><b>Predicted range (median/typical move, empirical):</b>{ranges_html}</div>
           {near_footer_html}
-          </details>
+          </details><!--/OWNER-->
           <!--OWNER-->{live_pull_html}<!--/OWNER-->
         </div>''')
 
@@ -10691,7 +10691,8 @@ PUBLIC_GET = {"/", "/login", "/signup", "/forgot", "/reset", "/setup", "/logout"
               "/health", "/favicon.ico"}
 OWNER_ONLY = {"/admin", "/arm_live", "/set_live_size", "/set_flip_target", "/set_flip_max_price", "/set_main_max_price",
               "/set_buy_delay", "/set_main_sell_price", "/set_flip_sell_mode", "/set_flip_hold_if_certain",
-              "/set_protect_threshold", "/backtest_run", "/locked", "/live_status"}
+              "/set_protect_threshold", "/backtest_run", "/locked", "/live_status", "/backtest", "/backtest.txt",
+              "/backtest.json", "/debug_poll", "/debug_threads"}
 _OWNER_RE = re.compile(r"<!--OWNER-->.*?<!--/OWNER-->", re.S)
 _admin_reset_links = {}
 
@@ -10702,8 +10703,22 @@ def _public_state(name):
         return dict(d) if isinstance(d, dict) else {}
 
 
+_OWNER_TOK = re.compile(r"<!--(/?)OWNER-->")
+
+
 def _strip_owner_only(html_, user):
-    return html_ if (user and user.get("role") == "owner") else _OWNER_RE.sub("", html_)
+    """Owner sees everything. Everyone else gets the page with every <!--OWNER-->...<!--/OWNER--> block removed (nesting-safe)."""
+    if user and user.get("role") == "owner":
+        return html_
+    out, depth, pos = [], 0, 0
+    for m in _OWNER_TOK.finditer(html_):
+        if depth == 0:
+            out.append(html_[pos:m.start()])
+        depth = max(0, depth + (-1 if m.group(1) else 1))
+        pos = m.end()
+    if depth == 0:
+        out.append(html_[pos:])
+    return "".join(out)
 
 
 def _safe_next(n):
@@ -11059,8 +11074,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed.query)
             try:
                 lim = max(0, min(HISTORY_CAP, int((qs.get("limit") or ["300"])[0])))
-                html_ = round_history_html((qs.get("asset") or [""])[0], (qs.get("call") or ["sealed"])[0],
-                                           (qs.get("range") or ["all"])[0], lim)
+                html_ = _strip_owner_only(round_history_html((qs.get("asset") or [""])[0], (qs.get("call") or ["sealed"])[0],
+                                                             (qs.get("range") or ["all"])[0], lim), user)
             except Exception as _he:
                 html_ = f'<div class="hint">history error: {_html_attr(repr(_he))}</div>'
             body = json.dumps({"html": html_}).encode()
