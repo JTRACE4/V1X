@@ -6115,8 +6115,9 @@ function checkBuildingAlerts() {
     flipFired.add(key + '::' + why);
     if (why === 'crit') flipFired.add(key + '::jump');
     if (!soundEnabled || assetSoundEnabled[name] === false) return;
-    playFlipSound();
-    speakDelayed(name + '. ' + (why === 'crit' ? 'Flip radar critical, ' : 'Flip risk jumped to ') + Math.round(pct) + ' percent.', 900);
+    // 2026-10-20: voice only, no sound effect
+    const coin = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
+    speakUrgent(coin + '. ' + (why === 'crit' ? 'A flip is happening.' : 'A flip might be happening.'), 0);
   });
 }
 
@@ -7286,7 +7287,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playAlienSound('BNB')">Test BNB sound</button>
       <button onclick="playWhaleSound('buy'); showWhaleCrossing('BTC','buy')">Test whale BUY</button>
       <button onclick="playWhaleSound('sell'); showWhaleCrossing('BTC','sell')">Test whale SELL</button>
-      <button onclick="playFlipSound(); speakDelayed('BTC. Flip radar critical, 74 percent.', 900)">Test flip alert</button>
+      <button onclick="speakRaw('Bitcoin. A flip might be happening.')">Test flip warning</button>
+      <button onclick="speakRaw('Bitcoin. A flip is happening.')">Test flip alert</button>
       <button onclick="speakRaw('Voice check. Whale buy. 2.4 million dollars.')">Test voice</button>
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin. Early call. UP. good confidence, 68 percent.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('Bitcoin. Call locked. DOWN. super confident, 84 percent sure.'),650)">Test call locked</button>
