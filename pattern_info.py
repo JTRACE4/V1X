@@ -21,7 +21,7 @@ INFO = {
                         "Bearish reversal warning, strongest after an uptrend or at resistance.", "Needs a down candle after it to confirm."),
     "dragonfly doji": ("Open, close and high are near the top; price dumped and was bought back up. Looks like a dragonfly.",
                        "Bullish reversal warning, strongest after a downtrend or at support.", "Needs an up candle after it to confirm."),
-    "long-legged doji": ("A doji with long wicks on both sides: a big tug-of-war that ended where it started.",
+    "long-legged doji": ("A doji with long wicks on both sides: buyers and sellers fought hard and it ended where it started.",
                          "Indecision; a turning point or a pause is possible.", "Direction of the next candle decides it."),
     "doji": ("Open and close are almost equal, so neither side won the period.",
              "Indecision. After a strong move it can mark a pause or a reversal.", "Wait for the next candle's direction."),

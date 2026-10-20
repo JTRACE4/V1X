@@ -5153,6 +5153,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#e3e9f7; }
 .press-top { border-bottom:none; margin-bottom:10px; }
 .press-sub { font-size:11px; margin:-2px 0 3px; }
+.more-detail { margin-top:14px; border-top:1px solid #27345a; padding-top:8px; }
+.more-detail > summary { cursor:pointer; font-size:13px; padding:6px 0; letter-spacing:0.5px; }
 .fa-item { padding:4px 8px; cursor:default; }
 .fa-item .fa-detail { display:none; }
 .fa-item:hover .fa-detail, .fa-item:active .fa-detail { display:block; }
@@ -6899,8 +6901,8 @@ def build_tug_panel(name, d):
         fl = fused * 100
         lean = "UP" if fl >= 50 else "DOWN"
         lean_pct = fl if fl >= 50 else 100 - fl
-        lean_html = (f'<div class="tug-lean {"up" if fl >= 50 else "down"}">pressure leans {lean} <b>{lean_pct:.0f}%</b> across {len(used)} feed'
-                     f'{"s" if len(used) != 1 else ""} <span class="hint">(price vs the line counts half, the flow feeds the other half - a lean, not a score)</span></div>'
+        lean_html = (f'<div class="tug-lean {"up" if fl >= 50 else "down"}">overall lean: {lean} <b>{lean_pct:.0f}%</b> '
+                     f'<span class="hint">({len(used)} feed{"s" if len(used) != 1 else ""})</span></div>'
                      f'<div class="tug-bar"><i style="width:{fl:.1f}%"></i><b style="left:{fl:.1f}%"></b></div>')
     else:
         lean_html = '<div class="tug-lean hint">collecting feeds...</div>'
@@ -6923,18 +6925,18 @@ def build_tug_panel(name, d):
     if flow_up is not None:
         flow_side_up = flow_up >= 0.5
         if flow_side_up == up_side:
-            agree = (f'<div class="tug-agree ok">&#10003; flow and price agree - {"buyers pushing AND price above the line" if up_side else "sellers pushing AND price below the line"}</div>')
+            agree = f'<div class="tug-agree ok">&#10003; flow and price agree ({"both UP" if up_side else "both DOWN"})</div>'
         else:
-            agree = (f'<div class="tug-agree warn">&#9888; flow and price disagree - price is {"above" if up_side else "below"} the line but '
-                     f'{"buyers" if flow_side_up else "sellers"} are pushing the other way. In ~420 past rounds the PRICE side won about 3 times out of 4 when they disagreed.</div>')
+            agree = (f'<div class="tug-agree warn">&#9888; flow and price disagree - price says {"UP" if up_side else "DOWN"}, flow says '
+                     f'{"UP" if flow_side_up else "DOWN"} (the price side usually wins, about 3 in 4)</div>')
     lv = _flow.HUB.line_volume(name)
     around = ""
     if lv and lv.get("ticker") == d.get("ticker") and (lv["above"] + lv["below"]) > 0:
         tot = lv["above"] + lv["below"]
-        around = (f'<div class="hint tug-around">Around the line ({fmt_price(line, dec)}): <b>{_usd_short(lv["above"])}</b> traded above &middot; '
-                  f'<b>{_usd_short(lv["below"])}</b> traded below ({lv["above"] / tot * 100:.0f}% above) - Coinbase, Kraken, Bitstamp, Gemini, Bitfinex, Crypto.com</div>')
+        around = (f'<div class="hint tug-around">Traded above the line: <b>{_usd_short(lv["above"])}</b> &middot; below: '
+                  f'<b>{_usd_short(lv["below"])}</b> ({lv["above"] / tot * 100:.0f}% above)</div>')
     mm, ss = divmod(int(left), 60)
-    return (f'<div class="tug"><div class="tug-title">PRICE VS THE LINE &middot; tug of war <span class="hint">(this round &middot; resets in {mm:02d}:{ss:02d})</span></div>'
+    return (f'<div class="tug"><div class="tug-title">PRICE VS THE LINE - BREAKDOWN <span class="hint">(this round &middot; resets in {mm:02d}:{ss:02d})</span></div>'
             f'<div class="tug-top"><div><div class="hint">price to beat (Kalshi line)</div><div class="tug-big">{fmt_price(line, dec)}</div><div class="hint">{kal}</div></div>'
             f'<div class="tug-diff {"up" if up_side else "down"}">{"+" if up_side else "-"}{fmt_price(abs(diff), dec)} {"above" if up_side else "below"}</div></div>'
             f'<div class="tug-gauge"><span class="tug-gl hint">DOWN</span><span class="tug-gline"></span><i style="left:{needle:.1f}%"></i><span class="tug-gr hint">UP</span></div>'
@@ -8287,8 +8289,7 @@ def build_pressure_bar(asset_name, d=None, part="all"):
             lu, lq = ser[-1][1], ser[-1][2]
             cvd_html = (f'<div class="press-cvd"><div class="press-cvd-head"><b>Net volume delta this round</b> '
                         f'<span class="{"up" if lu >= 0 else "down"}"><b>{"+" if lq >= 0 else ""}{_coin_amt(coin, lq)} {coin}</b> '
-                        f'({"+" if lu >= 0 else "-"}{_usd_short(lu)})</span> <span class="hint">rising = buyers have been hitting the asks, '
-                        f'falling = sellers hitting the bids</span></div>{_cvd_svg(ser, coin)}</div>')
+                        f'({"+" if lu >= 0 else "-"}{_usd_short(lu)})</span> <span class="hint">(up = buyers leading)</span></div>{_cvd_svg(ser, coin)}</div>')
     # biggest aggregated prints
     bp = _ENG.big_prints(asset_name, seconds=180, limit=6)
     tape = ""
@@ -8332,9 +8333,8 @@ def build_pressure_bar(asset_name, d=None, part="all"):
     deriv_html = f'<div class="hint press-deriv">{" &nbsp;|&nbsp; ".join(dv)}</div>' if dv else ""
     h = _flow.HUB.feed_health()
     ps = _ENG.print_stats(asset_name, 60)
-    health = (f'<div class="hint press-health">&#10003; {h["n_live"]} of {h["n_total"]} exchange feeds live &middot; every trade counted once '
-              f'(exchange trade id) - <b>{h["dupes_15m"]}</b> repeated trade{"s" if h["dupes_15m"] != 1 else ""} dropped in the last 15 min'
-              f' &middot; last minute: {ps["fills"]:,} fills = {ps["prints"]:,} market orders &middot; liquidations shown separately, never added again</div>')
+    health = (f'<div class="hint press-health">&#10003; {h["n_live"]}/{h["n_total"]} feeds live &middot; each trade counted once '
+              f'({h["dupes_15m"]} repeat{"s" if h["dupes_15m"] != 1 else ""} dropped, 15 min)</div>')
     rows = []
     for v in s["venues"]:
         if v["pct"] is None and v["book_pct"] is None:
@@ -8382,8 +8382,8 @@ def build_pressure_bar(asset_name, d=None, part="all"):
         mc_html = '<div class="press-health hint">Math check: fetching each exchange&#39;s own 24h numbers (first check about 30 seconds after start)...</div>'
     top_html = (
         f'<div class="row press-row press-top" data-asset-press="{asset_name}">'
-        f'<div class="press-head"><b>{coin} BOUGHT vs SOLD &middot; {win_lbl.upper()}</b> <span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
-        f'<div class="hint press-sub">{s["live_n"]} exchanges live &middot; counted by who hit the market (the aggressor) &middot; each trade once</div>'
+        f'<div class="press-head"><b>BUY PRESSURE</b> <span class="hint">{coin} bought vs sold, {win_lbl}, {s["live_n"]} exchanges</span> '
+        f'<span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
         f'<div class="press-qty"><span class="up">&#9650; <b>{_coin_amt(coin, m["buy_qty"])} {coin}</b> bought <span class="hint">({_usd_short(m["buy"])})</span></span>'
         f'<span class="press-net {"up" if net_q >= 0 else "down"}">net {"+" if net_q >= 0 else ""}{_coin_amt(coin, net_q)} {coin} '
         f'({"+" if net_usd >= 0 else "-"}{_usd_short(net_usd)})</span>'
@@ -9402,15 +9402,16 @@ def render_html():
           {build_round_strip(name, d)}
           {build_scoreboard(name, d)}
           {build_top_strip(name, d)}
-          <div class="row bot-calls"><span class="label">Bot&#39;s own calls (these drive the real-money auto-buy, unchanged)</span>
-            <span class="value">first validated call {locked_call_html} <span class="hint">{locked_when_html} @ {locked_price_html}</span>
-            &nbsp;|&nbsp; late call (~4.5 min left) {late_call_html} <span class="hint">{late_pct_html}</span></span></div>
           {stage_summary_row(name, d)}
-          {flip_meter_html}
-          {flip_counts_html}
+          {pattern_window_html}
+          {build_rounds_panel(name, d)}
+          <details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
           {tug_html}
           {pressure_html}
-          {pattern_window_html}
+          <div class="row bot-calls"><span class="label">Bot&#39;s own calls (drive the real-money auto-buy)</span>
+            <span class="value">first call {locked_call_html} <span class="hint">{locked_when_html}</span>
+            &nbsp;|&nbsp; late call {late_call_html}</span></div>
+          {flip_meter_html}
           {pattern_panel_html}
           {pattern_hist_html}
           <div class="row"><span class="label">{direction_label}</span><span class="value {lean_class}">{leaning_html}</span></div>{fair_html}
@@ -9432,7 +9433,7 @@ def render_html():
           {last_html}
           <div class="ranges"><b>Predicted range (median/typical move, empirical):</b>{ranges_html}</div>
           {near_footer_html}
-          {build_rounds_panel(name, d)}
+          </details>
           {live_pull_html}
         </div>''')
 
