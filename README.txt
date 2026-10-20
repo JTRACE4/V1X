@@ -62,3 +62,17 @@ UPDATE 4 (same day)
   moving at the line) agree - RSI required unless 4+ agree. Shown as "REVERSAL ~4.5x" with the Kalshi payout, graded like
   every call, and tracked separately in the round history (record, avg payout, units won/lost). The bot's own real-money
   auto-buy is unchanged - reversal calls never place a trade on their own.
+
+UPDATE 5 (same day)
+- FLIP RADAR 10-SECOND RULE: the score shown is the lowest reading of the last 10 seconds, so a 1-2 second burst can't
+  throw it from 15% to 45%. Pressure has to hold 10 straight seconds to lift it above 20%; it drops straight away when
+  pressure eases. A one-off burst is shown underneath as "burst to N% right now - counts only if it holds 10s".
+  Reversal calls use the same steadied score.
+- BACKTEST (backtest_engine.py): runs on the server 90s after start and again every 24h. Pulls the last 21 days of settled
+  KXBTC15M rounds from Kalshi (strike, result, price every minute), Coinbase 1-minute prices and Binance 1-minute taker
+  volume, rebuilds the 4:00 and 8:00 reads, and grades: buying the favorite, the current call rules (by tier), reversal
+  calls (with a threshold sweep) and a search for filters that win 80%+ - chosen on the older 70% of rounds, checked on
+  the newest 30% they never saw. Win rate AND money (Kalshi price + 1c slippage + fee). Report: /backtest
+  (also /backtest.txt, /backtest.json, /backtest_run to re-run now).
+- Live effect: reversal calls switch off for a stage whose reversals lost money in the backtest; calls matching a filter
+  that held 80%+ on unseen rounds get a "★ 80% SETUP" tag showing its backtest win rate and money result.

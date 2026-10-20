@@ -30,6 +30,7 @@ the live trading bot itself uses, not something to retune off a few dozen
 samples. Only the price number adapts, and the adjustment is always shown
 plainly, never hidden.
 """
+import collections
 import csv
 import datetime as dt
 import http.server
@@ -4086,6 +4087,7 @@ def poll_loop():
                             hist[-1][f"{_sk}_correct"] = (_c["call"] == actual_side) if _c.get("call") else None
                             hist[-1][f"{_sk}_tier"] = _c.get("tier")
                             hist[-1][f"{_sk}_reversal"] = bool(_c.get("reversal"))
+                            hist[-1][f"{_sk}_zone80"] = _c.get("zone80")
                             hist[-1][f"{_sk}_payout"] = _c.get("rev_payout")
                         del hist[:-HISTORY_CAP]
                         _save_history()
@@ -4284,6 +4286,13 @@ def poll_loop():
                 except Exception:
                     _trend_v, _trend_d = 0, {}
                 stage_sig = stage_signals(kalshi_price, live_price, target, spot_closes, _f2, _tn["ex_up"] if _tn else None, _trend_v)
+                try:     # feed the 10-second flip-risk memory every poll, even with no page open
+                    if live_price and target and abs(live_price - target) / target >= CROSS_BAND_PCT:
+                        flip_risk_sustained(asset["name"], 1 if live_price > target else -1, live_price, target, seconds_left,
+                                            elapsed_seconds, (line_stats or {}).get("crosses") or 0,
+                                            (line_stats or {}).get("events"), ticker)
+                except Exception:
+                    pass
                 _stage_wait = locked.setdefault("stage_wait", {})
                 for _sk, _mark, _lab, _mk in STAGE_CALLS:
                     if _sk in stage_calls or elapsed_seconds < _mark:
@@ -4325,14 +4334,26 @@ def poll_loop():
                     _rev = None
                     try:
                         _rev = reversal_check(asset["name"], live_price, target, seconds_left, elapsed_seconds, line_stats,
-                                              rsi_multi, stage_sig, kalshi_price, ticker)
+                                              rsi_multi, stage_sig, kalshi_price, ticker, stage=_sk)
                     except Exception as _rve:
                         print(f"[reversal] {_rve!r}")
                     if _rev and _rev["call"] != _call:
                         _call, _tier, _why = _rev["call"], _rev["tier"], _rev["why"]
                     elif _rev:
                         _rev = None
+                    _z80 = _z80roi = None
+                    try:
+                        _rule = (_bt.decisions().get("rule80") or {}).get(_sk)
+                        if _rule and _call and not _rev and kalshi_price is not None and live_price and target:
+                            _zf = {"kp": kalshi_price, "dist": (live_price - target) / target, "crosses": _crosses or 0,
+                                   "sig": dict(stage_sig), "r1": rsi_multi.get("rsi1")}
+                            if _bt.rule_match(_zf, _rule["rule"]) == _call:
+                                _z80 = round(_rule["holdout"]["win"], 3)
+                                _z80roi = _rule["holdout"].get("roi")
+                    except Exception as _ze:
+                        print(f"[80% rule] {_ze!r}")
                     stage_calls[_sk] = {
+                        "zone80": _z80, "zone80_roi": _z80roi,
                         "reversal": bool(_rev), "rev_payout": _rev["payout"] if _rev else None,
                         "rev_score": _rev["score"] if _rev else None,
                         "call": _call, "tier": _tier, "skipped": _call is None, "why": _why,
@@ -5229,6 +5250,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .wr-rev { margin:4px 0 6px; font-size:12px; padding:6px; border-radius:8px; background:#211a21; }
 .vol-warn { margin:4px 0 8px; padding:8px 10px; border-radius:10px; border:1px solid #d29922; background:rgba(210,153,34,0.12); color:#f3d28c; font-size:12px; line-height:1.4; }
 .hist-toast { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:9999; padding:10px 14px; border-radius:10px; background:#e5b85c; color:#1a1218; font-weight:700; }
+.sb-z80 { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#7be0b0; }
 .twap-lock { margin-top:4px; padding:4px 6px; border:1px dashed #4a3c43; border-radius:8px; }
 .twap-avg { font-weight:800; font-size:18px; line-height:1.2; }
 .twap-need { font-size:12px; line-height:1.3; }
@@ -7944,6 +7966,7 @@ def flip_counts(records):
 
 # ====================================================================== 2026-10-20 additions: top strip, stage calls, alert box
 from orderflow_engine import ENGINE as _ENG, KIND_LABEL as _KIND_LABEL
+import backtest_engine as _bt
 
 
 def _coin_amt(asset, q):
@@ -8229,7 +8252,10 @@ def build_stage_box(name, d, key):
         if holding is not None:
             hold_html = (f'<div class="sb-line">Kalshi now: <span class="{"up" if holding >= 0.5 else "down"}"><b>{holding:.0%}</b> - '
                          f'{"holding" if holding >= 0.5 else "going AGAINST it"}</span></div>')
-        rev = (f'<div class="sb-rev">&#8634; REVERSAL{(" &middot; ~" + format(c["rev_payout"], ".1f") + "x") if c.get("rev_payout") else ""}</div>'
+        z80 = (f'<div class="sb-z80">&#9733; 80% SETUP &middot; won {c["zone80"]:.0%} in backtest'
+               + (f' &middot; {c["zone80_roi"] * 100:+.0f}% per $ at Kalshi prices' if c.get("zone80_roi") is not None else "")
+               + '</div>' if c.get("zone80") else "")
+        rev = z80 + (f'<div class="sb-rev">&#8634; REVERSAL{(" &middot; ~" + format(c["rev_payout"], ".1f") + "x") if c.get("rev_payout") else ""}</div>'
                if c.get("reversal") else "")
         body = (f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>{rev}'
                 f'<div class="sb-tier {_TIER_CLS.get(tier, "")}">{tier}</div>'
@@ -8265,7 +8291,7 @@ def build_stage_box(name, d, key):
                 pw = "a coin flip right now - it will wait up to 60s"
             try:
                 _rv = reversal_check(name, d.get("spot_price"), d.get("target_price"), d.get("seconds_left"), el, ls,
-                                     d.get("rsi_multi"), sg, d.get("kalshi_price"), d.get("ticker"))
+                                     d.get("rsi_multi"), sg, d.get("kalshi_price"), d.get("ticker"), stage=key)
             except Exception:
                 _rv = None
             if _rv and _rv["call"] != pc:
@@ -8712,6 +8738,44 @@ def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, cros
             "drivers": [t for _w, t in sorted(drivers, key=lambda z: -abs(z[0]))]}
 
 
+# ---- 10-second rule (2026-10-20, user request): a one-second burst must not throw the radar from 10% to 42%. The score shown
+# is the LOWEST raw score of the last 10 seconds, so it can only climb as far as pressure has held for 10 straight seconds,
+# and drops straight away when pressure eases. Under 10 seconds of readings it never shows more than 20%.
+FLIP_SUSTAIN_S = 10
+FLIP_FREE_PCT = 20.0
+_flip_hist = {}          # (asset, ticker, call_sign) -> deque of (ts, raw score)
+
+
+def flip_risk_sustained(name, call_sign, spot, line, seconds_left, elapsed=None, crosses=0, events=None, ticker=None):
+    fr = flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed, crosses, events, ticker)
+    if not fr:
+        return fr
+    now = time.time()
+    key = (name, ticker, call_sign)
+    h = _flip_hist.get(key)
+    if h is None:
+        h = _flip_hist[key] = collections.deque()
+        for k in [k for k in _flip_hist if k[0] == name and k != key and k[1] != ticker]:
+            _flip_hist.pop(k, None)               # old rounds
+    h.append((now, fr["score"]))
+    while h and now - h[0][0] > FLIP_SUSTAIN_S + 5:
+        h.popleft()
+    win = [sc for t, sc in h if now - t <= FLIP_SUSTAIN_S]
+    covered = (now - h[0][0]) >= FLIP_SUSTAIN_S - 1
+    raw = fr["score"]
+    shown = min(win) if covered else min(raw, FLIP_FREE_PCT, min(win))
+    fr["raw"] = raw
+    fr["score"] = shown
+    fr["held"] = covered
+    tier, cls = "LOW", "up"
+    for lim, t_, c_ in FLIP_TIERS:
+        if shown <= lim:
+            tier, cls = t_, c_
+            break
+    fr["tier"], fr["cls"] = tier, cls
+    return fr
+
+
 # ---------------------------------------------------------------- REVERSAL CALLS (2026-10-20, user request)
 # "Don't be scared to call the currently losing side if the RSI data and other factors support it." When the composite
 # flip score says the side price is on now is in trouble AND RSI + momentum point the other way, the early / sealed call
@@ -8722,13 +8786,21 @@ REVERSAL_MIN_VOTES = 3          # at least 3 of: RSI stretched, flow against, ca
 REVERSAL_RSI_HI, REVERSAL_RSI_LO = 68, 32
 
 
-def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_multi, sig, kalshi_yes, ticker=None):
-    """None, or {"call", "tier", "why", "score", "votes", "payout"} - call the side that is LOSING right now."""
+def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_multi, sig, kalshi_yes, ticker=None, stage=None):
+    """None, or {"call", "tier", "why", "score", "votes", "payout"} - call the side that is LOSING right now.
+    Kept only if the backtest says it pays: once a backtest has finished, a stage whose reversal calls lost money over the
+    tested rounds stops making them (until the next daily re-test says otherwise)."""
     if not spot or not line or abs(spot - line) / line < CROSS_BAND_PCT:
         return None
+    try:
+        gate = (_bt.decisions().get("reversal_enabled") or {})
+        if stage in gate and not gate[stage]:
+            return None
+    except Exception:
+        pass
     fav = 1 if spot > line else -1                       # the side price is on now
     ls = line_stats or {}
-    fr = flip_risk_core(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
+    fr = flip_risk_sustained(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
     if not fr or fr["score"] < REVERSAL_MIN_SCORE:
         return None
     rm = rsi_multi or {}
@@ -8776,8 +8848,8 @@ def build_flip_radar(name, d):
     if not (spot and line and call):
         return '<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div><div class="fr-big flat">--</div></div>'
     ls = d.get("line_stats") or {}
-    fr = flip_risk_core(name, 1 if call == "YES" else -1, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"),
-                        ls.get("crosses") or 0, ls.get("events"), d.get("ticker"))
+    fr = flip_risk_sustained(name, 1 if call == "YES" else -1, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"),
+                             ls.get("crosses") or 0, ls.get("events"), d.get("ticker"))
     if not fr:
         return '<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div><div class="fr-big flat">--</div></div>'
     pct, level, cls = fr["score"], fr["tier"], fr["cls"]
@@ -8796,6 +8868,10 @@ def build_flip_radar(name, d):
     if kp is not None:
         k_opp = (1 - kp) if call == "YES" else kp
         kal = f'<div class="fr-txt hint">Kalshi still prices the other side at {k_opp * 100:.0f}% - reference only, it lags the tape</div>'
+    spike = ""
+    if fr.get("raw") is not None and fr["raw"] - pct >= 10:
+        spike = (f'<div class="fr-txt hint">burst to {fr["raw"]:.0f}% right now - counts only if it holds '
+                 f'{FLIP_SUSTAIN_S}s</div>')
     p = fr["parts"]
     tip = (f'momentum {p["momentum"]:+.0f} &middot; cushion {p["cushion"]:+.0f} &middot; crosses {p["crosses"]:+.0f} &middot; '
            f'book walls {p["book"]:+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
@@ -8807,7 +8883,7 @@ def build_flip_radar(name, d):
             f'<div class="fr-txt">Chance {which} ({"UP" if call == "YES" else "DOWN"}) flips</div>'
             + (f'<div class="fr-txt">&#9888; {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
-            + f'{kal}{marker}</div>')
+            + f'{spike}{kal}{marker}</div>')
 
 
 def _mmss_words(sec):
@@ -8923,7 +8999,7 @@ def _wr_rows(name, call):
             continue
         t = _window_close_utc(h.get("ticker"))
         out.append({"t": t, "ok": bool(h[field]), "call": h.get(cfield), "actual": h.get("actual_side"),
-                    "rev": bool(h.get(f"{call}_reversal")), "payout": h.get(f"{call}_payout"),
+                    "rev": bool(h.get(f"{call}_reversal")), "payout": h.get(f"{call}_payout"), "z80": h.get(f"{call}_zone80"),
                     "final": h.get("final_price"), "strike": h.get("strike"), "tier": h.get(f"{call}_tier") if call != "bot" else None,
                     "ticker": h.get("ticker")})
     return out
@@ -8996,6 +9072,11 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
                       f'<td>{sum(agg[k])}</td></tr>' for k in keys)
         return (f'<details class="wr-more"><summary>{title}</summary><table class="press-table"><tr><th>{title.split()[0]}</th>'
                 f'<th>W-L</th><th>win %</th><th>rounds</th></tr>{trs}</table></details>')
+    z8 = [r for r in sel if r.get("z80")]
+    if z8:
+        zw = sum(r["ok"] for r in z8)
+        grid += (f'<div class="wr-rev">&#9733; 80% setups (live): <b class="skw">{zw}W</b> - <b class="skl">{len(z8) - zw}L</b> '
+                 f'({zw / len(z8):.0%})</div>')
     rv = [r for r in sel if r.get("rev")]
     if rv:
         rw = sum(r["ok"] for r in rv)
@@ -9017,7 +9098,7 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
         px = (fmt_price(r["final"], dec) if r["final"] is not None else "")
         if r.get("strike"):
             px += f' vs {fmt_price(r["strike"], dec)}'
-        lst.append(f'<div class="wr-row"><span>{tm}</span><span>{"&#8634; " if r.get("rev") else ""}{call_txt} &rarr; {act}{(" &middot; " + r["tier"]) if r.get("tier") else ""}'
+        lst.append(f'<div class="wr-row"><span>{tm}</span><span>{"&#8634; " if r.get("rev") else ""}{"&#9733; " if r.get("z80") else ""}{call_txt} &rarr; {act}{(" &middot; " + r["tier"]) if r.get("tier") else ""}'
                    f'<span class="hint"> {px}</span></span><b class="{"skw" if r["ok"] else "skl"}">{"W" if r["ok"] else "L"}</b></div>')
     more = (f'<button class="wr-btn" onclick="loadWr({{limit:{limit + 300}}})">Show more ({len(sel) - limit:,} older)</button>'
             if limit and len(sel) > limit else "")
@@ -9029,7 +9110,8 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
     return (f'<div class="wr-head"><b>ROUND HISTORY</b><button class="wr-btn" onclick="toggleWr()">Close</button></div>'
             f'<div class="wr-tabs">{assets}</div><div class="wr-tabs">{calls}</div><div class="wr-tabs">{rngs}</div>{grid}'
             f'{daily}{weekly}<div class="wr-list">{"".join(lst) or "<div class=hint>No graded rounds in this range yet.</div>"}</div>{more}'
-            f'<div class="hint" style="margin-top:6px;">{allst["n"]:,} graded rounds saved for {name} (kept up to {HISTORY_CAP:,}).</div>')
+            f'<div class="hint" style="margin-top:6px;">{allst["n"]:,} graded rounds saved for {name} (kept up to {HISTORY_CAP:,}). '
+            f'<a href="/backtest" target="_blank" style="color:#e9a5bb;">Backtest report &rarr;</a></div>')
 
 
 @_never_break
@@ -10464,6 +10546,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
+        elif parsed.path in ("/backtest", "/backtest.txt", "/backtest.json", "/backtest_run"):
+            if parsed.path == "/backtest_run" and not _bt.STATE["running"]:
+                threading.Thread(target=_bt.run, daemon=True, name="backtest-now").start()
+            if parsed.path == "/backtest.json":
+                body = json.dumps({"state": {k: v for k, v in _bt.STATE.items()}, "results": _bt.load_saved()}).encode()
+                ctype = "application/json"
+            else:
+                st = _bt.STATE
+                head = (f"status: {st['stage']} {st['progress']}" + (f" | error: {st['error']}" if st.get("error") else "")
+                        + (" | running..." if st["running"] else ""))
+                txt = head + "\n\n" + _bt.summary_text()
+                if parsed.path == "/backtest.txt":
+                    body, ctype = txt.encode(), "text/plain; charset=utf-8"
+                else:
+                    body = ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+                            '<title>Backtest</title><body style="background:#120e12;color:#eadfe4;font:13px/1.45 ui-monospace,Menlo,monospace;'
+                            'padding:12px;"><h2 style="font-family:sans-serif;">Backtest - 15-minute BTC calls</h2>'
+                            '<p><a style="color:#e9a5bb" href="/backtest_run">Run it again now</a> &middot; '
+                            '<a style="color:#e9a5bb" href="/backtest.txt">plain text</a> &middot; refreshes every 20s</p>'
+                            f'<pre style="white-space:pre-wrap;">{_html_attr(txt)}</pre>'
+                            '<script>setTimeout(function(){location.href="/backtest"},20000)</script></body>').encode()
+                    ctype = "text/html; charset=utf-8"
+            self.send_response(200); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(body)
         elif parsed.path == "/round_history":
             qs = urllib.parse.parse_qs(parsed.query)
             try:
@@ -10982,6 +11089,9 @@ def main():
         _flow.ENGINE.whale_threshold_fn = lambda a: get_adaptive_whale_thresholds(f"{a}-USD")
         _flow.start()
         threading.Thread(target=_book_track_loop, daemon=True, name="book-tracker").start()
+        _bt.configure(trend_read=trend_read, stage_decide=stage_decide, signal_consensus=signal_consensus)
+        _bt.load_saved()
+        _bt.start_background(delay=90, every_hours=24)
     except Exception as _e:
         print(f"[flow] could not start: {_e!r}")
     global _mtf
