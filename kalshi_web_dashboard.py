@@ -5664,6 +5664,20 @@ body { color:var(--br-text) !important; background-color:var(--br-bg) !important
 .sc-streak.loss { color:var(--br-loss) !important; background:rgba(169,155,224,0.12) !important; border-color:var(--br-loss) !important; border-radius:999px !important; }
 .lx-clean { border-color:var(--br-tan) !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:var(--br-tan) !important; }
 .lx-chop { border-color:var(--br-blush) !important; } .lx-chop .lx-num, .lx-chop .lx-zone { color:var(--br-blush) !important; }
+/* ---- 2026-10-20 (5): "Both" view readability - the 6-tile calls row was crammed into half-width cards and overflowed.
+   Let the tiles wrap into rows of 2-3 so every box gets real width; the green setup pill wraps cleanly instead of spilling. ---- */
+body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)) !important; gap:12px; }
+.calls-row > * { min-width:0; overflow-wrap:anywhere; }
+body[data-view="both"] .calls-row .stage-box { padding:12px 14px 10px; }
+body[data-view="both"] .calls-row .sb-dir { font-size:30px; }
+body[data-view="both"] .calls-row .sb-line { font-size:13px; }
+body[data-view="both"] .calls-row .sb-sig { font-size:12px; }
+body[data-view="both"] .rsi-box, body[data-view="both"] .lx-box, body[data-view="both"] .sk-box { display:flex; flex-direction:column; justify-content:center; }
+.sb-z80 { display:block; border-radius:14px !important; padding:5px 10px !important; line-height:1.35; max-width:100%; box-sizing:border-box; }
+.sb-sig span { display:inline-block; }
+body[data-view="both"] .card { min-width:0; }
+body[data-view="both"] .press-split-lab { flex:1 1 100%; }
+body[data-view="both"] .sc-wl { min-width:0; }
 </style>
 <script>
 let audioCtx = null;
