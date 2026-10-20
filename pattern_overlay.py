@@ -311,7 +311,7 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
     step = _x(0, n + 8, L, width - R)[1]
     bw = max(2.0, step * 0.62)
     fs = 10 * F
-    o = [f'<svg viewBox="0 0 {width} {height}" width="100%" style="height:auto;background:#160a2b;border:1px solid #4a2a72;border-radius:6px" xmlns="http://www.w3.org/2000/svg">']
+    o = [f'<svg viewBox="0 0 {width} {height}" width="100%" style="height:auto;background:#121418;border:1px solid #343a45;border-radius:6px" xmlns="http://www.w3.org/2000/svg">']
     labs = []       # overlay text labels, placed after everything else so they can avoid each other
 
     def lab(x, yy, text, anchor, fill, bold=False, prio=5):
@@ -319,10 +319,10 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
 
     for k in range(5):   # price grid + axis
         p = lo + (hi - lo) * k / 4
-        o.append(f'<line x1="{L}" y1="{y(p):.1f}" x2="{width - R}" y2="{y(p):.1f}" stroke="#2c1650" stroke-width="{1 * F:.1f}"/>')
-        o.append(f'<text fill-opacity="0.85" x="{width - R + 4}" y="{y(p) + 3:.1f}" font-size="{fs:.0f}" fill="#9a86c2" font-family="sans-serif">{p:.6g}</text>')
+        o.append(f'<line x1="{L}" y1="{y(p):.1f}" x2="{width - R}" y2="{y(p):.1f}" stroke="#252a32" stroke-width="{1 * F:.1f}"/>')
+        o.append(f'<text fill-opacity="0.85" x="{width - R + 4}" y="{y(p) + 3:.1f}" font-size="{fs:.0f}" fill="#8a93a3" font-family="sans-serif">{p:.6g}</text>')
     if title:
-        o.append(f'<text fill-opacity="0.85" x="{L + 2}" y="{14 * F:.0f}" font-size="{11 * F:.0f}" fill="#b9a6d9" font-family="sans-serif">{title}</text>')
+        o.append(f'<text fill-opacity="0.85" x="{L + 2}" y="{14 * F:.0f}" font-size="{11 * F:.0f}" fill="#a3abb8" font-family="sans-serif">{title}</text>')
     o.append('<g class="ov">')       # 2026-10-20: everything in class "ov" can be switched off with the Indicators button
     for d in draws:     # boxes first (behind candles)
         if d["t"] == "box":
@@ -382,18 +382,18 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
             x = xi(i)
             if abs(x - now_x) < keep_clear or x < L + 14 or x > width - R - 14:
                 continue
-            o.append(f'<line x1="{x:.1f}" y1="{T}" x2="{x:.1f}" y2="{base:.1f}" stroke="#4a2a72" stroke-opacity="0.35" stroke-width="{1 * F:.1f}"/>')
-            o.append(f'<line x1="{x:.1f}" y1="{base:.1f}" x2="{x:.1f}" y2="{base + 4 * F:.1f}" stroke="#b9a6d9" stroke-opacity="0.8" stroke-width="{1 * F:.1f}"/>')
-            o.append(f'<text x="{x:.1f}" y="{base + fs * 1.25 + 3 * F:.1f}" text-anchor="middle" font-size="{fs:.0f}" fill="{"#e7dcff" if is_date else "#b9a6d9"}" '
+            o.append(f'<line x1="{x:.1f}" y1="{T}" x2="{x:.1f}" y2="{base:.1f}" stroke="#343a45" stroke-opacity="0.35" stroke-width="{1 * F:.1f}"/>')
+            o.append(f'<line x1="{x:.1f}" y1="{base:.1f}" x2="{x:.1f}" y2="{base + 4 * F:.1f}" stroke="#a3abb8" stroke-opacity="0.8" stroke-width="{1 * F:.1f}"/>')
+            o.append(f'<text x="{x:.1f}" y="{base + fs * 1.25 + 3 * F:.1f}" text-anchor="middle" font-size="{fs:.0f}" fill="{"#dfe3ea" if is_date else "#a3abb8"}" '
                      f'fill-opacity="0.9" font-family="sans-serif"' + (' font-weight="bold"' if is_date else '') + f'>{txt}</text>')
-        o.append(f'<line x1="{now_x:.1f}" y1="{base:.1f}" x2="{now_x:.1f}" y2="{base + 4 * F:.1f}" stroke="#c084ff" stroke-width="{1.5 * F:.1f}"/>')
-        o.append(f'<text x="{now_x:.1f}" y="{base + fs * 1.25 + 3 * F:.1f}" text-anchor="middle" font-size="{fs:.0f}" fill="#c084ff" font-weight="bold" '
+        o.append(f'<line x1="{now_x:.1f}" y1="{base:.1f}" x2="{now_x:.1f}" y2="{base + 4 * F:.1f}" stroke="#5cc8ff" stroke-width="{1.5 * F:.1f}"/>')
+        o.append(f'<text x="{now_x:.1f}" y="{base + fs * 1.25 + 3 * F:.1f}" text-anchor="middle" font-size="{fs:.0f}" fill="#5cc8ff" font-weight="bold" '
                  f'font-family="sans-serif">{now_txt}</text>')
     except Exception:
         pass
     last = cs[-1][4]
-    o.append(f'<line x1="{L}" y1="{y(last):.1f}" x2="{width - R}" y2="{y(last):.1f}" stroke="#c084ff" stroke-width="{1 * F:.1f}" stroke-dasharray="1 3"/>')
-    o.append(f'<text fill-opacity="0.9" x="{width - R + 4}" y="{y(last) + 3:.1f}" font-size="{fs:.0f}" fill="#c084ff" font-family="sans-serif" font-weight="bold">{last:.6g}</text>')
+    o.append(f'<line x1="{L}" y1="{y(last):.1f}" x2="{width - R}" y2="{y(last):.1f}" stroke="#5cc8ff" stroke-width="{1 * F:.1f}" stroke-dasharray="1 3"/>')
+    o.append(f'<text fill-opacity="0.9" x="{width - R + 4}" y="{y(last) + 3:.1f}" font-size="{fs:.0f}" fill="#5cc8ff" font-family="sans-serif" font-weight="bold">{last:.6g}</text>')
 
     # ---- collision-free label placement: highest priority first, nudge up/down until the box is free
     fh, fl = cs[-1][2], cs[-1][3]
@@ -420,7 +420,7 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
         placed.append(best[1])
         anchor_x = x0 + (w if lb["anchor"] == "end" else (w / 2 if lb["anchor"] == "middle" else 0))
         o.append(f'<text x="{anchor_x:.1f}" y="{best[0]:.1f}" text-anchor="{lb["anchor"]}" font-size="{fs:.0f}" fill="{lb["fill"]}" fill-opacity="0.38" '
-                 f'stroke="#160a2b" stroke-opacity="0.2" stroke-width="{2.4 * F:.1f}" stroke-linejoin="round" paint-order="stroke" font-family="sans-serif"'
+                 f'stroke="#121418" stroke-opacity="0.2" stroke-width="{2.4 * F:.1f}" stroke-linejoin="round" paint-order="stroke" font-family="sans-serif"'
                  + (' font-weight="bold"' if lb["bold"] else '') + f'>{lb["text"]}</text>')
     o.append('</g>')
     o.append("</svg>")

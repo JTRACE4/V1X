@@ -3,7 +3,7 @@ Candle patterns: lists of (open, high, low, close) on a 0-100 scale (higher = hi
 Chart patterns: a price path [(x, y)...] on 0-100 x 0-100 plus dashed guide lines and text labels."""
 
 W, H = 240, 120
-UP, DOWN, GUIDE, MUTED, GOLD = "#2de2a6", "#ff5c8a", "#b9a6d9", "#9a86c2", "#f2cc60"
+UP, DOWN, GUIDE, MUTED, GOLD = "#2de2a6", "#ff5c8a", "#a3abb8", "#8a93a3", "#f2cc60"
 
 
 def _px(x): return 10 + x * 2.2
@@ -12,7 +12,7 @@ def _py(y): return 108 - y * 0.96
 
 def _wrap(inner):
     return (f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg" '
-            f'style="background:#160a2b;border:1px solid #4a2a72;border-radius:6px">{inner}</svg>')
+            f'style="background:#121418;border:1px solid #343a45;border-radius:6px">{inner}</svg>')
 
 
 def _label(x, y, t, color=MUTED):
@@ -53,9 +53,9 @@ def path_svg(path, lines=(), labels=(), shade=None, fill_between=None):
     for (p1, p2, *rest) in lines:
         out.append(_line(p1, p2, rest[0] if rest else GUIDE))
     pts = " ".join(f"{_px(x):.1f},{_py(y):.1f}" for x, y in path)
-    out.append(f'<polyline points="{pts}" fill="none" stroke="#c084ff" stroke-width="2" stroke-linejoin="round"/>')
+    out.append(f'<polyline points="{pts}" fill="none" stroke="#5cc8ff" stroke-width="2" stroke-linejoin="round"/>')
     ex, ey = path[-1]
-    out.append(f'<circle cx="{_px(ex):.1f}" cy="{_py(ey):.1f}" r="3" fill="#c084ff"/>')
+    out.append(f'<circle cx="{_px(ex):.1f}" cy="{_py(ey):.1f}" r="3" fill="#5cc8ff"/>')
     for (x, y, t) in labels:
         out.append(_label(x, y, t))
     return _wrap("".join(out))
