@@ -36,6 +36,7 @@ import http.server
 import json
 import math
 import os
+_DATA_ROOT = os.environ.get("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))   # Railway: point DATA_DIR at a volume
 import re
 import socketserver
 import statistics
@@ -93,7 +94,7 @@ CERTAIN_FLIP_MIN_CHANCE = 0.55  # the "for sure" bar - the BOOM swing-against-ca
 # it will be.
 CERTAIN_FLIP_ALERT_ENABLED = True
 
-INTRAWINDOW_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state", "intrawindow_price_log.csv")
+INTRAWINDOW_LOG = os.path.join(_DATA_ROOT, "bot_state", "intrawindow_price_log.csv")
 INTRAWINDOW_FIELDS = ["ts", "asset", "ticker", "seconds_left", "kalshi_price", "spot_price", "target",
                        "leaning", "confidence", "locked_call", "dramatic_swing", "dramatic_vs_call",
                        "certain_flip", "yes_bid", "yes_ask", "quote_source", "fair_yes",
@@ -101,7 +102,7 @@ INTRAWINDOW_FIELDS = ["ts", "asset", "ticker", "seconds_left", "kalshi_price", "
 # rows before 2026-10-03 have no yes_bid/yes_ask/fair_yes and their
 # kalshi_price came from the ~30s-stale list endpoint - they're rotated to
 # this file the first time the new header is written
-INTRAWINDOW_LOG_V1 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state", "intrawindow_price_log_v1_stale_quotes.csv")
+INTRAWINDOW_LOG_V1 = os.path.join(_DATA_ROOT, "bot_state", "intrawindow_price_log_v1_stale_quotes.csv")
 
 
 def _log_intrawindow_price(row):
@@ -273,7 +274,7 @@ CROSS_MIN_GAP_S = 15           # a new cross only counts 15+ seconds after the l
                                # a quick whip back and forth over the line is one cross, not five. If price is still on the
                                # new side once 15s have passed, that switch is counted then.
 MIN_RANGE_PCT = 0.00025        # the round's high-low so far under 0.025% (~$27 on BTC) = not enough price action to call
-ROUNDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_cache", "round_paths.json")
+ROUNDS_FILE = os.path.join(_DATA_ROOT, "data_cache", "round_paths.json")
 ROUNDS_KEEP = 24
 _rounds = {}                   # asset name -> [finished round records], oldest first (persisted)
 _kalshi_path = {}              # asset name -> {"ticker", "pts": [[elapsed_s, yes_price]]} - the live Kalshi odds this round
@@ -322,32 +323,29 @@ def round_line_stats(symbol, line, open_ts, end_ts=None):
             "range_pct": ((hi - lo) / line) if hi is not None else None, "side": side}
 
 
-def stage_decide(p_yes, flow_up, crosses, range_pct, sealed):
-    """(call or None, tier, reason). call None = SKIPPED."""
+STAGE_WAIT_S = 60             # a toss-up at the mark: keep watching up to 60s for it to clear 55%, then decide anyway
+STAGE_CALL_MIN = 0.55          # call right away once the blended chance of one side reaches 55%
+STAGE_FORCE_MIN = 0.52         # after the 60s wait: still call (WEAK) if the minute's average leans 52%+ one way
+
+
+def stage_decide(p_yes, flow_up, crosses, range_pct=None, sealed=False):
+    """(call or None, tier, note). Rules since 2026-10-20 (user: "give me a call almost every round unless it's close close
+    close"): call the side with the higher blended chance. SUPER = 80%+, GOOD = 65%+, otherwise WEAK. Line crosses no
+    longer skip a call: 3+ crosses lower it one level (SUPER -> GOOD -> WEAK). Flow pointing the other way stops a SUPER.
+    The only skip left is a real coin flip - see the 60-second wait in poll_loop."""
     if p_yes is None:
         return None, None, "no price data yet"
     side = "YES" if p_yes >= 0.5 else "NO"
     ps = max(p_yes, 1 - p_yes)
-    if ps < STAGE_TIERS[-1][0]:
-        return None, None, f"basically 50/50 ({ps:.0%})"
-    if crosses is not None and crosses >= CROSS_SKIP:
-        return None, None, f"{crosses} line crosses - too choppy"
-    if range_pct is not None and range_pct < MIN_RANGE_PCT:
-        return None, None, "not enough price action to read"
-    idx = next(i for i, (th, _n) in enumerate(STAGE_TIERS) if ps >= th)
+    idx = 0 if ps >= 0.80 else (1 if ps >= 0.65 else 2)
     notes = []
-    if crosses == 2:
+    if crosses is not None and crosses >= 3 and idx < 2:
         idx += 1
-        notes.append("2 line crosses")
+        notes.append(f"{crosses} line crosses")
     if idx == 0 and flow_up is not None and (flow_up >= 0.5) != (side == "YES"):
         idx = 1
         notes.append("flow disagrees")
-    if idx >= len(STAGE_TIERS):
-        return None, None, "too weak after " + " + ".join(notes)
-    tier = STAGE_TIERS[idx][1]
-    if sealed and tier == "WEAK":
-        return None, None, "not strong enough to seal (" + (" + ".join(notes) or f"{ps:.0%}") + ")"
-    return side, tier, " + ".join(notes)
+    return side, ("SUPER", "GOOD", "WEAK")[idx], " + ".join(notes)
 
 
 def _load_rounds():
@@ -1085,7 +1083,7 @@ _live_last_error = None            # last buy/settle exception message, shown on
 _live_size_mode = "dollars"   # "dollars" or "percent"
 _live_size_dollars = 100.0
 _live_size_percent = 10.0
-LIVE_TRADES_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state", "live_xrp_lock_trades.csv")
+LIVE_TRADES_LOG = os.path.join(_DATA_ROOT, "bot_state", "live_xrp_lock_trades.csv")
 LIVE_TRADE_FIELDS = ["ts", "event", "asset", "ticker", "strategy", "side", "contracts", "price",
                       "cost_dollars", "payoff_dollars", "order_id", "filled",
                       "entry_flip_chance", "entry_swing_pct", "flip_sell_mode", "flip_hold_if_certain",
@@ -1110,7 +1108,7 @@ LIVE_TRADE_FIELDS = ["ts", "event", "asset", "ticker", "strategy", "side", "cont
 # it. The user explicitly asked for the opposite trade-off (set it once,
 # trust it to keep running) - the daily loss limit auto-disarm stays in
 # place regardless as the one backstop that can't be configured away.
-LIVE_TRADING_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state", "live_trading_state.json")
+LIVE_TRADING_STATE_FILE = os.path.join(_DATA_ROOT, "bot_state", "live_trading_state.json")
 
 
 def _load_live_trading_state():
@@ -1171,7 +1169,7 @@ def _load_live_trading_state():
               f"protect: {_live_protect_armed}")
 
 
-LIVE_BOUGHT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state", "live_bought_tickers.json")
+LIVE_BOUGHT_FILE = os.path.join(_DATA_ROOT, "bot_state", "live_bought_tickers.json")
 
 
 def _load_bought_tickers():
@@ -1969,7 +1967,7 @@ HISTORY_CAP = 50_000
 
 # persisted to disk so the track record survives restarts (needed often while
 # iterating on this file) instead of silently resetting to zero every time.
-HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_cache", "kalshi_dashboard_history.json")
+HISTORY_FILE = os.path.join(_DATA_ROOT, "data_cache", "kalshi_dashboard_history.json")
 
 
 def _load_history():
@@ -2004,7 +2002,7 @@ def _save_history():
 # older window (e.g. the PC was off overnight) gets discarded instead of
 # being graded against today's live price, which would produce a bogus
 # history entry.
-LOCKED_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_cache", "kalshi_dashboard_locked_state.json")
+LOCKED_STATE_FILE = os.path.join(_DATA_ROOT, "data_cache", "kalshi_dashboard_locked_state.json")
 LOCKED_STATE_MAX_AGE_SECONDS = 20 * 60  # a bit more than one 15-min window, to allow for restart delay
 
 
@@ -2417,7 +2415,7 @@ def get_adaptive_whale_thresholds(symbol):
         return _adaptive_whale_thresholds_locked(symbol)
 
 
-_WHALE_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state", "whale_log.csv")
+_WHALE_LOG = os.path.join(_DATA_ROOT, "bot_state", "whale_log.csv")
 _whale_log_lock = threading.Lock()
 
 
@@ -4077,29 +4075,51 @@ def poll_loop():
                 stage_calls = locked.setdefault("stage_calls", {})
                 stage_just = None
                 _flow_now = stage_parts.get("flow")
+                _stage_wait = locked.setdefault("stage_wait", {})
                 for _sk, _mark, _lab, _mk in STAGE_CALLS:
                     if _sk in stage_calls or elapsed_seconds < _mark:
                         continue
-                    if elapsed_seconds > _mark + STAGE_GRACE_SECONDS:
+                    _w = _stage_wait.setdefault(_sk, [])
+                    if not _w and elapsed_seconds > _mark + 20:
                         stage_calls[_sk] = {"missed": True, "seen_at_elapsed": int(elapsed_seconds)}
                         _save_locked_state()
-                    elif stage_p_yes is not None:
-                        _call, _tier, _why = stage_decide(stage_p_yes, _flow_now, _crosses, _rng, sealed=(_sk == "sealed"))
-                        stage_calls[_sk] = {
-                            "call": _call, "tier": _tier, "skipped": _call is None, "why": _why,
-                            "p_yes": round(stage_p_yes, 4), "strength": stage_strength(stage_p_yes),
-                            "kalshi_yes": kalshi_price, "fair_yes": round(fair_yes, 4) if fair_yes is not None else None,
-                            "flow_up": round(_flow_now, 4) if _flow_now is not None else None,
-                            "kp": ((kalshi_price if _call == "YES" else 1 - kalshi_price) if (kalshi_price is not None and _call) else None),
-                            "spot": round(live_price, price_decimals) if live_price is not None else None, "line": target,
-                            "crosses": _crosses, "range_pct": _rng,
-                            "rsi": rsi_multi.get("rsi1"), "elapsed": int(elapsed_seconds), "seconds_left": int(seconds_left),
-                            "ts": time.time(),
-                        }
-                        stage_just = _sk
-                        print(f"[{asset['name']}] {_lab} ({_mk}): {(_call + ' ' + _tier) if _call else 'SKIPPED'} - {stage_p_yes:.1%} UP, "
-                              f"{_crosses} crosses {('- ' + _why) if _why else ''} (Kalshi {kalshi_price}, fair {fair_yes}, flow {_flow_now}) {ticker}")
-                        _save_locked_state()
+                        continue
+                    if stage_p_yes is None:
+                        continue
+                    _w.append(round(stage_p_yes, 4))
+                    _ps = max(stage_p_yes, 1 - stage_p_yes)
+                    _waited = elapsed_seconds - _mark
+                    _use_p = None
+                    _why_extra = ""
+                    if _ps >= STAGE_CALL_MIN:
+                        _use_p = stage_p_yes
+                    elif _waited >= STAGE_WAIT_S:
+                        _avg = sum(_w) / len(_w)
+                        if max(_avg, 1 - _avg) >= STAGE_FORCE_MIN:
+                            _use_p = _avg
+                            _why_extra = f"close round - called on the {int(_waited)}s average"
+                    if _use_p is None and _waited < STAGE_WAIT_S:
+                        continue                       # still a toss-up: keep watching (up to 60s)
+                    if _use_p is None:
+                        _call, _tier, _why = None, None, f"stayed a coin flip for a full minute ({_ps:.0%})"
+                    else:
+                        _call, _tier, _why = stage_decide(_use_p, _flow_now, _crosses)
+                        _why = " + ".join(x for x in (_why, _why_extra) if x)
+                    stage_calls[_sk] = {
+                        "call": _call, "tier": _tier, "skipped": _call is None, "why": _why,
+                        "p_yes": round(_use_p if _use_p is not None else stage_p_yes, 4), "strength": stage_strength(stage_p_yes),
+                        "kalshi_yes": kalshi_price, "fair_yes": round(fair_yes, 4) if fair_yes is not None else None,
+                        "flow_up": round(_flow_now, 4) if _flow_now is not None else None,
+                        "kp": ((kalshi_price if _call == "YES" else 1 - kalshi_price) if (kalshi_price is not None and _call) else None),
+                        "spot": round(live_price, price_decimals) if live_price is not None else None, "line": target,
+                        "crosses": _crosses, "range_pct": _rng,
+                        "rsi": rsi_multi.get("rsi1"), "elapsed": int(elapsed_seconds), "seconds_left": int(seconds_left),
+                        "ts": time.time(),
+                    }
+                    stage_just = _sk
+                    print(f"[{asset['name']}] {_lab} ({_mk}): {(_call + ' ' + _tier) if _call else 'SKIPPED'} at {int(elapsed_seconds) // 60}:"
+                          f"{int(elapsed_seconds) % 60:02d} - {stage_p_yes:.1%} UP, {_crosses} crosses {('- ' + _why) if _why else ''} {ticker}")
+                    _save_locked_state()
                 _log_intrawindow_price({
                     "yes_bid": fresh_quote[0] if fresh_quote is not None else active.get("yes_bid_dollars"),
                     "yes_ask": fresh_quote[1] if fresh_quote is not None else active.get("yes_ask_dollars"),
@@ -4995,6 +5015,9 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .k-bar i { position:absolute; left:0; top:0; bottom:0; background:#2a9d74; transition:width 0.5s ease; }
 .k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#e3e9f7; }
 .press-top { border-bottom:none; margin-bottom:10px; }
+.press-sub { font-size:11px; margin:-2px 0 3px; }
+.chip-lbl { font-size:11px; align-self:center; }
+.press-split-lab { flex:0 0 210px; }
 .calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(190px,1.1fr) minmax(110px,0.55fr); }
 @media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr; } }
 .calls-row .stage-box { padding:9px 10px 8px; }
@@ -6616,7 +6639,7 @@ def tug_numbers(name, d):
     pb, ps_, _n2 = _flow.HUB.window_totals(name, elapsed, "perp")
     spot_up = sb / (sb + ss_) if (sb + ss_) > 0 else None
     perp_up = pb / (pb + ps_) if (pb + ps_) > 0 else None
-    feeds.append(("Exchange buyers vs sellers", ex_up, None))
+    feeds.append(("Exchange buyers vs sellers (this round)", ex_up, None))
     kf = _kflow.get(name)
     k_up = None
     if kf and kf["ticker"] == d.get("ticker") and (kf["yes"] + kf["no"]) > 0:
@@ -6642,7 +6665,7 @@ def tug_numbers(name, d):
             "spot_up": spot_up, "perp_up": perp_up, "spot_usd": sb + ss_, "perp_usd": pb + ps_}
 
 
-_TUG_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state", "tug_log.csv")
+_TUG_LOG = os.path.join(_DATA_ROOT, "bot_state", "tug_log.csv")
 _tug_last_log = {}
 
 
@@ -6695,7 +6718,7 @@ def build_tug_panel(name, d):
                 f'<span class="tug-val {cls}">{lead} {lp:.0f}%{extra}</span></div>')
     rows = []
     for label, up, note in feeds:
-        if label == "Exchange buyers vs sellers":
+        if label == "Exchange buyers vs sellers (this round)":
             rows.append("@@EXCH@@")
         if up is None:
             rows.append(f'<div class="tug-row"><span class="tug-lab">{label}</span><span class="tug-track"></span>'
@@ -6706,7 +6729,7 @@ def build_tug_panel(name, d):
         if up is None:
             return ""
         return _bar_row(label, up, f' <span class="hint">({_usd_short(usd)})</span>', sub=True)
-    _split = (_sub("spot exchanges only", tn["spot_up"], tn["spot_usd"]) + _sub("perpetual futures only", tn["perp_up"], tn["perp_usd"]))
+    _split = (_sub("spot exchanges, this round", tn["spot_up"], tn["spot_usd"]) + _sub("perpetual futures, this round", tn["perp_up"], tn["perp_usd"]))
     rows = [(_split if r == "@@EXCH@@" else r) for r in rows]
     if fused is not None:
         fl = fused * 100
@@ -7610,7 +7633,7 @@ def build_stage_box(name, d, key):
                 f'<div class="sb-tier {_TIER_CLS.get(tier, "")}">{tier}</div>'
                 f'<div class="sb-line">{p_side:.0%} sure &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
                 f'{"" if c.get("crosses") == 1 else "es"} so far</div>'
-                + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line at {mk}</div>' if diff is not None else "")
+                + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line, locked at {c.get("elapsed", 0) // 60}:{c.get("elapsed", 0) % 60:02d}</div>' if diff is not None else "")
                 + hold_html
                 + (f'<div class="sb-note">{c["why"]}</div>' if c.get("why") else ""))
         tip = (f'chance of UP when it locked: {p_up:.1%} = blend of Kalshi {c.get("kalshi_yes")}, fair value {c.get("fair_yes")}, '
@@ -7621,7 +7644,7 @@ def build_stage_box(name, d, key):
                 f'<div class="sb-line">{c.get("why", "")}</div>'
                 f'<div class="sb-line hint">It was leaning {"UP" if (c.get("p_yes") or 0.5) >= 0.5 else "DOWN"} '
                 f'{max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)):.0%}</div>')
-        tip = "skipped: 50/50, too many line crosses, not enough price action - or (sealed only) not strong enough"
+        tip = "skipped only when the round stayed a coin flip for a full minute after the mark"
     elif c.get("missed"):
         body = (f'<div class="sb-dir flat">MISSED</div><div class="sb-line">The dashboard wasn&#39;t running at {mk} this round.</div>')
         tip = "only locks live at its mark - never back-filled"
@@ -7632,7 +7655,10 @@ def build_stage_box(name, d, key):
         ls = d.get("line_stats") or {}
         prev = ""
         if p is not None:
-            pc, pt, pw = stage_decide(p, (d.get("stage_parts") or {}).get("flow"), ls.get("crosses"), ls.get("range_pct"), key == "sealed")
+            pc, pt, pw = stage_decide(p, (d.get("stage_parts") or {}).get("flow"), ls.get("crosses"))
+            if max(p, 1 - p) < STAGE_CALL_MIN:
+                pc = None
+                pw = "a coin flip right now - it will wait up to 60s"
             if pc:
                 prev = (f'<div class="sb-line">Right now: <span class="{"up" if pc == "YES" else "down"}"><b>{"UP" if pc == "YES" else "DOWN"} '
                         f'{pt}</b></span></div>')
@@ -7677,7 +7703,7 @@ def stage_summary_row(name, d):
         cr = (f'<div class="row cross-row"><span class="label">Line crosses this round</span><span class="value">'
               f'<b class="{"down" if n >= CROSS_SKIP else ("warn" if n == 2 else "up")}" style="font-size:18px;">{n}</b> '
               f'<span class="hint">(&#9650; {ls.get("up", 0)} up &middot; &#9660; {ls.get("down", 0)} down) - '
-              f'{"choppy, so calls get skipped" if n >= CROSS_SKIP else ("2 crosses lower the call by one confidence level" if n == 2 else "clean so far")}'
+              f'{"choppy - lowers the call one confidence level" if n >= 3 else "clean so far"}'
               f' &middot; a cross only counts 15+ seconds after the last one</span></span></div>')
     return cr      # the per-call track record now lives in the SCOREBOARD at the top
 
@@ -8013,14 +8039,19 @@ def build_pressure_bar(asset_name, d=None, part="all"):
     if w[60]["pct"] is None and w[10]["pct"] is None:
         return ('<div class="row press-row"><span class="label">Bought / sold pressure - all exchanges</span> '
                 '<span class="hint">collecting trades from the exchanges...</span></div>')
-    m = w[60] if w[60]["pct"] is not None else w[10]
-    buy = m["pct"] * 100
-    sell = 100 - buy
-    verdict = ("BUYERS in control" if buy >= 55 else ("SELLERS in control" if buy <= 45 else "balanced"))
-    net_usd = m["buy"] - m["sell"]
-    net_q = m["buy_qty"] - m["sell_qty"]
     open_ts = d.get("line_for_round_open_ts")
     rnd = _flow.HUB.window_detail(asset_name, 900, since_ts=open_ts) if open_ts else None
+    # 2026-10-20: the big bar is THIS ROUND (what decides the Kalshi market), the chips are the short windows - before, the
+    # big bar was the last minute, so "51% buy - balanced" sat next to a round that was a clear sell-off.
+    if rnd and rnd["pct"] is not None:
+        m, win_lbl = rnd, "this round so far"
+    else:
+        m, win_lbl = (w[60] if w[60]["pct"] is not None else w[10]), "last minute"
+    buy = m["pct"] * 100
+    sell = 100 - buy
+    verdict = ("BUYERS in control" if buy >= 53 else ("SELLERS in control" if buy <= 47 else "balanced"))
+    net_usd = m["buy"] - m["sell"]
+    net_q = m["buy_qty"] - m["sell_qty"]
     chips = []
     for sec, lab in ((10, "10s"), (30, "30s"), (60, "1m"), (300, "5m")):
         x = w[sec]
@@ -8030,14 +8061,11 @@ def build_pressure_bar(asset_name, d=None, part="all"):
         chips.append(f'<span class="press-chip {_pct_cls(x["pct"] * 100)}" title="{_coin_amt(coin, x["buy_qty"])} {coin} bought / '
                      f'{_coin_amt(coin, x["sell_qty"])} {coin} sold">{lab} <b>{x["pct"] * 100:.0f}%</b> buy '
                      f'<span class="hint">({"+" if nq >= 0 else ""}{_coin_amt(coin, nq)} {coin})</span></span>')
-    if rnd and rnd["pct"] is not None:
-        nq = rnd["buy_qty"] - rnd["sell_qty"]
-        chips.append(f'<span class="press-chip {_pct_cls(rnd["pct"] * 100)}"><b>this round</b> {rnd["pct"] * 100:.0f}% buy '
-                     f'<span class="hint">({"+" if nq >= 0 else ""}{_coin_amt(coin, nq)} {coin})</span></span>')
+    chips.insert(0, '<span class="hint chip-lbl">shorter windows:</span>')
     # spot vs perp, last minute
     split = []
-    for kind, lab in (("spot", "spot exchanges"), ("perp", "perpetual futures")):
-        k = _flow.HUB.window_detail(asset_name, 60, kind=kind)
+    for kind, lab in (("spot", "spot exchanges, this round"), ("perp", "perpetual futures, this round")):
+        k = _flow.HUB.window_detail(asset_name, 900, kind=kind, since_ts=open_ts) if open_ts else _flow.HUB.window_detail(asset_name, 60, kind=kind)
         if k["pct"] is None:
             continue
         split.append(f'<div class="press-split"><span class="press-split-lab">{lab} <span class="hint">({k["venues"]})</span></span>'
@@ -8147,8 +8175,8 @@ def build_pressure_bar(asset_name, d=None, part="all"):
         mc_html = '<div class="press-health hint">Math check: fetching each exchange&#39;s own 24h numbers (first check about 30 seconds after start)...</div>'
     top_html = (
         f'<div class="row press-row press-top" data-asset-press="{asset_name}">'
-        f'<div class="press-head"><b>{coin} BOUGHT vs SOLD</b> <span class="hint">{s["live_n"]} exchanges live &middot; last minute &middot; '
-        f'aggressor side, each trade once</span> <span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
+        f'<div class="press-head"><b>{coin} BOUGHT vs SOLD &middot; {win_lbl.upper()}</b> <span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
+        f'<div class="hint press-sub">{s["live_n"]} exchanges live &middot; counted by who hit the market (the aggressor) &middot; each trade once</div>'
         f'<div class="press-qty"><span class="up">&#9650; <b>{_coin_amt(coin, m["buy_qty"])} {coin}</b> bought <span class="hint">({_usd_short(m["buy"])})</span></span>'
         f'<span class="press-net {"up" if net_q >= 0 else "down"}">net {"+" if net_q >= 0 else ""}{_coin_amt(coin, net_q)} {coin} '
         f'({"+" if net_usd >= 0 else "-"}{_usd_short(net_usd)})</span>'
@@ -8166,20 +8194,6 @@ def build_pressure_bar(asset_name, d=None, part="all"):
     if part == "detail":
         return detail_html
     return top_html + detail_html
-    return (
-        f'<div class="row press-row" data-asset-press="{asset_name}">'
-        f'<div class="press-head"><b>{coin} BOUGHT vs SOLD</b> <span class="hint">{s["live_n"]} exchanges live &middot; last minute &middot; '
-        f'aggressor side, each trade once</span> <span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
-        f'<div class="press-qty"><span class="up">&#9650; <b>{_coin_amt(coin, m["buy_qty"])} {coin}</b> bought <span class="hint">({_usd_short(m["buy"])})</span></span>'
-        f'<span class="press-net {"up" if net_q >= 0 else "down"}">net {"+" if net_q >= 0 else ""}{_coin_amt(coin, net_q)} {coin} '
-        f'({"+" if net_usd >= 0 else "-"}{_usd_short(net_usd)})</span>'
-        f'<span class="down"><b>{_coin_amt(coin, m["sell_qty"])} {coin}</b> sold <span class="hint">({_usd_short(m["sell"])})</span> &#9660;</span></div>'
-        f'<div class="press-bar"><div class="press-buy" style="width:{buy:.1f}%">{buy:.0f}% buy</div>'
-        f'<div class="press-sell" style="width:{sell:.1f}%">{sell:.0f}% sell</div><span class="press-mid"></span></div>'
-        f'<div class="press-chips">{"".join(chips)}{book}</div>'
-        f'{"".join(split)}{cvd_html}{deriv_html}{tape}{health}'
-        f'<details class="press-more" data-pat="PRESS|{asset_name}"><summary class="hint">by exchange (information only - never used for buying)</summary>'
-        f'{table}</details></div>')
 
 
 def build_volume_bar(asset_name):
@@ -9755,7 +9769,7 @@ class _TeeToFile:
 def main():
     import sys
     # a fresh copy has no bot_state/ or data_cache/ folder yet (fixed 2026-10-08 - it crashed on the first log write)
-    _root = os.path.dirname(os.path.abspath(__file__))
+    _root = _DATA_ROOT
     os.makedirs(os.path.join(_root, "bot_state"), exist_ok=True)
     os.makedirs(os.path.join(_root, "data_cache"), exist_ok=True)
     _console_log = os.path.join(_root, "bot_state", "dashboard_console.log")

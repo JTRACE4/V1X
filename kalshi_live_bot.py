@@ -28,6 +28,7 @@ import csv
 import datetime as dt
 import json
 import os
+_DATA_ROOT = os.environ.get("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))   # Railway: point DATA_DIR at a volume
 import time
 import uuid
 
@@ -41,7 +42,7 @@ from kalshi_paper_bot import load_thresholds
 AUTH_BASE = "https://api.elections.kalshi.com/trade-api/v2"
 PUBLIC_BASE = "https://external-api.kalshi.com/trade-api/v2"
 
-STATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state")
+STATE_DIR = os.path.join(_DATA_ROOT, "bot_state")
 LIVE_TRADES_PATH = os.path.join(STATE_DIR, "live_trades.csv")
 LIVE_LEDGER_PATH = os.path.join(STATE_DIR, "live_ledger.json")
 

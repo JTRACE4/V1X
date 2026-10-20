@@ -22,6 +22,7 @@ import collections
 import csv
 import json
 import os
+_DATA_ROOT = os.environ.get("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))   # Railway: point DATA_DIR at a volume
 import threading
 import time
 import urllib.request
@@ -40,8 +41,8 @@ ASSETS = ("BTC", "XRP")
 WINDOWS = (10, 30, 60, 300)
 KEEP_SECONDS = 900
 _ROOT = os.path.dirname(os.path.abspath(__file__))
-PRESSURE_LOG = os.path.join(_ROOT, "bot_state", "pressure_log.csv")
-INCOMING_LOG = os.path.join(_ROOT, "bot_state", "incoming_log.csv")
+PRESSURE_LOG = os.path.join(_DATA_ROOT, "bot_state", "pressure_log.csv")
+INCOMING_LOG = os.path.join(_DATA_ROOT, "bot_state", "incoming_log.csv")
 
 # venue -> (display label, kind)
 VENUES = {
@@ -79,7 +80,7 @@ class FlowHub:
         self.engine = ENGINE
 
     # -------------------------------------------------------------- input
-    def record(self, venue, asset, usd, side, price=None, qty=None, tid=None, ts_ms=None):
+    def record(self, venue, asset, usd, side, price=None, qty=None, tid=None, ts_ms=None, gkey=None):
         """One trade. tid = the exchange's own trade id (or a unique fingerprint) - a trade whose id was already counted is
         DROPPED, so a reconnect / snapshot replay can never count the same sale twice. qty = coin amount (from the trade's
         own size, more exact than usd / price). ts_ms = the exchange's timestamp (groups fills into one taker order).
@@ -138,7 +139,7 @@ class FlowHub:
         eng = self.engine
         if eng is not None and price:
             try:
-                eng.ingest(venue, asset, usd, qty, side, price, ts_ms, VENUES.get(venue, ("", "spot"))[1])
+                eng.ingest(venue, asset, usd, qty, side, price, ts_ms, VENUES.get(venue, ("", "spot"))[1], gkey)
             except Exception:
                 pass
         cb = self.on_trade
@@ -650,8 +651,10 @@ def _hyperliquid(d, ws, st):
             a = t.get("coin")
             if a in ASSETS:
                 p, q = _f(t["px"]), _f(t["sz"])
+                h = str(t.get("hash") or "")
+                gk = h if h.strip("0x") else f'tid{t.get("tid")}'      # an all-zero hash = never group it with anything
                 HUB.record("hyperliquid", a, p * q, "buy" if t.get("side") == "B" else "sell", p, qty=q, tid=t.get("tid") or t.get("hash"),
-                           ts_ms=_ms(t.get("time")))
+                           ts_ms=_ms(t.get("time")), gkey=gk)
 
 
 def _kucoin(d, ws, st):
@@ -855,6 +858,13 @@ def math_check(asset="BTC"):
         px = {v: p for (v, a), p in HUB.last_price.items() if a == asset}
     ref = px.get("coinbase")
     rows = []
+    paces = []
+    for v, q in got.items():
+        vv = VOL24.get(v)
+        if vv:
+            paces.append(q / (vv["btc"] / 86400 * max(60, now - first[v] + 1)))
+    paces.sort()
+    med = paces[len(paces) // 2] if paces else None
     for v, q in got.items():
         span = max(60, now - first[v] + 1)
         vv = VOL24.get(v)
@@ -862,8 +872,9 @@ def math_check(asset="BTC"):
         ratio = (q / norm) if norm else None
         pdiff = ((px[v] / ref - 1) * 100) if (ref and px.get(v)) else None
         settled = span >= 300                                     # judge only after 5+ minutes of counting
-        flag = ((settled and ratio is not None and ratio > 10 and q > 2)
-                or (settled and ratio is not None and norm >= 5 and ratio < 0.05)
+        rel = (ratio / med) if (ratio is not None and med) else None   # this exchange's pace vs the middle exchange's pace
+        flag = ((settled and rel is not None and rel > 5 and q > 2)
+                or (settled and rel is not None and norm >= 5 and rel < 0.15)
                 or (pdiff is not None and abs(pdiff) > 0.5))
         rows.append({"venue": v, "label": VENUES.get(v, (v, ""))[0], "kind": VENUES.get(v, ("", "spot"))[1], "counted": q, "span": span,
                      "normal": norm, "ratio": ratio, "pdiff": pdiff, "flag": flag})

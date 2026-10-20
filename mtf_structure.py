@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from pattern_detector import CandleBook, _structure, _candle_patterns, _atr, _L, FailTracker, TF_SECONDS
 from pattern_info import explain
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.environ.get("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, "data_cache")
 STATS_FILE = os.path.join(ROOT, "bot_state", "pattern_stats.json")
 LOG_FILE = os.path.join(ROOT, "bot_state", "pattern_log.csv")

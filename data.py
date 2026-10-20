@@ -1,4 +1,5 @@
 import os
+_DATA_ROOT = os.environ.get("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))   # Railway: point DATA_DIR at a volume
 import time
 import datetime as dt
 
@@ -23,7 +24,7 @@ MAX_CANDLES_PER_REQUEST = 300
 MAX_RETRIES = 6
 RETRY_BACKOFF_SECONDS = 2  # doubles each attempt: 2,4,8,16,32,64
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_cache")
+CACHE_DIR = os.path.join(_DATA_ROOT, "data_cache")
 
 
 def _iso(ts):

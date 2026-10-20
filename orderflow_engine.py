@@ -107,7 +107,7 @@ class Engine:
         self._started = False
 
     # ================================================================== input (called from feed threads - must be cheap)
-    def ingest(self, venue, asset, usd, qty, side, price, ts_ms=None, kind="spot"):
+    def ingest(self, venue, asset, usd, qty, side, price, ts_ms=None, kind="spot", gkey=None):
         if asset not in self.prints or not price or usd <= 0:
             return
         now = time.time()
@@ -120,7 +120,10 @@ class Engine:
             if p is not None:
                 gap = GROUP_MS_EXCHANGE if (exch and p["exch"]) else GROUP_MS_LOCAL
                 same = (p["side"] == side and abs(t_ms - p["t_ms"]) <= gap
-                        and (price >= p["last"] if side == "buy" else price <= p["last"]))   # a sweep only walks one way
+                        and (price >= p["last"] if side == "buy" else price <= p["last"])    # a sweep only walks one way
+                        and (gkey is None and p.get("gkey") is None or gkey == p.get("gkey")))
+                # gkey: venues that stamp every trade in a block with the same time (Hyperliquid) pass the taker order's
+                # transaction hash, so two different traders' orders in the same block are never merged into one "print"
                 if same:
                     p["usd"] += usd; p["qty"] += qty; p["n"] += 1; p["last"] = price; p["t_local"] = now
                     p["hi"] = max(p["hi"], price); p["lo"] = min(p["lo"], price)
@@ -128,7 +131,7 @@ class Engine:
                 self.out.append(p)
             self.pending[key] = {"venue": venue, "asset": asset, "side": side, "usd": usd, "qty": qty, "n": 1,
                                  "first": price, "last": price, "hi": price, "lo": price, "t_ms": t_ms, "exch": exch,
-                                 "t_local": now, "ts": now, "kind": kind}
+                                 "t_local": now, "ts": now, "kind": kind, "gkey": gkey}
 
     def liquidation(self, venue, asset, liquidated, usd, price, ts_ms=None):
         """A forced close. liquidated = 'long' (their position was SOLD out -> selling pressure) or 'short' (bought back ->

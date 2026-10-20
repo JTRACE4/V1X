@@ -10,13 +10,14 @@ Read-only; writes data_cache/venue_vs_brti_<date>.json.  Run: python -m src.acco
 """
 import json
 import os
+_DATA_ROOT = os.environ.get("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))   # Railway: point DATA_DIR at a volume
 import sys
 import time
 import datetime as dt
 import urllib.request
 
 PUBLIC = "https://external-api.kalshi.com/trade-api/v2"
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_cache")
+OUT = os.path.join(_DATA_ROOT, "data_cache")
 
 
 def get(url, data=None, headers=None, tries=3):

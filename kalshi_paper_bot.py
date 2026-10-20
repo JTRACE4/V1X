@@ -3,12 +3,13 @@ import csv
 import datetime as dt
 import json
 import os
+_DATA_ROOT = os.environ.get("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))   # Railway: point DATA_DIR at a volume
 import time
 
 from data import fetch_klines, drop_forming_candle
 from kalshi_favorite_backtest import BASE, SERIES, _get
 
-STATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state")
+STATE_DIR = os.path.join(_DATA_ROOT, "bot_state")
 TRADES_PATH = os.path.join(STATE_DIR, "trades.csv")
 TICKS_PATH = os.path.join(STATE_DIR, "ticks.csv")
 THRESHOLDS_PATH = os.path.join(STATE_DIR, "thresholds.json")
