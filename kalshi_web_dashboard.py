@@ -5153,6 +5153,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#e3e9f7; }
 .press-top { border-bottom:none; margin-bottom:10px; }
 .press-sub { font-size:11px; margin:-2px 0 3px; }
+body.ov-off .ov { display:none; }
+.ov-toggle { margin-left:10px; }
 .sb-sig { font-size:11px; margin-top:4px; line-height:1.45; }
 .sb-sig span { white-space:nowrap; margin:0 2px; }
 .chip-lbl { font-size:11px; align-self:center; }
@@ -6372,6 +6374,19 @@ const LIVE_SETTINGS_INPUT_PREFIX = /^(livesize-input-|fliptarget-input-|flipmaxp
 // after that the refresh resumes and the existing restore logic below keeps
 // whatever is being typed.
 async function setPatternTf(asset, tf) { await fetch('/set_pattern_tf?asset=' + encodeURIComponent(asset) + '&tf=' + encodeURIComponent(tf)); refresh(); }
+// 2026-10-20: one button hides / shows every pattern drawing on the chart (lines, boxes, labels, projections) so the forming
+// candles are easy to see. Remembered in this browser; works on the full-screen chart too.
+let overlaysOff = false;
+try { overlaysOff = localStorage.getItem('overlaysOff') === '1'; } catch (e) {}
+function applyOverlays() {
+  document.body.classList.toggle('ov-off', overlaysOff);
+  document.querySelectorAll('.ov-state').forEach(el => { el.textContent = overlaysOff ? 'OFF' : 'ON'; });
+}
+function toggleOverlays() {
+  overlaysOff = !overlaysOff;
+  try { localStorage.setItem('overlaysOff', overlaysOff ? '1' : '0'); } catch (e) {}
+  applyOverlays();
+}
 let expandedAsset = null;
 function expandPatternChart(asset) { expandedAsset = asset; renderExpanded(); }
 function closeExpanded() { expandedAsset = null; const o = document.getElementById('pat-overlay'); if (o) o.remove(); }
@@ -6582,6 +6597,7 @@ async function refresh() {
   checkIncomingAlerts();
   checkStageAlerts();
   checkFlowAlerts();
+  applyOverlays();
 }
 setInterval(refresh, 1000);
 window.onload = function() {
@@ -6993,7 +7009,8 @@ def build_pattern_window(asset_name):
         f'<button class="{"size-mode-btn size-mode-active" if t == tf else "size-mode-btn"}" '
         f"onclick=\"setPatternTf('{asset_name}','{t}')\">{_MTF_NAMES[t]}</button>" for t in _PAT_WINDOW_TFS)
     head = (f'<div class="pat-win-head"><b>What is being formed - {asset_name} live pattern window</b> '
-            f'<span class="hint">(information only - never used for buying)</span><div class="pat-win-tfs">{btns}</div></div>')
+            f'<span class="hint">(information only - never used for buying)</span><div class="pat-win-tfs">{btns}'
+            f'<button class="size-mode-btn ov-toggle" onclick="toggleOverlays()">Indicators: <b class="ov-state">ON</b></button></div></div>')
     if not cs or len(cs) < 25:
         return f'<div class="row pat-win">{head}<span class="flat">loading candle history...</span></div>'
     cs = _live_patched(cs, sym, tf)

@@ -323,17 +323,20 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
         o.append(f'<text fill-opacity="0.85" x="{width - R + 4}" y="{y(p) + 3:.1f}" font-size="{fs:.0f}" fill="#6f7ba0" font-family="sans-serif">{p:.6g}</text>')
     if title:
         o.append(f'<text fill-opacity="0.85" x="{L + 2}" y="{14 * F:.0f}" font-size="{11 * F:.0f}" fill="#93a0bf" font-family="sans-serif">{title}</text>')
+    o.append('<g class="ov">')       # 2026-10-20: everything in class "ov" can be switched off with the Indicators button
     for d in draws:     # boxes first (behind candles)
         if d["t"] == "box":
             x0, x1 = xi(d["i0"]) - step / 2, xi(d["i1"]) + step / 2
             o.append(f'<rect x="{x0:.1f}" y="{y(d["hi"]):.1f}" width="{x1 - x0:.1f}" height="{max(2.0, y(d["lo"]) - y(d["hi"])):.1f}" fill="{d["col"]}" opacity="0.11" stroke="{d["col"]}" stroke-opacity="0.5" stroke-dasharray="3 3"/>')
             lab(x0 + 3, y(d["hi"]) + fs, d["text"], "start", d["col"], prio=4)
+    o.append('</g>')
     for i, (ts, op, h, l, c) in enumerate(cs):
         col = "#5ad1a0" if c >= op else "#ff6f86"
         forming = i == n - 1
         o.append(f'<line x1="{xi(i):.1f}" y1="{y(h):.1f}" x2="{xi(i):.1f}" y2="{y(l):.1f}" stroke="{col}" stroke-width="{1 * F:.1f}"/>')
         top, bot = y(max(op, c)), y(min(op, c))
         o.append(f'<rect x="{xi(i) - bw / 2:.1f}" y="{top:.1f}" width="{bw:.1f}" height="{max(1.0, bot - top):.1f}" fill="{col if not forming else "none"}" stroke="{col}" stroke-width="{1 * F:.1f}"' + (' stroke-dasharray="2 2"' if forming else '') + '/>')
+    o.append('<g class="ov">')
     for d in draws:
         c = d["col"]
         if d["t"] == "hline":
@@ -367,6 +370,7 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
             yt, yb = y(max(c_[2] for c_ in sub)) - 4, y(min(c_[3] for c_ in sub)) + 4
             o.append(f'<rect x="{x0:.1f}" y="{yt:.1f}" width="{x1 - x0:.1f}" height="{yb - yt:.1f}" fill="none" stroke="{c}" stroke-opacity="0.55" stroke-width="{1.5 * F:.1f}" rx="3"/>')
             lab((x0 + x1) / 2, yb + fs * 1.2, d["text"], "middle", c, prio=4)
+    o.append('</g>')
     # ---- time axis along the bottom (Eastern time), with faint vertical guide lines
     try:
         ticks = _time_ticks(cs, step, fs)
@@ -395,6 +399,7 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
     fh, fl = cs[-1][2], cs[-1][3]
     placed = [(xi(n - 1) - step * 1.2, y(fh) - fs * 0.6, xi(n - 1) + step * 1.2, y(fl) + fs * 0.6)]   # keep text off the forming candle
     lh = fs * 1.35
+    o.append('<g class="ov">')
     for lb in sorted(labs, key=lambda z: z["prio"]):
         w = len(lb["text"]) * fs * (0.62 if lb["bold"] else 0.56)
         x0 = lb["x"] - (w if lb["anchor"] == "end" else (w / 2 if lb["anchor"] == "middle" else 0))
@@ -417,5 +422,6 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
         o.append(f'<text x="{anchor_x:.1f}" y="{best[0]:.1f}" text-anchor="{lb["anchor"]}" font-size="{fs:.0f}" fill="{lb["fill"]}" fill-opacity="0.38" '
                  f'stroke="#0a1020" stroke-opacity="0.2" stroke-width="{2.4 * F:.1f}" stroke-linejoin="round" paint-order="stroke" font-family="sans-serif"'
                  + (' font-weight="bold"' if lb["bold"] else '') + f'>{lb["text"]}</text>')
+    o.append('</g>')
     o.append("</svg>")
     return "".join(o), shown
