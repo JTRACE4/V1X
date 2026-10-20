@@ -5838,6 +5838,24 @@ function updateVoiceToggleButton() {
   btn.classList.toggle('asset-sound-off', !voiceAlertsEnabled);
 }
 
+// 2026-10-20: a warm female US-English voice. Picks the best one the phone / computer has (names differ per device).
+const VOICE_PREFS = ['Samantha', 'Ava', 'Allison', 'Susan', 'Zoe', 'Nicky', 'Microsoft Aria', 'Microsoft Jenny', 'Microsoft Michelle',
+  'Google US English', 'Microsoft Zira', 'Karen', 'Moira'];
+let _voice = null;
+function pickVoice() {
+  if (_voice) return _voice;
+  try {
+    const vs = window.speechSynthesis.getVoices() || [];
+    for (const name of VOICE_PREFS) {
+      const v = vs.find(x => x.name.indexOf(name) === 0 && /^en(-|_)?US/i.test(x.lang)) || vs.find(x => x.name.indexOf(name) === 0);
+      if (v) { _voice = v; return v; }
+    }
+    _voice = vs.find(x => /^en(-|_)?US/i.test(x.lang) && /female|woman/i.test(x.name)) || vs.find(x => /^en(-|_)?US/i.test(x.lang)) || null;
+  } catch (e) {}
+  return _voice;
+}
+try { if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = () => { _voice = null; pickVoice(); }; } catch (e) {}
+
 function speakRaw(text) {
   // unconditional - no toggle checks. Used by speak() below AND directly by
   // the "Test voice alert" button, so the test proves the actual mechanism
@@ -5850,7 +5868,10 @@ function speakRaw(text) {
     // day per user request - the extra repeat was adding real delay on top
     // of the alert's own lag, which made it feel out of sync with the chart)
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.05;
+    const v = pickVoice();
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-US'; }
+    u.rate = 1.0;
+    u.pitch = 1.12;
     // boosted 2026-09-28 per user request ("make it a little bit louder") -
     // raises the floor and applies a 1.3x multiplier, capped at the Web
     // Speech API's hard ceiling of 1.0
@@ -6044,34 +6065,58 @@ function playSirenAlert(assetName) {
   } catch (e) { /* autoplay may be blocked until the user interacts once - fine, just skip */ }
 }
 
+// 2026-10-20: the Flip Radar alert. Speaks up ONLY when the radar hits CRITICAL (70%+) or has climbed 45+ points from
+// its lowest reading this round - once per round each. Plays static/flip.mp3 if one has been added, else a "backflip" whoosh.
+const FLIP_CRIT = 70, FLIP_JUMP = 45;
+const flipLow = {}, flipFired = new Set();
+let flipClip = null, flipClipTried = false;
+function playFlipSound() {
+  if (!flipClipTried) {
+    flipClipTried = true;
+    try { flipClip = new Audio('/static/flip.mp3'); flipClip.preload = 'auto'; flipClip.onerror = () => { flipClip = null; }; } catch (e) { flipClip = null; }
+  }
+  if (flipClip) {
+    try { flipClip.currentTime = 0; flipClip.volume = Math.min(1, masterVolume); const pr = flipClip.play(); if (pr) pr.catch(() => playBackflipWhoosh()); return; } catch (e) {}
+  }
+  playBackflipWhoosh();
+}
+function playBackflipWhoosh() {
+  try {
+    const ctx = ensureAudioCtx();
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(180, now);
+    o.frequency.exponentialRampToValueAtTime(900, now + 0.35);
+    o.frequency.exponentialRampToValueAtTime(220, now + 0.75);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(vol(0.32), now + 0.05);
+    g.gain.linearRampToValueAtTime(0.0001, now + 0.8);
+    o.connect(lp); lp.connect(g); g.connect(ctx.destination);
+    o.start(now); o.stop(now + 0.85);
+    const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+    o2.type = 'sine'; o2.frequency.setValueAtTime(1320, now + 0.82);
+    g2.gain.setValueAtTime(vol(0.3), now + 0.82); g2.gain.exponentialRampToValueAtTime(0.0008, now + 1.3);
+    o2.connect(g2); g2.connect(ctx.destination); o2.start(now + 0.82); o2.stop(now + 1.35);
+  } catch (e) {}
+}
 function checkBuildingAlerts() {
-  if (!soundEnabled || !buildingAlertsEnabled) return;
-  // assets whose window has ALREADY flipped - the flip alert announces that; no "building" chatter on top of it
-  const flipped = new Set(Array.from(document.querySelectorAll('.flip-alert, .certain-flip-alert')).map(e =>
-    (e.getAttribute('data-flip-key') || ((e.getAttribute('data-flip-name') || '') + '::')).split('::')[0]));
-  const els = document.querySelectorAll('.flip-chance-value');
-  els.forEach(el => {
+  document.querySelectorAll('.flip-chance-value[data-flip-src="radar"]').forEach(el => {
     const key = el.getAttribute('data-flip-chance-key');
     const pct = parseFloat(el.getAttribute('data-flip-chance-pct'));
     if (!key || isNaN(pct)) return;
-    const assetName = key.split('::')[0];
-    // if it jumped past several tiers at once (e.g. 20% -> 50%), mark them all done but announce ONLY the highest
-    let top = 0;
-    BUILD_TIERS.forEach(tier => {
-      const tierKey = key + '::' + tier;
-      if (pct >= tier && !alertedBuildTiers.has(tierKey)) {
-        alertedBuildTiers.add(tierKey);
-        top = Math.max(top, tier);
-      }
-    });
-    if (!top || flipped.has(assetName) || assetSoundEnabled[assetName] === false) return;
-    if (top === 45) {
-      playSirenAlert(assetName);
-      speakDelayed(assetName + '. Siren. Flip chance ' + top + ' percent, building fast.');
-    } else {
-      playBuildingBeep(assetName, top);
-      speakDelayed(assetName + '. Beep. Flip chance ' + top + ' percent.');
-    }
+    const name = key.split('::')[0];
+    flipLow[key] = Math.min(flipLow[key] === undefined ? pct : flipLow[key], pct);
+    let why = null;
+    if (pct >= FLIP_CRIT && !flipFired.has(key + '::crit')) { why = 'crit'; }
+    else if (pct - flipLow[key] >= FLIP_JUMP && !flipFired.has(key + '::jump')) { why = 'jump'; }
+    if (!why) return;
+    flipFired.add(key + '::' + why);
+    if (why === 'crit') flipFired.add(key + '::jump');
+    if (!soundEnabled || assetSoundEnabled[name] === false) return;
+    playFlipSound();
+    speakDelayed(name + '. ' + (why === 'crit' ? 'Flip radar critical, ' : 'Flip risk jumped to ') + Math.round(pct) + ' percent.', 900);
   });
 }
 
@@ -6584,26 +6629,44 @@ function checkRegimeAlerts() {
 // up-glide), distinct from every other alert. Rises in pitch a bit for a
 // whale BUY, drops for a whale SELL, so you can tell direction by ear.
 function playWhaleSound(side) {
+  // 2026-10-20: whale BUY = cash-register "cha-ching", whale SELL = a "denied" double beep
   try {
     const ctx = ensureAudioCtx();
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    const base = 90;
-    const peak = side === 'buy' ? 220 : 150;
-    const end = side === 'buy' ? 130 : 70;
-    osc.frequency.setValueAtTime(base, now);
-    osc.frequency.linearRampToValueAtTime(peak, now + 0.5);
-    osc.frequency.linearRampToValueAtTime(end, now + 1.4);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(vol(0.5), now + 0.15);
-    gain.gain.setValueAtTime(vol(0.5), now + 1.1);
-    gain.gain.linearRampToValueAtTime(0.0001, now + 1.5);
-    osc.start(now);
-    osc.stop(now + 1.55);
+    if (side === 'buy') {
+      // "cha" - short noisy drawer slide
+      const len = Math.floor(ctx.sampleRate * 0.09);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const nz = ctx.createBufferSource(); nz.buffer = buf;
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
+      const ng = ctx.createGain(); ng.gain.value = vol(0.35);
+      nz.connect(hp); hp.connect(ng); ng.connect(ctx.destination);
+      nz.start(now);
+      // "ching" - bright bell: two partials, long shimmering tail
+      [[2093, 0.5], [3136, 0.35], [4186, 0.18], [2637, 0.25]].forEach(([f, a], i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(f, now + 0.11);
+        g.gain.setValueAtTime(0.0001, now + 0.11);
+        g.gain.linearRampToValueAtTime(vol(a), now + 0.115);
+        g.gain.exponentialRampToValueAtTime(0.0008, now + 0.11 + 0.9 + i * 0.1);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(now + 0.11); o.stop(now + 1.2);
+      });
+    } else {
+      // denied: two short low square beeps
+      [0, 0.22].forEach(t => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type = 'square'; o.frequency.setValueAtTime(196, now + t);
+        g.gain.setValueAtTime(0.0001, now + t);
+        g.gain.linearRampToValueAtTime(vol(0.28), now + t + 0.01);
+        g.gain.setValueAtTime(vol(0.28), now + t + 0.14);
+        g.gain.linearRampToValueAtTime(0.0001, now + t + 0.16);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(now + t); o.stop(now + t + 0.18);
+      });
+    }
   } catch (e) { /* autoplay may be blocked until first interaction - fine */ }
 }
 
@@ -7197,6 +7260,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playAlienSound('BNB')">Test BNB sound</button>
       <button onclick="playWhaleSound('buy'); showWhaleCrossing('BTC','buy')">Test whale BUY</button>
       <button onclick="playWhaleSound('sell'); showWhaleCrossing('BTC','sell')">Test whale SELL</button>
+      <button onclick="playFlipSound(); speakDelayed('BTC. Flip radar critical, 74 percent.', 900)">Test flip alert</button>
+      <button onclick="speakRaw('Voice check. Whale buy. 2.4 million dollars.')">Test voice</button>
       <button onclick="playWallAlert('sell'); showWhaleCrossing('XRP','sell')">Test SELL wall</button>
       <button onclick="playWallAlert('buy'); showWhaleCrossing('XRP','buy')">Test BUY wall</button>
       <button onclick="playReversalAlarm('XRP'); speakRaw('XRP. Swinging down, against your call.')">Test voice alert</button>
@@ -9013,7 +9078,7 @@ def build_flip_radar(name, d):
     p = fr["parts"]
     tip = (f'momentum {p["momentum"]:+.0f} &middot; cushion {p["cushion"]:+.0f} &middot; crosses {p["crosses"]:+.0f} &middot; '
            f'book walls {p["book"]:+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
-    marker = (f'<span class="flip-chance-value" data-flip-chance-key="{name}::{d.get("ticker", "")}{("::" + key) if key else ""}" '
+    marker = (f'<span class="flip-chance-value" data-flip-src="radar" data-flip-chance-key="{name}::{d.get("ticker", "")}{("::" + key) if key else ""}" '
               f'data-flip-chance-pct="{pct:.2f}" style="display:none;"></span>')
     return (f'<div class="rs-tile flip-radar" title="{_html_attr(tip.replace("&middot;", "|"))}"><div class="rs-title">FLIP RADAR</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
@@ -10689,7 +10754,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path.startswith("/static/"):
             name_ = os.path.basename(path)
             fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", name_)
-            ctype = {".jpg": "image/jpeg", ".webp": "image/webp", ".png": "image/png", ".svg": "image/svg+xml"}.get(os.path.splitext(name_)[1])
+            ctype = {".jpg": "image/jpeg", ".webp": "image/webp", ".png": "image/png", ".svg": "image/svg+xml", ".mp3": "audio/mpeg",
+                     ".m4a": "audio/mp4"}.get(os.path.splitext(name_)[1])
             if not ctype or not os.path.isfile(fp):
                 return self._send(404, "not found", "text/plain")
             with open(fp, "rb") as f_:
