@@ -759,7 +759,7 @@ def render_candle_chart_svg(candles, target, current_price, typical_move, second
     bars = []
     for i, (ts, o, h, l, c) in enumerate(candles):
         cx = x_of(ts) + candle_w / 2
-        color = "#2de2a6" if c >= o else "#ff5c8a"
+        color = "#3dd69c" if c >= o else "#f05454"
         body_top, body_bot = y(max(o, c)), y(min(o, c))
         body_h = max(1.0, abs(body_bot - body_top))
         bars.append(f'<line x1="{cx:.1f}" y1="{y(h):.1f}" x2="{cx:.1f}" y2="{y(l):.1f}" '
@@ -774,11 +774,11 @@ def render_candle_chart_svg(candles, target, current_price, typical_move, second
         hi_y, lo_y = y(proj_hi), y(proj_lo)
         cone_svg = (
             f'<polygon points="{last_x:.1f},{last_y:.1f} {tip_x:.1f},{hi_y:.1f} {tip_x:.1f},{lo_y:.1f}" '
-            f'fill="#5cc8ff" opacity="0.14"/>'
+            f'fill="#e9a5bb" opacity="0.14"/>'
             f'<line x1="{last_x:.1f}" y1="{last_y:.1f}" x2="{tip_x:.1f}" y2="{hi_y:.1f}" '
-            f'stroke="#5cc8ff" stroke-width="1" stroke-dasharray="3,2" opacity="0.55"/>'
+            f'stroke="#e9a5bb" stroke-width="1" stroke-dasharray="3,2" opacity="0.55"/>'
             f'<line x1="{last_x:.1f}" y1="{last_y:.1f}" x2="{tip_x:.1f}" y2="{lo_y:.1f}" '
-            f'stroke="#5cc8ff" stroke-width="1" stroke-dasharray="3,2" opacity="0.55"/>'
+            f'stroke="#e9a5bb" stroke-width="1" stroke-dasharray="3,2" opacity="0.55"/>'
         )
 
     target_svg = ""
@@ -801,7 +801,7 @@ def render_candle_chart_svg(candles, target, current_price, typical_move, second
             wx = x_of(ts)
             frac = min(1.0, usd / max_usd)
             mh = max(2, strip_h * (0.25 + 0.75 * frac))
-            color = "#2de2a6" if side == "buy" else "#ff5c8a"
+            color = "#3dd69c" if side == "buy" else "#f05454"
             opacity = 0.4 + 0.6 * frac
             marks.append(f'<line x1="{wx:.1f}" y1="{strip_top + strip_h:.1f}" '
                         f'x2="{wx:.1f}" y2="{strip_top + strip_h - mh:.1f}" '
@@ -826,7 +826,7 @@ def build_chart_svg(closes, width=780, height=60):
         x = (i / (n - 1)) * width
         y = height - ((c - lo) / span) * height
         points.append(f"{x:.1f},{y:.1f}")
-    color = "#2de2a6" if closes[-1] >= closes[0] else "#ff5c8a"
+    color = "#3dd69c" if closes[-1] >= closes[0] else "#f05454"
     poly = " ".join(points)
     return (f'<svg viewBox="0 0 {width} {height}" width="100%" height="{height}" '
             f'preserveAspectRatio="none" style="display:block;margin-top:6px;">'
@@ -878,7 +878,7 @@ def build_flip_gauge_svg(pct):
         rad = math.radians(angle_deg)
         return cx + radius * math.cos(rad), cy - radius * math.sin(rad)
 
-    zones = [(0, 30, "#2de2a6"), (30, 40, "#d29922"), (40, 45, "#f0883e"), (45, 60, "#ff5c8a")]
+    zones = [(0, 30, "#3dd69c"), (30, 40, "#d29922"), (40, 45, "#f0883e"), (45, 60, "#f05454")]
     arcs = []
     for zstart, zend, color in zones:
         a1 = 180 - (zstart / max_scale) * 180
@@ -891,9 +891,9 @@ def build_flip_gauge_svg(pct):
     needle_angle = 180 - (clamped / max_scale) * 180
     nx, ny = angle_xy(needle_angle, r - 12)
     needle = (f'<line x1="{cx}" y1="{cy}" x2="{nx:.1f}" y2="{ny:.1f}" '
-             f'stroke="#f5f7fa" stroke-width="3" stroke-linecap="round"/>'
-             f'<circle cx="{cx}" cy="{cy}" r="5" fill="#f5f7fa"/>')
-    label = f'<text x="{cx}" y="{cy + 26}" text-anchor="middle" fill="#f5f7fa" font-size="16" font-weight="700">{pct:.1f}%</text>'
+             f'stroke="#fbf4ec" stroke-width="3" stroke-linecap="round"/>'
+             f'<circle cx="{cx}" cy="{cy}" r="5" fill="#fbf4ec"/>')
+    label = f'<text x="{cx}" y="{cy + 26}" text-anchor="middle" fill="#fbf4ec" font-size="16" font-weight="700">{pct:.1f}%</text>'
     return (f'<svg viewBox="0 0 180 126" width="140" height="98" style="display:block;">'
             f'{"".join(arcs)}{needle}{label}</svg>')
 
@@ -2201,7 +2201,7 @@ def best_hours_html(asset_history):
         chips.append(f'<span style="{dim}">{_fmt_hour_12(hour)} '
                      f'<span class="{css}">{pct:.0%}</span>({n})</span>')
     strip = " &middot; ".join(chips)
-    return (f'<div style="font-size:11px; line-height:1.7; color:#a3abb8;">{strip}'
+    return (f'<div style="font-size:11px; line-height:1.7; color:#bcaaa1;">{strip}'
             f'<br><span style="opacity:0.6;">dimmed = under {BEST_HOURS_MIN_SAMPLE} graded windows, EDT</span></div>')
 
 
@@ -4181,6 +4181,17 @@ def poll_loop():
                     rsi_multi = _flow.HUB.rsi_multi(asset["name"]) if asset["name"] in _flow.ASSETS else {}
                 except Exception:
                     rsi_multi = {}
+                # 2026-10-20: RSI cross-check vs TradingView / Webull. The number BRAIN shows (and every RSI warning uses) is
+                # now TradingView's Wilder RSI(14) on Coinbase candles incl. the live candle; the old composite stays as "all1".
+                try:
+                    _rc = _rsi_check.read(asset["name"], live_price, rsi_multi.get("rsi1"))
+                except Exception:
+                    _rc = None
+                if _rc:
+                    rsi_multi = dict(rsi_multi)
+                    rsi_multi.update({"rsi1": _rc["tv1"], "rsi5": _rc["tv5"] if _rc["tv5"] is not None else rsi_multi.get("rsi5"),
+                                      "rsi1_prev": _rc["tv1_prev"] if _rc["tv1_prev"] is not None else rsi_multi.get("rsi1_prev"),
+                                      "check": _rc})
                 locked.setdefault("open_ts", open_time_dt.timestamp())
                 _kp_rec = _kalshi_path.get(asset["name"])
                 if not _kp_rec or _kp_rec["ticker"] != ticker:
@@ -4655,35 +4666,35 @@ PAGE_TEMPLATE = r"""<!doctype html>
   }, 5000);
 })();
 </script><meta charset="utf-8"><title>Brain</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#211b1e">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&family=Bungee&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&family=Bungee&family=Bebas+Neue&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..900,0..100;1,9..144,400..900,0..100&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background:#121418; color:#f5f7fa; margin:0; padding:12px 24px 24px; }
+body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background:#211b1e; color:#fbf4ec; margin:0; padding:12px 24px 24px; }
 h1 { font-size: 15px; color:#9d9d9d; margin:0 0 8px; }
 .view-bar { margin:6px 0 2px; display:flex; gap:6px; align-items:center; }
 body[data-view="BTC"] .card[data-asset="XRP"], body[data-view="XRP"] .card[data-asset="BTC"] { display:none; }
 body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 #content { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; margin-top:10px; }
 .sound-details { display:inline-block; vertical-align:middle; margin-left:8px; }
-.sound-details summary { display:inline-block; cursor:pointer; color:#a3abb8; font-size:13px; padding:6px 10px; background:#252a32; border:1px solid #343a45; border-radius:6px; }
-.sound-details summary:hover { background:#343a45; }
+.sound-details summary { display:inline-block; cursor:pointer; color:#bcaaa1; font-size:13px; padding:6px 10px; background:#352b30; border:1px solid #4a3c43; border-radius:6px; }
+.sound-details summary:hover { background:#4a3c43; }
 .sound-details[open] summary { margin-bottom:6px; }
 .sound-details-body { padding-top:4px; }
-.card { background:#1a1d23; border:1px solid #343a45; border-radius:10px; padding:20px; margin-bottom:20px; flex:1 1 640px; min-width:640px; max-width:900px; }
+.card { background:#2a2226; border:1px solid #4a3c43; border-radius:10px; padding:20px; margin-bottom:20px; flex:1 1 640px; min-width:640px; max-width:900px; }
 .chart-wrap { margin-top:6px; }
 .chart-controls { display:flex; justify-content:flex-end; gap:4px; margin-bottom:2px; }
-.chart-tf-btn { background:#252a32; color:#a3abb8; border:1px solid #343a45; border-radius:5px; padding:2px 9px; font-size:11px; cursor:pointer; }
-.chart-tf-btn:hover { background:#343a45; }
-.chart-tf-btn.chart-tf-active { background:#0d2818; border-color:#2de2a6; color:#2de2a6; }
+.chart-tf-btn { background:#352b30; color:#bcaaa1; border:1px solid #4a3c43; border-radius:5px; padding:2px 9px; font-size:11px; cursor:pointer; }
+.chart-tf-btn:hover { background:#4a3c43; }
+.chart-tf-btn.chart-tf-active { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
 /* whale-cross: position/left are set inline per-instance (JS computes the
    target card's on-screen rect) since the card it flies over is rebuilt via
    innerHTML every 3s poll - a child element would get wiped mid-animation,
    so this lives under <body> instead and is just visually aligned over the
    card. See showWhaleCrossing(). */
 .whale-cross { font-size:90px; white-space:nowrap; pointer-events:none; z-index:9999; }
-.whale-cross.whale-buy { filter: drop-shadow(0 0 6px #2de2a6); }
-.whale-cross.whale-sell { filter: drop-shadow(0 0 6px #ff5c8a); }
+.whale-cross.whale-buy { filter: drop-shadow(0 0 6px #3dd69c); }
+.whale-cross.whale-sell { filter: drop-shadow(0 0 6px #f05454); }
 /* big, screen-center "for sure" flip alert - added 2026-09-24 per user
    request for something bigger/louder than the small BOOM pill. Fixed under
    <body> (not #content, which gets wiped every 1s poll) so it survives the
@@ -4698,17 +4709,17 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
    property fights the JS-driven transform instead of combining with it (the
    same conflict that broke the flame effect earlier in this project) and
    would drop the translate(-50%,-50%) centering entirely. */
-.big-flip-alert.flip-down { border-color:#ff5c8a; box-shadow:0 0 40px rgba(248,81,73,0.6); }
-.big-flip-alert.flip-up { border-color:#2de2a6; box-shadow:0 0 40px rgba(63,185,80,0.6); }
+.big-flip-alert.flip-down { border-color:#f05454; box-shadow:0 0 40px rgba(248,81,73,0.6); }
+.big-flip-alert.flip-up { border-color:#3dd69c; box-shadow:0 0 40px rgba(63,185,80,0.6); }
 .big-flip-title { font-size:clamp(22px,5vw,40px); font-weight:900; color:#fff; letter-spacing:0.5px; }
-.big-flip-sub { font-size:14px; color:#a3abb8; margin-top:8px; }
+.big-flip-sub { font-size:14px; color:#bcaaa1; margin-top:8px; }
 /* "cha-ching" money banner - added 2026-09-27 per user request ("if the bet
    is won, I'd like a cha-ching with a money symbol to go across the
    screen"). Same technique as .big-flip-alert: fixed position, motion
    driven entirely by the JS Web Animations API call in showMoneyBanner()
    below (animating `left` across the viewport), no CSS animation here. */
 .money-banner { position:fixed; top:45%; z-index:10001; pointer-events:none;
-                 font-size:clamp(20px,4vw,34px); font-weight:900; color:#2de2a6;
+                 font-size:clamp(20px,4vw,34px); font-weight:900; color:#3dd69c;
                  text-shadow:0 0 16px rgba(63,185,80,0.85); white-space:nowrap; }
 .money-banner-emoji { font-size:5.5em; vertical-align:middle; }  /* "make sure it's big" per user
                                                                      request 2026-09-27, bumped up
@@ -4721,15 +4732,15 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 /* loss banner - added 2026-09-27 per user request ("when it's wrong...
    fuck you, Kalshi"). Same technique/motion as .money-banner. */
 .loss-banner { position:fixed; top:45%; z-index:10001; pointer-events:none;
-                font-size:clamp(20px,4vw,34px); font-weight:900; color:#ff5c8a;
+                font-size:clamp(20px,4vw,34px); font-weight:900; color:#f05454;
                 text-shadow:0 0 16px rgba(248,81,73,0.85); white-space:nowrap; }
 .loss-banner-emoji { font-size:5.5em; vertical-align:middle; }  /* "make sure it's big" - same
                                                                     bump as the money emoji */
 .asset-name { font-size: 22px; font-weight:700; margin-bottom: 0; }
-.row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #252a32; }
-.label { color:#a3abb8; }
+.row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #352b30; }
+.label { color:#bcaaa1; }
 .value { font-weight:600; }
-.up { color:#2de2a6; }
+.up { color:#3dd69c; }
 .fire-streak { display:flex; justify-content:flex-end; margin-bottom:2px; }
 /* real-fire technique: blurred, glowing, layered blobs (not a vector
    outline) - soft irregular edges + screen blend = reads like actual flame/
@@ -4753,60 +4764,60 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
                           50% { transform:scaleY(1.16) scaleX(0.82) translateX(-1px); opacity:1; } }
 .smoke-streak { font-size:16px; line-height:1; text-align:right; margin-bottom:2px; opacity:0.7; animation: smoke-rise 2.2s ease-in-out infinite; }
 @keyframes smoke-rise { 0% { opacity:0; transform:translateY(4px) scale(0.9); } 30% { opacity:0.7; } 100% { opacity:0; transform:translateY(-10px) scale(1.15); } }
-.down { color:#ff5c8a; }
+.down { color:#f05454; }
 .warn { color:#d29922; }
-.position-tag { color:#5cc8ff; }  /* live position summary label - added 2026-09-27 per user
+.position-tag { color:#e9a5bb; }  /* live position summary label - added 2026-09-27 per user
                                      request ("a different color other than white green or red...
                                      so it stands out") - a distinct cyan-blue, not reused anywhere
                                      else as up/down/warn/locked-call already claim green/red/gold */
-.ranges { margin-top:10px; font-size: 13px; color:#a3abb8; }
-.timer { font-size: 13px; color:#a3abb8; }
-.flat { color:#a3abb8; }
+.ranges { margin-top:10px; font-size: 13px; color:#bcaaa1; }
+.timer { font-size: 13px; color:#bcaaa1; }
+.flat { color:#bcaaa1; }
 .callbox { box-sizing:border-box; display:flex; flex-direction:column; justify-content:center;
-           background:#121418; border:1px solid #343a45; border-radius:8px; padding:5px 6px;
+           background:#211b1e; border:1px solid #4a3c43; border-radius:8px; padding:5px 6px;
            margin-left:6px; text-align:center; width:92px; flex:0 1 92px; }
 .live-price-inline { box-sizing:border-box; display:flex; flex-direction:column; justify-content:center;
                       margin-left:6px; text-align:center; min-width:130px; flex:0 1 auto; }
 .live-price-inline .big { font-size:26px; font-weight:800; line-height:1.1; }
-.tug { margin:8px 0; padding:10px 12px; background:#121418; border:1px solid #343a45; border-radius:8px; }
+.tug { margin:8px 0; padding:10px 12px; background:#211b1e; border:1px solid #4a3c43; border-radius:8px; }
 .tug-title { font-size:12px; font-weight:800; letter-spacing:0.4px; margin-bottom:6px; }
 .tug-top { display:flex; justify-content:space-between; align-items:flex-end; gap:10px; }
 .tug-big { font-size:28px; font-weight:800; line-height:1.1; }
 .tug-diff { font-size:22px; font-weight:800; }
 .tug-gauge { position:relative; height:26px; margin:6px 0 0; display:flex; align-items:center; justify-content:space-between; }
-.tug-gline { position:absolute; left:6%; right:6%; top:50%; height:2px; background:#343a45; }
-.tug-gauge i { position:absolute; top:3px; width:16px; height:20px; margin-left:-8px; border-radius:50%; background:#2de2a6; box-shadow:0 0 8px #2de2a6; }
+.tug-gline { position:absolute; left:6%; right:6%; top:50%; height:2px; background:#4a3c43; }
+.tug-gauge i { position:absolute; top:3px; width:16px; height:20px; margin-left:-8px; border-radius:50%; background:#3dd69c; box-shadow:0 0 8px #3dd69c; }
 .tug-gl, .tug-gr { position:relative; z-index:1; font-size:10px; }
 .tug-cap { text-align:center; font-size:10px; margin-bottom:4px; }
 .tug-head { font-size:20px; font-weight:800; margin:4px 0; }
 .tug-lean { font-size:13px; margin-top:2px; }
-.tug-bar { position:relative; height:12px; border-radius:6px; background:#e0436f; margin:4px 0 8px; }
-.tug-bar i { position:absolute; left:0; top:0; bottom:0; border-radius:6px 0 0 6px; background:#1fb58a; }
-.tug-bar b { position:absolute; top:-3px; width:4px; height:18px; margin-left:-2px; background:#f5f7fa; border-radius:2px; }
+.tug-bar { position:relative; height:12px; border-radius:6px; background:#cf3b3b; margin:4px 0 8px; }
+.tug-bar i { position:absolute; left:0; top:0; bottom:0; border-radius:6px 0 0 6px; background:#26a878; }
+.tug-bar b { position:absolute; top:-3px; width:4px; height:18px; margin-left:-2px; background:#fbf4ec; border-radius:2px; }
 .tug-row { display:flex; align-items:center; gap:8px; font-size:12px; margin:2px 0; }
-.tug-lab { flex:0 0 170px; color:#a3abb8; }
-.tug-track { position:relative; flex:1 1 auto; height:6px; background:#252a32; border-radius:3px; overflow:hidden; }
+.tug-lab { flex:0 0 170px; color:#bcaaa1; }
+.tug-track { position:relative; flex:1 1 auto; height:6px; background:#352b30; border-radius:3px; overflow:hidden; }
 .tug-fill { position:absolute; top:0; bottom:0; border-radius:3px; }
-.tug-center::after { content:""; position:absolute; left:50%; top:-2px; bottom:-2px; width:2px; margin-left:-1px; background:#f5f7fa; opacity:0.7; }
-.tug-fill.up { background:#2de2a6; } .tug-fill.down { background:#ff5c8a; } .tug-fill.flat { background:#a3abb8; }
+.tug-center::after { content:""; position:absolute; left:50%; top:-2px; bottom:-2px; width:2px; margin-left:-1px; background:#fbf4ec; opacity:0.7; }
+.tug-fill.up { background:#3dd69c; } .tug-fill.down { background:#f05454; } .tug-fill.flat { background:#bcaaa1; }
 .tug-val { flex:0 0 118px; text-align:right; font-weight:700; }
 .tug-boxes { display:flex; gap:8px; margin:8px 0 6px; }
-.tug-box { flex:1 1 0; padding:6px 10px; border-radius:6px; font-size:12px; border:1px solid #343a45; }
-.tug-box.up { background:#0f2a1a; border-color:#1fb58a; } .tug-box.down { background:#2a1212; border-color:#e0436f; }
-.tug-box span { color:#a3abb8; font-size:11px; }
+.tug-box { flex:1 1 0; padding:6px 10px; border-radius:6px; font-size:12px; border:1px solid #4a3c43; }
+.tug-box.up { background:#0f2a1a; border-color:#26a878; } .tug-box.down { background:#2a1212; border-color:#cf3b3b; }
+.tug-box span { color:#bcaaa1; font-size:11px; }
 .tug-agree { font-size:12px; padding:5px 10px; border-radius:6px; margin:4px 0; }
-.tug-agree.ok { background:#0f2a1a; border:1px solid #1fb58a; color:#2de2a6; }
+.tug-agree.ok { background:#0f2a1a; border:1px solid #26a878; color:#3dd69c; }
 .tug-agree.warn { background:#2d2606; border:1px solid #d4b106; color:#e3b341; }
 .tug-around { margin-top:4px; font-size:11px; }
 .line-diff { font-size:12px; font-weight:800; margin-top:2px; white-space:nowrap; }
-.live-price-inline .lbl { font-size:10px; color:#a3abb8; text-transform:uppercase; }
+.live-price-inline .lbl { font-size:10px; color:#bcaaa1; text-transform:uppercase; }
 .callbox .big { font-size:14px; font-weight:700; line-height:1.2; }
-.callbox .lbl { font-size:9px; color:#a3abb8; text-transform:uppercase; line-height:1.25; }
+.callbox .lbl { font-size:9px; color:#bcaaa1; text-transform:uppercase; line-height:1.25; }
 .asset-label { font-weight:800; letter-spacing:0.5px; }
 .asset-BTC { color:#f7931a; } .asset-XRP { color:#4aa8ff; }
-.clock { display:flex; align-items:center; gap:5px; margin-top:4px; font-family:Consolas, 'Courier New', monospace; font-size:17px; font-weight:700; color:#f5f7fa; }
+.clock { display:flex; align-items:center; gap:5px; margin-top:4px; font-family:Consolas, 'Courier New', monospace; font-size:17px; font-weight:700; color:#fbf4ec; }
 .clock svg { display:block; }
-.clock.clock-warn { color:#d29922; } .clock.clock-hot { color:#ff5c8a; }
+.clock.clock-warn { color:#d29922; } .clock.clock-hot { color:#f05454; }
 .callbox-locked { background:#2d2606; border:2px solid #d4b106; box-shadow:0 0 8px rgba(212,177,6,0.5); }
 .callbox-locked .lbl { color:#f0d040; }
 .callbox-locked .big { color:#ffe680; }
@@ -4818,24 +4829,24 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .head-row .kalshi-arrow-pct { font-size:19px; text-align:center; }
 .boom { display:inline-block; padding:6px 16px; border-radius:20px; font-weight:800; font-size:14px;
         margin-left:12px; animation: boom-pulse 0.9s infinite; vertical-align:middle; }
-.boom-up { background:#0d2818; color:#2de2a6; border:2px solid #2de2a6; }
-.boom-down { background:#2d0d0d; color:#ff5c8a; border:2px solid #ff5c8a; }
+.boom-up { background:#0d2818; color:#3dd69c; border:2px solid #3dd69c; }
+.boom-down { background:#2d0d0d; color:#f05454; border:2px solid #f05454; }
 @keyframes boom-pulse { 0% { opacity:1; transform:scale(1); } 50% { opacity:0.65; transform:scale(1.08); } 100% { opacity:1; transform:scale(1); } }
-.meter-track { display:inline-block; width:90px; height:8px; background:#121418; border:1px solid #343a45;
+.meter-track { display:inline-block; width:90px; height:8px; background:#211b1e; border:1px solid #4a3c43;
                border-radius:4px; overflow:hidden; vertical-align:middle; margin-left:8px; }
 .meter-fill { height:100%; border-radius:3px; }
-.meter-fill-up { background:#2de2a6; }
-.meter-fill-down { background:#ff5c8a; }
-.sound-bar { margin-bottom:16px; padding:12px 16px; background:#1a1d23; border:1px solid #343a45; border-radius:8px; }
-.sound-bar button { background:#252a32; color:#f5f7fa; border:1px solid #343a45; border-radius:6px; padding:8px 14px; margin-right:8px; margin-bottom:6px; cursor:pointer; font-size:13px; }
-.sound-bar button:hover { background:#343a45; }
+.meter-fill-up { background:#3dd69c; }
+.meter-fill-down { background:#f05454; }
+.sound-bar { margin-bottom:16px; padding:12px 16px; background:#2a2226; border:1px solid #4a3c43; border-radius:8px; }
+.sound-bar button { background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:6px; padding:8px 14px; margin-right:8px; margin-bottom:6px; cursor:pointer; font-size:13px; }
+.sound-bar button:hover { background:#4a3c43; }
 #sound-enable-btn { font-weight:700; }
-#sound-enable-btn.sound-on { background:#0d2818; border-color:#2de2a6; color:#2de2a6; }
-.asset-sound-on { background:#0d2818; border-color:#2de2a6; color:#2de2a6; }
-.asset-sound-off { background:#2d0d0d; border-color:#ff5c8a; color:#ff5c8a; }
-.sound-bar .hint { color:#a3abb8; font-size:12px; margin-top:6px; }
-.live-trading-row { align-items:flex-start; background:#1a1d23; border:1px solid #343a45; border-radius:8px; padding:10px 12px; margin:4px 0 10px; }
-.live-trading-row .hint { color:#a3abb8; font-size:12px; margin-top:4px; }
+#sound-enable-btn.sound-on { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
+.asset-sound-on { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
+.asset-sound-off { background:#2d0d0d; border-color:#f05454; color:#f05454; }
+.sound-bar .hint { color:#bcaaa1; font-size:12px; margin-top:6px; }
+.live-trading-row { align-items:flex-start; background:#2a2226; border:1px solid #4a3c43; border-radius:8px; padding:10px 12px; margin:4px 0 10px; }
+.live-trading-row .hint { color:#bcaaa1; font-size:12px; margin-top:4px; }
 /* live position line, under the box's own label/title instead of stacked in
    with the ARMED state/buttons - added 2026-09-27 per user request ("under
    the words real money auto buy flip scalp, in the same box, but where it's
@@ -4846,11 +4857,11 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .box-position-line { display:block; margin-top:8px; font-size:14px; font-weight:400;
                       white-space:normal; }
 .live-trading-row button { border-radius:6px; padding:6px 12px; margin-left:10px; cursor:pointer; font-weight:700; font-size:13px; border:1px solid; }
-.live-btn-on { background:#2d0d0d; border-color:#ff5c8a; color:#ff5c8a; }
+.live-btn-on { background:#2d0d0d; border-color:#f05454; color:#f05454; }
 .live-btn-on:hover { background:#3d1111; }
-.live-btn-off { background:#0d2818; border-color:#2de2a6; color:#2de2a6; }
+.live-btn-off { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
 .live-btn-off:hover { background:#123322; }
-.size-mode-btn { background:#252a32; border-color:#343a45; color:#a3abb8; font-weight:400 !important; }
+.size-mode-btn { background:#352b30; border-color:#4a3c43; color:#bcaaa1; font-weight:400 !important; }
 /* buy/sell volume "tug of war" bar - added 2026-09-30 per user request
    ("a tug of war window to show the tug of war against up and down volume
    going up and down in the moment so I can see which side is getting
@@ -4858,10 +4869,10 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
    fills the rest - the split point itself is the "which side is winning"
    read, labeled with both percentages. */
 #lock-toasts { position:fixed; top:70px; right:20px; z-index:99999; display:flex; flex-direction:column; gap:10px; pointer-events:none; }
-.lock-toast { background:#121418; border:2px solid #f2cc60; color:#f2cc60; padding:14px 22px; font-size:22px;
+.lock-toast { background:#211b1e; border:2px solid #f2cc60; color:#f2cc60; padding:14px 22px; font-size:22px;
               font-weight:700; border-radius:10px; box-shadow:0 4px 18px rgba(0,0,0,0.6); }
 #rsi-alerts { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:100000; display:flex; flex-direction:column; gap:8px; align-items:center; max-width:94vw; }
-.rsi-pill { background:#121418; border:3px solid currentColor; border-radius:12px; padding:12px 26px; text-align:center; cursor:pointer;
+.rsi-pill { background:#211b1e; border:3px solid currentColor; border-radius:12px; padding:12px 26px; text-align:center; cursor:pointer;
             font-size:26px; font-weight:800; letter-spacing:0.5px; animation:rsiPulse 1.4s ease-in-out infinite; }
 .rsi-pill small { display:block; font-size:12px; font-weight:400; opacity:0.75; letter-spacing:0; margin-top:2px; }
 .rsi-under { color:#00e5ff; } .rsi-over { color:#ff4dd2; }
@@ -4872,33 +4883,33 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 #sound-reminder { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:99999; background:#3d2f00;
                   border:1px solid #f2cc60; color:#f2cc60; padding:10px 18px; border-radius:8px; font-size:14px; }
 #incoming-alerts { position:fixed; top:90px; left:50%; transform:translateX(-50%); z-index:100001; display:flex; flex-direction:column; gap:10px; align-items:center; max-width:96vw; }
-.incoming-banner { background:#121418; border:4px solid currentColor; border-radius:14px; padding:16px 30px; text-align:center; cursor:pointer;
+.incoming-banner { background:#211b1e; border:4px solid currentColor; border-radius:14px; padding:16px 30px; text-align:center; cursor:pointer;
                    animation:rsiPulse 1.1s ease-in-out infinite; max-width:94vw; }
 .incoming-head { font-size:42px; font-weight:900; letter-spacing:1px; line-height:1.1; }
-.incoming-detail { font-size:17px; margin-top:6px; color:#f5f7fa; font-weight:600; }
-.incoming-buy { color:#2de2a6; } .incoming-sell { color:#ff5c8a; }
+.incoming-detail { font-size:17px; margin-top:6px; color:#fbf4ec; font-weight:600; }
+.incoming-buy { color:#3dd69c; } .incoming-sell { color:#f05454; }
 .whale-latest { margin-top:3px; font-size:12px; text-align:right; line-height:1.4; font-weight:400; }
 .pat-win { display:block; }
 .pat-chart { cursor:zoom-in; flex:1 1 auto; min-width:0; }
 .pat-chart-row { display:flex; gap:8px; align-items:stretch; }
-.vol-bar { flex:0 0 76px; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:11px; text-align:center; color:#a3abb8; line-height:1.2; }
-.vol-bar b { color:#f5f7fa; }
+.vol-bar { flex:0 0 76px; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:11px; text-align:center; color:#bcaaa1; line-height:1.2; }
+.vol-bar b { color:#fbf4ec; }
 .vol-bar { position:relative; }
 .vol-help { width:100%; margin-top:2px; }
-.vol-help summary { cursor:pointer; font-size:10px; color:#5cc8ff; list-style:none; }
+.vol-help summary { cursor:pointer; font-size:10px; color:#e9a5bb; list-style:none; }
 .vol-help summary::-webkit-details-marker { display:none; }
 .vol-help-body { position:absolute; right:calc(100% + 6px); bottom:0; width:min(270px, 72vw); z-index:30; text-align:left; font-size:12px; line-height:1.45;
-  background:#1a1d23; border:1px solid #343a45; border-radius:8px; padding:10px 12px; box-shadow:0 6px 20px rgba(0,0,0,0.5); color:#dfe3ea; }
-.vol-title { font-size:11px; font-weight:800; letter-spacing:0.5px; color:#f5f7fa; }
+  background:#2a2226; border:1px solid #4a3c43; border-radius:8px; padding:10px 12px; box-shadow:0 6px 20px rgba(0,0,0,0.5); color:#eee2d7; }
+.vol-title { font-size:11px; font-weight:800; letter-spacing:0.5px; color:#fbf4ec; }
 .vol-legend { font-size:10px; text-align:left; line-height:1.4; }
-.lg-buy { color:#1fb58a; } .lg-sell { color:#e0436f; } .lg-norm { color:#f5f7fa; }
-.tug-sub .tug-lab { color:#8a93a3; font-size:11px; }
-.vol-track { position:relative; flex:1 1 auto; width:32px; min-height:120px; background:#252a32; border-radius:6px; overflow:hidden; display:flex; align-items:flex-end; }
+.lg-buy { color:#26a878; } .lg-sell { color:#cf3b3b; } .lg-norm { color:#fbf4ec; }
+.tug-sub .tug-lab { color:#a8968e; font-size:11px; }
+.vol-track { position:relative; flex:1 1 auto; width:32px; min-height:120px; background:#352b30; border-radius:6px; overflow:hidden; display:flex; align-items:flex-end; }
 .vol-fill { width:100%; display:flex; flex-direction:column; transition:height 0.4s ease; }
-.vol-buy { background:#1fb58a; } .vol-sell { background:#e0436f; }
-.vol-normal { position:absolute; left:0; right:0; height:2px; background:#f5f7fa; opacity:0.85; }
+.vol-buy { background:#26a878; } .vol-sell { background:#cf3b3b; }
+.vol-normal { position:absolute; left:0; right:0; height:2px; background:#fbf4ec; opacity:0.85; }
 @media (max-width:560px) { .vol-bar { flex-basis:46px; font-size:10px; } .vol-track { width:24px; } }
-#pat-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:#121418; z-index:100000; overflow:auto; padding:10px 16px; }
+#pat-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:#211b1e; z-index:100000; overflow:auto; padding:10px 16px; }
 .pat-ov-bar { margin-bottom:8px; font-size:15px; }
 .pat-ov-bar button { margin-left:8px; }
 .pat-ov-chart svg { width:100%; max-height:88vh; }
@@ -4909,35 +4920,35 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .pat-panel { display:block; }
 details.pat-main > summary { cursor:pointer; list-style:none; }
 .pat-chips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
-.pat-chip { font-size:12px; padding:3px 8px; border-radius:12px; border:1px solid #343a45; background:#1a1d23; }
-.pat-chip.up { color:#2de2a6; border-color:#1fb58a; } .pat-chip.down { color:#ff5c8a; border-color:#e0436f; } .pat-chip.flat { color:#a3abb8; }
+.pat-chip { font-size:12px; padding:3px 8px; border-radius:12px; border:1px solid #4a3c43; background:#2a2226; }
+.pat-chip.up { color:#3dd69c; border-color:#26a878; } .pat-chip.down { color:#f05454; border-color:#cf3b3b; } .pat-chip.flat { color:#bcaaa1; }
 .pat-table { width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
-.pat-table th { text-align:left; color:#a3abb8; font-weight:400; border-bottom:1px solid #343a45; padding:4px 6px; }
-.pat-table td { vertical-align:top; padding:6px; border-bottom:1px solid #252a32; }
+.pat-table th { text-align:left; color:#bcaaa1; font-weight:400; border-bottom:1px solid #4a3c43; padding:4px 6px; }
+.pat-table td { vertical-align:top; padding:6px; border-bottom:1px solid #352b30; }
 .pat-tf { white-space:nowrap; font-weight:700; }
 .pat-bias { font-weight:700; white-space:nowrap; }
-.pat-status { margin-left:8px; font-size:11px; color:#8a93a3; text-transform:uppercase; }
+.pat-status { margin-left:8px; font-size:11px; color:#a8968e; text-transform:uppercase; }
 .pat-st { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; margin-right:4px; }
-.st-forming { color:#5cc8ff; } .st-formed { color:#a371f7; } .st-confirmed { color:#39d0d8; } .st-failed { color:#ff7b72; }
+.st-forming { color:#e9a5bb; } .st-formed { color:#a371f7; } .st-confirmed { color:#39d0d8; } .st-failed { color:#ff7b72; }
 .pat-pct { margin-left:8px; font-size:12px; font-weight:700; white-space:nowrap; }
-.pat-pbar { display:inline-block; width:46px; height:6px; margin-right:5px; border-radius:3px; background:#343a45; vertical-align:middle; overflow:hidden; }
+.pat-pbar { display:inline-block; width:46px; height:6px; margin-right:5px; border-radius:3px; background:#4a3c43; vertical-align:middle; overflow:hidden; }
 .pat-pbar i { display:block; height:100%; background:currentColor; transition:width 0.4s ease; }
 .pat-failed { text-decoration:line-through; opacity:0.75; }
 .pat-rate { font-size:12px; }
 details.pat { margin:3px 0 6px 0; }
 details.pat > summary { cursor:pointer; }
-.pat-info { margin:6px 0 4px 0; padding:10px; background:#121418; border:1px solid #343a45; border-radius:6px; font-size:15px; line-height:1.5; color:#dfe3ea; white-space:normal; }
+.pat-info { margin:6px 0 4px 0; padding:10px; background:#211b1e; border:1px solid #4a3c43; border-radius:6px; font-size:15px; line-height:1.5; color:#eee2d7; white-space:normal; }
 .pat-review { font-size:12px; font-style:italic; }
 .pat-res { font-size:20px; font-weight:900; margin-left:8px; vertical-align:middle; }
-.pat-res.pending { font-size:11px; font-weight:400; color:#a3abb8; }
-.kept-head { margin:10px 0 2px 0; padding-top:6px; border-top:1px solid #343a45; }
-.pat-done { font-size:11px; color:#a3abb8; margin-left:6px; }
+.pat-res.pending { font-size:11px; font-weight:400; color:#bcaaa1; }
+.kept-head { margin:10px 0 2px 0; padding-top:6px; border-top:1px solid #4a3c43; }
+.pat-done { font-size:11px; color:#bcaaa1; margin-left:6px; }
 .hist-hour, .hist-q { margin:3px 0 3px 10px; }
 .hist-q { margin-left:16px; }
 .hist-hour > summary, .hist-q > summary { cursor:pointer; }
 .hist-body { margin:4px 0 4px 8px; }
 .hist-ev { margin:4px 0 4px 8px; }
-.hist-time { font-family:Consolas, 'Courier New', monospace; font-size:12px; color:#dfe3ea; margin-right:4px; }
+.hist-time { font-family:Consolas, 'Courier New', monospace; font-size:12px; color:#eee2d7; margin-right:4px; }
 .pat-info svg { display:block; margin-bottom:6px; max-width:100%; height:auto; }
 .pat-info-row { display:flex; gap:16px; align-items:flex-start; }
 .pat-pic { flex:0 0 250px; max-width:44%; }
@@ -4948,8 +4959,8 @@ details.pat > summary { cursor:pointer; }
 .pat-info b { color:#f2cc60; }
 .pat-dir { margin-top:8px; font-size:20px; font-weight:800; line-height:1; }
 .pat-dir small { font-size:11px; font-weight:400; opacity:0.8; margin-left:4px; }
-.pat-dir.up { color:#2de2a6; } .pat-dir.down { color:#ff5c8a; } .pat-dir.flat { color:#a3abb8; }
-.pat-disc { margin-top:8px; font-size:12px; color:#8a93a3; font-size:11px; }
+.pat-dir.up { color:#3dd69c; } .pat-dir.down { color:#f05454; } .pat-dir.flat { color:#bcaaa1; }
+.pat-disc { margin-top:8px; font-size:12px; color:#a8968e; font-size:11px; }
 .flip-combo { display:grid; grid-template-columns:1fr auto; align-items:center; column-gap:8px; padding:4px 0; }
 .flip-combo .flip-gauge { grid-column:1; grid-row:1; justify-self:center; }
 .flip-combo .flip-right { grid-column:2; grid-row:1; justify-self:end; display:flex; flex-direction:column; align-items:flex-end; }
@@ -4957,7 +4968,7 @@ details.pat > summary { cursor:pointer; }
 @media (max-width:560px) { .flip-gauge svg { width:100px; height:70px; } }
 .kalshi-arrow { display:flex; flex-direction:column; align-items:flex-end; }
 .kalshi-arrow svg { display:block; overflow:visible; }
-.kalshi-arrow-lbl { font-size:10px; font-weight:400; color:#a3abb8; margin-top:2px; }
+.kalshi-arrow-lbl { font-size:10px; font-weight:400; color:#bcaaa1; margin-top:2px; }
 .kalshi-arrow-pct { font-size:14px; font-weight:800; line-height:1.1; }
 @keyframes sparkle { 0%, 100% { opacity:0; scale:0.2; } 50% { opacity:1; scale:1; } }
 .fx-spark { transform-box:fill-box; transform-origin:center; animation:sparkle 1s ease-in-out infinite; }
@@ -4967,40 +4978,40 @@ details.pat > summary { cursor:pointer; }
 .flip-combo { position:relative; }
 .flip-streak { text-align:right; font-weight:700; font-size:14px; line-height:1.3; }
 .flip-streak .fire-streak, .flip-streak .smoke-streak { justify-content:flex-end; }
-.flip-cap { font-size:11px; color:#a3abb8; text-align:center; line-height:1.35; }
+.flip-cap { font-size:11px; color:#bcaaa1; text-align:center; line-height:1.35; }
 .press-row { display:block; }
 .press-head { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:baseline; margin-bottom:4px; }
 .press-verdict { font-weight:700; font-size:13px; }
-.press-bar { position:relative; display:flex; height:22px; border-radius:5px; overflow:hidden; background:#252a32; }
-.press-buy { background:#1fb58a; color:#fff; font-size:12px; font-weight:700; line-height:22px; padding-left:8px; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; }
-.press-sell { background:#e0436f; color:#fff; font-size:12px; font-weight:700; line-height:22px; padding-right:8px; text-align:right; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; }
-.press-mid { position:absolute; left:50%; top:0; bottom:0; width:2px; background:#f5f7fa; opacity:0.7; }
+.press-bar { position:relative; display:flex; height:22px; border-radius:5px; overflow:hidden; background:#352b30; }
+.press-buy { background:#26a878; color:#fff; font-size:12px; font-weight:700; line-height:22px; padding-left:8px; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; }
+.press-sell { background:#cf3b3b; color:#fff; font-size:12px; font-weight:700; line-height:22px; padding-right:8px; text-align:right; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; }
+.press-mid { position:absolute; left:50%; top:0; bottom:0; width:2px; background:#fbf4ec; opacity:0.7; }
 .press-chips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
-.press-chip { font-size:12px; padding:2px 8px; border-radius:10px; border:1px solid #343a45; background:#1a1d23; }
-.press-chip.up { color:#2de2a6; border-color:#1fb58a; } .press-chip.down { color:#ff5c8a; border-color:#e0436f; } .press-chip.flat { color:#a3abb8; }
+.press-chip { font-size:12px; padding:2px 8px; border-radius:10px; border:1px solid #4a3c43; background:#2a2226; }
+.press-chip.up { color:#3dd69c; border-color:#26a878; } .press-chip.down { color:#f05454; border-color:#cf3b3b; } .press-chip.flat { color:#bcaaa1; }
 .press-more { margin-top:6px; }
 .press-more > summary { cursor:pointer; }
 .press-table { width:100%; border-collapse:collapse; margin-top:6px; font-size:12px; }
-.press-table th { text-align:left; color:#a3abb8; font-weight:400; border-bottom:1px solid #343a45; padding:3px 6px; }
-.press-table td { padding:3px 6px; border-bottom:1px solid #252a32; }
+.press-table th { text-align:left; color:#bcaaa1; font-weight:400; border-bottom:1px solid #4a3c43; padding:3px 6px; }
+.press-table td { padding:3px 6px; border-bottom:1px solid #352b30; }
 .press-idle { opacity:0.45; }
-.press-mini { width:90px; height:8px; background:#e0436f; border-radius:3px; overflow:hidden; }
-.press-mini i { display:block; height:100%; background:#1fb58a; }
+.press-mini { width:90px; height:8px; background:#cf3b3b; border-radius:3px; overflow:hidden; }
+.press-mini i { display:block; height:100%; background:#26a878; }
 .tug-row { margin-top:6px; }
 .tug-bar { position:relative; height:18px; border-radius:4px; overflow:hidden;
-           background:#252a32; display:flex; margin-top:3px; }
-.tug-bar-buy { background:#2de2a6; height:100%; transition:width 0.3s ease; }
-.tug-bar-sell { background:#ff5c8a; height:100%; transition:width 0.3s ease; }
+           background:#352b30; display:flex; margin-top:3px; }
+.tug-bar-buy { background:#3dd69c; height:100%; transition:width 0.3s ease; }
+.tug-bar-sell { background:#f05454; height:100%; transition:width 0.3s ease; }
 .tug-bar-label { display:flex; justify-content:space-between; font-size:12px; margin-top:2px; }
-.size-mode-btn:hover { background:#343a45; }
-.size-mode-active { background:#0d2818 !important; border-color:#2de2a6 !important; color:#2de2a6 !important; }
-.live-trading-row input[type="number"] { background:#121418; border:1px solid #343a45; border-radius:6px;
-                                          color:#f5f7fa; padding:5px 8px; margin-left:8px; font-size:13px; }
+.size-mode-btn:hover { background:#4a3c43; }
+.size-mode-active { background:#0d2818 !important; border-color:#3dd69c !important; color:#3dd69c !important; }
+.live-trading-row input[type="number"] { background:#211b1e; border:1px solid #4a3c43; border-radius:6px;
+                                          color:#fbf4ec; padding:5px 8px; margin-left:8px; font-size:13px; }
 /* ---- 2026-10-20: top strip (RSI flip meter / flip meter / whale & liquidity alert box), stage calls, bought-sold bar ---- */
 .top-strip { display:grid; grid-template-columns:minmax(230px,1.1fr) minmax(170px,0.8fr) minmax(280px,1.6fr); gap:10px; margin:0 0 12px; }
 @media (max-width:900px) { .top-strip { grid-template-columns:1fr 1fr; } .top-alerts { grid-column:1 / -1; } }
 @media (max-width:560px) { .top-strip { grid-template-columns:1fr; } }
-.top-w { background:#121418; border:1px solid #343a45; border-radius:8px; padding:8px 10px; min-width:0; }
+.top-w { background:#211b1e; border:1px solid #4a3c43; border-radius:8px; padding:8px 10px; min-width:0; }
 .top-w-title { font-size:11px; font-weight:800; letter-spacing:0.5px; margin-bottom:4px; }
 .top-w-title .hint { font-weight:400; letter-spacing:0; }
 .top-rsi-body { display:flex; gap:8px; align-items:center; }
@@ -5009,84 +5020,84 @@ details.pat > summary { cursor:pointer; }
 .top-flip { display:flex; flex-direction:column; align-items:center; }
 .top-flip .flip-cap { margin-top:2px; }
 .rsi-over { color:#ff4dd2; }
-.fr-track { height:8px; background:#252a32; border-radius:4px; overflow:hidden; margin:6px 0 3px; }
+.fr-track { height:8px; background:#352b30; border-radius:4px; overflow:hidden; margin:6px 0 3px; }
 .fr-track i { display:block; height:100%; border-radius:4px; background:currentColor; transition:width 0.4s ease; }
 .fr-line { display:flex; justify-content:space-between; gap:6px; flex-wrap:wrap; font-size:12px; }
 .fr-why { font-size:11px; margin-top:3px; line-height:1.35; }
 .fr-high { color:#f0883e; } .fr-ext { color:#ff4dd2; font-weight:800; animation:rsiText 1.2s ease-in-out infinite; }
 .fa-list { max-height:196px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding-right:2px; }
-.fa-item { border-left:4px solid #343a45; background:#1a1d23; border-radius:4px; padding:4px 7px; font-size:12px; line-height:1.3; }
-.fa-item.fa-up { border-left-color:#2de2a6; } .fa-item.fa-down { border-left-color:#ff5c8a; }
+.fa-item { border-left:4px solid #4a3c43; background:#2a2226; border-radius:4px; padding:4px 7px; font-size:12px; line-height:1.3; }
+.fa-item.fa-up { border-left-color:#3dd69c; } .fa-item.fa-down { border-left-color:#f05454; }
 .fa-item.fa-sev3 { background:#1f1a12; } .fa-item.fa-sev1 { opacity:0.8; }
 .fa-item.fa-fresh { animation:faFresh 1.2s ease-in-out 4; }
 @keyframes faFresh { 0%,100% { box-shadow:none; } 50% { box-shadow:0 0 0 2px #f2cc60; } }
 .fa-tag { font-size:10px; font-weight:800; letter-spacing:0.4px; margin-right:3px; }
 .fa-age { float:right; font-size:10px; }
-.fa-detail { color:#a3abb8; font-size:11px; margin-top:1px; }
+.fa-detail { color:#bcaaa1; font-size:11px; margin-top:1px; }
 .fa-empty { font-size:12px; padding:6px 2px; }
 .fa-foot { font-size:10px; margin-top:4px; }
 .stage-box { width:106px; flex:0 1 106px; }
 .stage-box .big { font-size:16px; font-weight:800; }
-.stage-title { font-weight:800; color:#f5f7fa !important; margin-bottom:3px; }
-.stage-early { border:2px solid #5cc8ff; }
+.stage-title { font-weight:800; color:#fbf4ec !important; margin-bottom:3px; }
+.stage-early { border:2px solid #e9a5bb; }
 .stage-sealed { border:2px solid #d4b106; background:#1c1806; box-shadow:0 0 8px rgba(212,177,6,0.4); }
 .stage-sealed .stage-title { color:#f0d040 !important; }
 .stage-box.stage-up { background:#0f2a1a; } .stage-box.stage-down { background:#2a1212; }
 .stage-sealed.stage-up, .stage-sealed.stage-down { border-color:#d4b106; }
-.stage-locked-lbl { margin-top:3px; font-weight:700; color:#f5f7fa !important; }
-.stage-rec { margin-top:4px; border-top:1px solid #343a45; padding-top:3px; }
+.stage-locked-lbl { margin-top:3px; font-weight:700; color:#fbf4ec !important; }
+.stage-rec { margin-top:4px; border-top:1px solid #4a3c43; padding-top:3px; }
 .bot-calls .value, .stage-sum .value { font-weight:400; font-size:13px; text-align:right; }
 .press-qty { display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; font-size:14px; margin:2px 0 4px; }
 .press-net { font-weight:800; font-size:15px; }
 .press-split { display:flex; align-items:center; gap:8px; font-size:12px; margin-top:4px; flex-wrap:wrap; }
-.press-split-lab { flex:0 0 150px; color:#a3abb8; }
+.press-split-lab { flex:0 0 150px; color:#bcaaa1; }
 .press-mini.wide { width:120px; }
 .press-cvd { margin-top:8px; }
 .press-cvd-head { font-size:12px; margin-bottom:2px; }
-.cvd-svg { display:block; background:#121418; border:1px solid #252a32; border-radius:4px; }
+.cvd-svg { display:block; background:#211b1e; border:1px solid #352b30; border-radius:4px; }
 .press-deriv { margin-top:6px; font-size:12px; }
 .press-health { margin-top:6px; font-size:11px; }
 .stage-box { box-sizing:border-box; display:flex; flex-direction:column; justify-content:flex-start; text-align:center;
              flex:1 1 200px; min-width:190px; max-width:260px; margin-left:10px; padding:12px 12px 10px; border-radius:14px;
-             background:#1a1d23; border:2px solid #4a515e; }
-.sb-title { font-size:13px; font-weight:800; letter-spacing:1px; color:#dfe3ea; margin-bottom:6px; }
+             background:#2a2226; border:2px solid #4a515e; }
+.sb-title { font-size:13px; font-weight:800; letter-spacing:1px; color:#eee2d7; margin-bottom:6px; }
 .sb-dir { font-size:40px; font-weight:900; line-height:1.05; letter-spacing:0.5px; }
 .sb-count { font-size:34px; font-family:Consolas, 'Courier New', monospace; }
 .sb-tier { display:inline-block; align-self:center; margin:6px 0 4px; padding:3px 16px; border-radius:20px; font-size:18px; font-weight:900; letter-spacing:2px; }
 .tier-super { color:#ffb347; background:rgba(255,215,106,0.12); border:2px solid #ffb347; text-shadow:0 0 10px rgba(255,215,106,0.7); animation:superGlow 1.8s ease-in-out infinite; }
-.tier-good { color:#2de2a6; background:rgba(90,209,160,0.12); border:2px solid #2de2a6; }
+.tier-good { color:#3dd69c; background:rgba(90,209,160,0.12); border:2px solid #3dd69c; }
 .tier-weak { color:#c7b98a; background:rgba(199,185,138,0.08); border:2px dashed #8f8466; }
-.tier-skip { color:#a3abb8; border:2px dashed #4a5680; }
+.tier-skip { color:#bcaaa1; border:2px dashed #4a5680; }
 span.tier-super, span.tier-good, span.tier-weak { padding:0 5px; border-radius:6px; font-size:11px; font-weight:800; border-width:1px; animation:none; }
 @keyframes superGlow { 0%,100% { box-shadow:0 0 4px rgba(255,215,106,0.4); } 50% { box-shadow:0 0 18px rgba(255,215,106,0.85); } }
-.sb-line { font-size:13px; color:#dfe3ea; margin-top:3px; }
+.sb-line { font-size:13px; color:#eee2d7; margin-top:3px; }
 .sb-note { font-size:11px; color:#e3b341; margin-top:3px; }
-.sb-rec { margin-top:8px; padding-top:5px; border-top:1px solid #343a45; font-size:12px; color:#a3abb8; }
-.stage-early { border-color:#4fb3ff; box-shadow:0 0 14px rgba(111,140,255,0.25); }
+.sb-rec { margin-top:8px; padding-top:5px; border-top:1px solid #4a3c43; font-size:12px; color:#bcaaa1; }
+.stage-early { border-color:#e9a5bb; box-shadow:0 0 14px rgba(111,140,255,0.25); }
 .stage-sealed { border-color:#ffb347; box-shadow:0 0 16px rgba(255,215,106,0.3); background:#16182a; }
 .stage-sealed .sb-title { color:#ffb347; }
-.stage-box.stage-up { background:linear-gradient(180deg,#10302a 0%,#1a1d23 75%); }
-.stage-box.stage-down { background:linear-gradient(180deg,#341626 0%,#1a1d23 75%); }
+.stage-box.stage-up { background:linear-gradient(180deg,#10302a 0%,#2a2226 75%); }
+.stage-box.stage-down { background:linear-gradient(180deg,#341626 0%,#2a2226 75%); }
 .stage-box.stage-skip { opacity:0.85; }
 .kalshi-mini { font-size:13px; font-weight:700; margin-top:4px; }
 .cross-row .value { font-weight:400; }
-.rounds-panel { margin-top:14px; padding:10px 12px; background:#16191e; border:1px solid #343a45; border-radius:12px; }
+.rounds-panel { margin-top:14px; padding:10px 12px; background:#272024; border:1px solid #4a3c43; border-radius:12px; }
 .rc-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
-.rc { background:#1a1d23; border:1px solid #2e333c; border-radius:8px; padding:5px 6px; min-width:0; }
-.rc-live { grid-column:1 / -1; border-color:#4fb3ff; }
-.rc-head { font-size:11px; color:#dfe3ea; margin-bottom:2px; line-height:1.4; }
+.rc { background:#2a2226; border:1px solid #2e333c; border-radius:8px; padding:5px 6px; min-width:0; }
+.rc-live { grid-column:1 / -1; border-color:#e9a5bb; }
+.rc-head { font-size:11px; color:#eee2d7; margin-bottom:2px; line-height:1.4; }
 @media (max-width:700px) { .rc-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
-.call-tag { display:inline-block; font-size:10px; padding:0 5px; border-radius:5px; border:1px solid #4a515e; color:#dfe3ea; margin-right:2px; }
-.call-tag.tag-ok { border-color:#2de2a6; color:#2de2a6; } .call-tag.tag-bad { border-color:#ff5c8a; color:#ff5c8a; } .call-tag.tag-skip { opacity:0.6; }
+.call-tag { display:inline-block; font-size:10px; padding:0 5px; border-radius:5px; border:1px solid #4a515e; color:#eee2d7; margin-right:2px; }
+.call-tag.tag-ok { border-color:#3dd69c; color:#3dd69c; } .call-tag.tag-bad { border-color:#f05454; color:#f05454; } .call-tag.tag-skip { opacity:0.6; }
 /* ---- chill night theme (2026-10-20): deep indigo sky, soft moonlight text, mint / coral instead of hard green / red ---- */
-body { background:#121418; background-image:radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,0.55) 50%, transparent 51%),
+body { background:#211b1e; background-image:radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,0.55) 50%, transparent 51%),
   radial-gradient(1px 1px at 68% 9%, rgba(255,255,255,0.45) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 85% 32%, rgba(255,255,255,0.35) 50%, transparent 51%),
   radial-gradient(1px 1px at 35% 62%, rgba(255,255,255,0.3) 50%, transparent 51%), radial-gradient(1px 1px at 92% 78%, rgba(255,255,255,0.35) 50%, transparent 51%),
   radial-gradient(1200px 600px at 85% -10%, rgba(111,140,255,0.16), transparent 60%), radial-gradient(900px 500px at -10% 110%, rgba(90,209,160,0.07), transparent 60%);
-  background-attachment:fixed; color:#f5f7fa; }
-h1 { color:#8fe3d6; } h1::before { content:"\263E  "; color:#ffb347; }
-.card { background:rgba(17,26,46,0.92); border-color:#343a45; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.35); }
-.top-w, .tug { background:#16191e; border-color:#343a45; border-radius:12px; }
+  background-attachment:fixed; color:#fbf4ec; }
+h1 { color:#dcbb91; } h1::before { content:"\263E  "; color:#ffb347; }
+.card { background:rgba(17,26,46,0.92); border-color:#4a3c43; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.35); }
+.top-w, .tug { background:#272024; border-color:#4a3c43; border-radius:12px; }
 /* ---- 2026-10-20 (3): calm + clean - one typeface, tabular numbers, no flashing ---- */
 body, button, input, .card { font-family:'Inter', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; font-variant-numeric:tabular-nums; }
 body { font-size:14px; line-height:1.4; letter-spacing:0.1px; }
@@ -5095,50 +5106,50 @@ h1 { font-size:13px; font-weight:600; letter-spacing:0.3px; }
 body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .row { font-size:13px; padding:7px 0; }
 .label { font-weight:400; } .value { font-weight:600; }
-.hint { color:#a3abb8; }
+.hint { color:#bcaaa1; }
 .boom, .rsi-hot, .fa-item.fa-fresh, .tier-super, .fr-ext, .incoming-banner, .rsi-pill, .smoke-streak, .fx-spark, .fx-drop { animation:none !important; }
 .fa-item.fa-fresh { box-shadow:inset 0 0 0 1px #ffb347; }
 .boom { font-size:12px; padding:4px 12px; }
 #incoming-alerts, #rsi-alerts, #lock-toasts, .big-flip-alert, .whale-cross { display:none !important; }
 #top-banner { position:fixed; top:0; left:0; right:0; z-index:100002; padding:9px 18px; font-size:14px; font-weight:700; text-align:center;
-              cursor:pointer; background:#1a1d23; border-bottom:2px solid currentColor; box-shadow:0 4px 16px rgba(0,0,0,0.45);
+              cursor:pointer; background:#2a2226; border-bottom:2px solid currentColor; box-shadow:0 4px 16px rgba(0,0,0,0.45);
               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-#top-banner.tb-buy { color:#2de2a6; } #top-banner.tb-sell { color:#ff5c8a; }
-.rs-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#8fe3d6; margin-bottom:6px; text-transform:uppercase; }
-.rs-title b { color:#f5f7fa; }
+#top-banner.tb-buy { color:#3dd69c; } #top-banner.tb-sell { color:#f05454; }
+.rs-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#dcbb91; margin-bottom:6px; text-transform:uppercase; }
+.rs-title b { color:#fbf4ec; }
 .round-strip { display:grid; grid-template-columns:minmax(260px,1.3fr) minmax(200px,1fr) minmax(200px,1fr); gap:12px; margin-bottom:12px; }
 @media (max-width:760px) { .round-strip { grid-template-columns:1fr 1fr; } .rs-odds { grid-column:1 / -1; } }
-.rs-tile { background:#16191e; border:1px solid #343a45; border-radius:14px; padding:12px 14px; min-width:0; }
-.rs-clock { float:right; color:#f5f7fa; letter-spacing:0; font-family:'JetBrains Mono', Consolas, monospace; }
+.rs-tile { background:#272024; border:1px solid #4a3c43; border-radius:14px; padding:12px 14px; min-width:0; }
+.rs-clock { float:right; color:#fbf4ec; letter-spacing:0; font-family:'JetBrains Mono', Consolas, monospace; }
 .rs-odds-nums { display:flex; justify-content:space-between; font-size:15px; }
 .rs-odds-nums b { font-size:30px; font-weight:800; }
-.rs-odds-bar { position:relative; height:10px; border-radius:5px; background:#e0436f; overflow:hidden; margin:6px 0 4px; }
-.rs-odds-bar i { position:absolute; left:0; top:0; bottom:0; background:#1fb58a; transition:width 0.5s ease; }
-.rs-odds-bar b { position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px; background:#f5f7fa; opacity:0.8; }
+.rs-odds-bar { position:relative; height:10px; border-radius:5px; background:#cf3b3b; overflow:hidden; margin:6px 0 4px; }
+.rs-odds-bar i { position:absolute; left:0; top:0; bottom:0; background:#26a878; transition:width 0.5s ease; }
+.rs-odds-bar b { position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px; background:#fbf4ec; opacity:0.8; }
 .rs-lean { font-size:15px; font-weight:700; margin-bottom:4px; }
 .rs-sub { display:flex; justify-content:space-between; gap:8px; font-size:11px; margin-top:2px; flex-wrap:wrap; }
-.rs-wait { color:#a3abb8; padding:18px 0; }
+.rs-wait { color:#bcaaa1; padding:18px 0; }
 .round-strip .stage-box { margin:0; width:auto; max-width:none; min-width:0; flex:none; border-radius:14px; justify-content:center; }
 .round-strip .sb-line { font-size:13px; }
 .round-strip .sb-dir { font-size:36px; }
 .sb-tier { font-size:15px; letter-spacing:1.5px; }
-.scoreboard { background:#16191e; border:1px solid #343a45; border-radius:14px; padding:12px 14px; margin-bottom:12px; }
+.scoreboard { background:#272024; border:1px solid #4a3c43; border-radius:14px; padding:12px 14px; margin-bottom:12px; }
 .sc-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
 @media (max-width:760px) { .sc-grid { grid-template-columns:1fr; } }
-.sc-col { background:#1a1d23; border:1px solid #2e333c; border-radius:10px; padding:10px 12px; min-width:0; }
-.sc-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#dfe3ea; margin-bottom:6px; }
+.sc-col { background:#2a2226; border:1px solid #2e333c; border-radius:10px; padding:10px 12px; min-width:0; }
+.sc-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#eee2d7; margin-bottom:6px; }
 .sc-main { display:flex; align-items:center; gap:12px; }
-.sc-pct { font-size:30px; font-weight:800; color:#f5f7fa; line-height:1; }
+.sc-pct { font-size:30px; font-weight:800; color:#fbf4ec; line-height:1; }
 .sc-wl { font-size:14px; line-height:1.35; }
 .sc-cur { margin:8px 0 6px; }
 .sc-streak { display:inline-block; padding:4px 12px; border-radius:8px; font-size:14px; font-weight:800; letter-spacing:0.5px; }
-.sc-streak.win { color:#2de2a6; background:rgba(90,209,160,0.12); border:1px solid #1fb58a; }
-.sc-streak.loss { color:#ff5c8a; background:rgba(255,111,134,0.12); border:1px solid #e0436f; }
-.sc-stats { font-size:12px; color:#dfe3ea; }
+.sc-streak.win { color:#3dd69c; background:rgba(90,209,160,0.12); border:1px solid #26a878; }
+.sc-streak.loss { color:#f05454; background:rgba(240,84,84,0.12); border:1px solid #cf3b3b; }
+.sc-stats { font-size:12px; color:#eee2d7; }
 .sc-chips { display:flex; gap:3px; margin-top:7px; flex-wrap:wrap; }
 .sc-chips i { font-style:normal; font-size:10px; font-weight:800; width:17px; height:17px; line-height:17px; text-align:center; border-radius:4px; }
-.sc-chips i.w { background:rgba(90,209,160,0.18); color:#2de2a6; } .sc-chips i.l { background:rgba(255,111,134,0.18); color:#ff5c8a; }
-.sc-empty { font-size:12px; color:#a3abb8; }
+.sc-chips i.w { background:rgba(90,209,160,0.18); color:#3dd69c; } .sc-chips i.l { background:rgba(240,84,84,0.18); color:#f05454; }
+.sc-empty { font-size:12px; color:#bcaaa1; }
 .sc-more { margin-top:8px; } .sc-more > summary { cursor:pointer; font-size:12px; }
 .streak-arrow { display:none; }
 /* ---- 2026-10-20 (4): price on top, thin Kalshi line, compact calls row, one flip radar, one RSI box ---- */
@@ -5147,20 +5158,20 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .live-price-inline .big { font-size:30px; }
 .k-line { margin-top:6px; width:100%; min-width:240px; }
 .k-nums { display:flex; justify-content:space-between; gap:8px; font-size:12px; font-weight:700; }
-.k-lean { color:#dfe3ea; font-weight:600; }
-.k-bar { position:relative; height:6px; border-radius:3px; background:#e0436f; overflow:hidden; margin-top:3px; }
-.k-bar i { position:absolute; left:0; top:0; bottom:0; background:#1fb58a; transition:width 0.5s ease; }
-.k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#f5f7fa; }
+.k-lean { color:#eee2d7; font-weight:600; }
+.k-bar { position:relative; height:6px; border-radius:3px; background:#cf3b3b; overflow:hidden; margin-top:3px; }
+.k-bar i { position:absolute; left:0; top:0; bottom:0; background:#26a878; transition:width 0.5s ease; }
+.k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#fbf4ec; }
 .press-top { border-bottom:none; margin-bottom:10px; }
 .press-sub { font-size:11px; margin:-2px 0 3px; }
-.more-detail { margin-top:14px; border-top:1px solid #343a45; padding-top:8px; }
+.more-detail { margin-top:14px; border-top:1px solid #4a3c43; padding-top:8px; }
 .more-detail > summary { cursor:pointer; font-size:13px; padding:6px 0; letter-spacing:0.5px; }
 .fa-item { padding:4px 8px; cursor:default; }
 .fa-item .fa-detail { display:none; }
 .fa-item:hover .fa-detail, .fa-item:active .fa-detail { display:block; }
-.fa-where { color:#dfe3ea; font-size:12px; }
-.fa-item.fa-void { border-left-color:#f5f7fa; background:#151b2b; }
-.void { color:#f5f7fa !important; }
+.fa-where { color:#eee2d7; font-size:12px; }
+.fa-item.fa-void { border-left-color:#fbf4ec; background:#151b2b; }
+.void { color:#fbf4ec !important; }
 .fa-item.fa-void b { font-weight:700; }
 .fa-arrow { font-size:11px; }
 
@@ -5181,96 +5192,159 @@ body.ov-off .ov { display:none; }
 .rsi-box { text-align:center; }
 .rsi-num { font-size:34px; font-weight:800; line-height:1.05; }
 .rsi-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
-.rsi-sub { font-size:11px; color:#a3abb8; margin-top:3px; }
+.rsi-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
 .rz-ob { border-color:#ff4dd2; } .rz-ob .rsi-num, .rz-ob .rsi-zone { color:#ff4dd2; }
-.rz-bull { border-color:#1fb58a; } .rz-bull .rsi-num, .rz-bull .rsi-zone { color:#2de2a6; }
-.rz-norm .rsi-num, .rz-norm .rsi-zone { color:#dfe3ea; }
-.rz-bear { border-color:#e0436f; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#ff5c8a; }
+.rz-bull { border-color:#26a878; } .rz-bull .rsi-num, .rz-bull .rsi-zone { color:#3dd69c; }
+.rz-norm .rsi-num, .rz-norm .rsi-zone { color:#eee2d7; }
+.rz-bear { border-color:#cf3b3b; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#f05454; }
 .rz-os { border-color:#00e5ff; } .rz-os .rsi-num, .rz-os .rsi-zone { color:#00e5ff; }
 .flip-radar .fr-big { font-size:30px; font-weight:800; line-height:1.05; }
 .flip-radar .fr-big span { font-size:13px; letter-spacing:1px; vertical-align:middle; }
-.fr-track2 { height:6px; background:#252a32; border-radius:3px; overflow:hidden; margin:6px 0 5px; }
+.fr-track2 { height:6px; background:#352b30; border-radius:3px; overflow:hidden; margin:6px 0 5px; }
 .fr-track2 i { display:block; height:100%; background:currentColor; border-radius:3px; }
 .fr-txt { font-size:12px; line-height:1.35; margin-top:2px; }
 .alerts-only { grid-template-columns:1fr !important; }
 .mc-bad td { color:#e3b341; }
 /* ======================= BRAIN skin (2026-10-20): modern night grey, island night skyline, white logo ======================= */
-body { background-color:#121418 !important;
+body { background-color:#211b1e !important;
   background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%201600%20600%22%20preserveAspectRatio%3D%22xMidYMax%20slice%22%3E%3Ccircle%20cx%3D%221260%22%20cy%3D%22380%22%20r%3D%2234%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.18%22/%3E%3Ccircle%20cx%3D%221260%22%20cy%3D%22380%22%20r%3D%2218%22%20fill%3D%22%23f3f5f8%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%221180%22%20y%3D%22566%22%20width%3D%22160%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.22%22/%3E%3Crect%20x%3D%221189%22%20y%3D%22571%22%20width%3D%22146%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.19%22/%3E%3Crect%20x%3D%221198%22%20y%3D%22576%22%20width%3D%22132%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.16%22/%3E%3Crect%20x%3D%221207%22%20y%3D%22581%22%20width%3D%22118%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.13%22/%3E%3Crect%20x%3D%221216%22%20y%3D%22586%22%20width%3D%22104%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.10%22/%3E%3Cpath%20d%3D%22M300%20560%20Q%20520%20470%20760%20548%20Q%20900%20500%201120%20556%20L%201120%20600%20L%20300%20600%20Z%22%20fill%3D%22%230f1216%22/%3E%3Crect%20x%3D%22520%22%20y%3D%22522%22%20width%3D%2234%22%20height%3D%2226%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22524%22%20y%3D%22526%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ffcf6e%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22556%22%20y%3D%22514%22%20width%3D%2228%22%20height%3D%2234%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22560%22%20y%3D%22518%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ff8fb0%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22586%22%20y%3D%22526%22%20width%3D%2238%22%20height%3D%2222%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22590%22%20y%3D%22530%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%237fe3d6%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22626%22%20y%3D%22518%22%20width%3D%2230%22%20height%3D%2230%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22630%22%20y%3D%22522%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ffcf6e%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22658%22%20y%3D%22524%22%20width%3D%2236%22%20height%3D%2224%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22662%22%20y%3D%22528%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%239fd3ff%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22696%22%20y%3D%22516%22%20width%3D%2226%22%20height%3D%2232%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22700%22%20y%3D%22520%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ff8fb0%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22980%22%20y%3D%22524%22%20width%3D%2230%22%20height%3D%2224%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22984%22%20y%3D%22528%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%237fe3d6%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%221012%22%20y%3D%22518%22%20width%3D%2234%22%20height%3D%2230%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%221016%22%20y%3D%22522%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ffcf6e%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%221048%22%20y%3D%22526%22%20width%3D%2228%22%20height%3D%2222%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%221052%22%20y%3D%22530%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ff8fb0%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%220%22%20y%3D%22556%22%20width%3D%221600%22%20height%3D%2244%22%20fill%3D%22%230c0e12%22/%3E%3Cg%20transform%3D%22translate%2860%200%29%20scale%281.0%201.0%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28230%200%29%20scale%280.72%200.72%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28860%200%29%20scale%280.62%200.62%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%281360%200%29%20scale%280.95%200.95%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%281500%200%29%20scale%280.7%200.7%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3C/svg%3E"),
-    radial-gradient(900px 420px at 80% -10%, rgba(92,200,255,0.10), transparent 60%),
+    radial-gradient(900px 420px at 80% -10%, rgba(233,165,187,0.10), transparent 60%),
     linear-gradient(180deg, #0f1115 0%, #15181d 40%, #1b1f26 75%, #232831 100%) !important;
   background-repeat:no-repeat, no-repeat, no-repeat; background-position:center bottom, center, center; background-size:100% auto, cover, cover;
-  background-attachment:fixed, fixed, fixed; color:#f5f7fa; }
+  background-attachment:fixed, fixed, fixed; color:#fbf4ec; }
 h1 { display:none; }
 .g-top { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:2px 0 6px; }
 .g-brand { display:flex; align-items:center; gap:10px; }
-.b-logo { filter:drop-shadow(0 0 10px rgba(255,111,168,0.35)); }
+.b-logo { filter:drop-shadow(0 0 10px rgba(233,165,187,0.35)); }
 .b-spark { animation:bSpark 3s ease-in-out infinite; }
 @keyframes bSpark { 0%,100% { opacity:0.4; } 50% { opacity:1; } }
 .g-logo { font-family:'Bungee', 'Inter', sans-serif; font-size:42px; line-height:1; letter-spacing:3px; color:#ffffff;
   text-shadow:0 2px 0 rgba(0,0,0,0.5), 0 0 18px rgba(255,255,255,0.12); }
-.g-tag { display:flex; align-items:center; gap:12px; font-family:'Bebas Neue', 'Inter', sans-serif; font-size:20px; letter-spacing:2px; color:#8fe3d6; }
-.g-live { color:#ff5c8a; font-size:16px; text-shadow:0 0 10px rgba(255,92,138,0.7); }
-.card { background:linear-gradient(180deg, rgba(26,29,35,0.92) 0%, rgba(20,22,27,0.94) 100%) !important;
+.g-tag { display:flex; align-items:center; gap:12px; font-family:'Bebas Neue', 'Inter', sans-serif; font-size:20px; letter-spacing:2px; color:#dcbb91; }
+.g-live { color:#f05454; font-size:16px; text-shadow:0 0 10px rgba(240,84,84,0.7); }
+.card { background:linear-gradient(180deg, rgba(44,35,39,0.92) 0%, rgba(36,29,32,0.94) 100%) !important;
   border:1px solid rgba(255,255,255,0.08) !important; border-radius:20px !important;
   box-shadow:0 18px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04) !important; backdrop-filter:blur(6px); }
-.rs-tile, .scoreboard, .top-w, .rounds-panel, .tug, .sc-col, .rc { background:rgba(30,34,41,0.90) !important; border-color:rgba(255,255,255,0.08) !important; }
+.rs-tile, .scoreboard, .top-w, .rounds-panel, .tug, .sc-col, .rc { background:rgba(48,39,43,0.90) !important; border-color:rgba(255,255,255,0.08) !important; }
 .rs-title, .top-w-title, .sc-title, .press-head b, .tug-title { font-family:'Bebas Neue', 'Inter', sans-serif !important; font-size:17px !important;
-  letter-spacing:2px !important; color:#8fe3d6 !important; font-weight:400 !important; }
-.press-head b { color:#ffcf6e !important; font-size:20px !important; }
+  letter-spacing:2px !important; color:#dcbb91 !important; font-weight:400 !important; }
+.press-head b { color:#e8c27c !important; font-size:20px !important; }
 .sb-title { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:17px !important; letter-spacing:2px; font-weight:400 !important; }
 .sb-dir, .sc-pct, .rsi-num, .fr-big, .tuc-time { font-family:'Bungee', 'Inter', sans-serif; font-weight:400 !important; letter-spacing:1px; }
 .calls-row .sb-dir { font-size:24px; }
 .sc-pct { font-size:26px; } .rsi-num { font-size:30px; } .flip-radar .fr-big { font-size:24px; }
 .asset-label { font-family:'Bungee', 'Inter', sans-serif; font-weight:400 !important; font-size:30px; }
-.asset-BTC { color:#ffcf6e !important; } .asset-XRP { color:#7fe3d6 !important; }
-.live-price-inline .big.up { color:#2de2a6 !important; } .live-price-inline .big.down { color:#ff5c8a !important; }
-.stage-early { border-color:#4fb3ff !important; box-shadow:0 0 16px rgba(79,179,255,0.18) !important; }
-.stage-sealed { border-color:#ffcf6e !important; box-shadow:0 0 18px rgba(255,207,110,0.22) !important; background:rgba(34,32,30,0.92) !important; }
-.stage-box.stage-up { background:linear-gradient(180deg, rgba(45,226,166,0.18) 0%, rgba(30,34,41,0.92) 70%) !important; }
-.stage-box.stage-down { background:linear-gradient(180deg, rgba(255,92,138,0.20) 0%, rgba(30,34,41,0.92) 70%) !important; }
-.press-buy, .k-bar i, .rs-odds-bar i, .vol-buy { background:linear-gradient(90deg, #15a57d, #2de2a6) !important; }
-.press-sell, .k-bar, .rs-odds-bar, .vol-sell { background:linear-gradient(90deg, #ff5c8a, #e0436f) !important; }
+.asset-BTC { color:#e8c27c !important; } .asset-XRP { color:#dcbb91 !important; }
+.live-price-inline .big.up { color:#3dd69c !important; } .live-price-inline .big.down { color:#f05454 !important; }
+.stage-early { border-color:#e9a5bb !important; box-shadow:0 0 16px rgba(233,165,187,0.18) !important; }
+.stage-sealed { border-color:#e8c27c !important; box-shadow:0 0 18px rgba(232,194,124,0.22) !important; background:rgba(34,32,30,0.92) !important; }
+.stage-box.stage-up { background:linear-gradient(180deg, rgba(61,214,156,0.18) 0%, rgba(48,39,43,0.92) 70%) !important; }
+.stage-box.stage-down { background:linear-gradient(180deg, rgba(240,84,84,0.20) 0%, rgba(48,39,43,0.92) 70%) !important; }
+.press-buy, .k-bar i, .rs-odds-bar i, .vol-buy { background:linear-gradient(90deg, #15a57d, #3dd69c) !important; }
+.press-sell, .k-bar, .rs-odds-bar, .vol-sell { background:linear-gradient(90deg, #f05454, #cf3b3b) !important; }
 .size-mode-btn, .chart-tf-btn, .sound-bar button { border-radius:10px !important; }
-.size-mode-active { background:rgba(79,179,255,0.16) !important; border-color:#4fb3ff !important; color:#bfe9ff !important; }
-.tier-super { color:#ffcf6e !important; border-color:#ffcf6e !important; background:rgba(255,207,110,0.12) !important; }
-.tier-good { color:#2de2a6 !important; border-color:#2de2a6 !important; }
-.more-detail > summary b { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:18px; letter-spacing:2px; color:#8fe3d6; font-weight:400; }
-#top-banner { background:#1a1d23 !important; }
-.sound-bar { background:rgba(30,34,41,0.9) !important; border-color:rgba(255,255,255,0.08) !important; border-radius:14px !important; }
+.size-mode-active { background:rgba(233,165,187,0.16) !important; border-color:#e9a5bb !important; color:#f6d9e2 !important; }
+.tier-super { color:#e8c27c !important; border-color:#e8c27c !important; background:rgba(232,194,124,0.12) !important; }
+.tier-good { color:#3dd69c !important; border-color:#3dd69c !important; }
+.more-detail > summary b { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:18px; letter-spacing:2px; color:#dcbb91; font-weight:400; }
+#top-banner { background:#2a2226 !important; }
+.sound-bar { background:rgba(48,39,43,0.9) !important; border-color:rgba(255,255,255,0.08) !important; border-radius:14px !important; }
 /* time-until-call box (top row) */
-.tuc { min-width:160px; text-align:center; border:1px solid rgba(255,255,255,0.10) !important; background:rgba(30,34,41,0.9) !important;
+.tuc { min-width:160px; text-align:center; border:1px solid rgba(255,255,255,0.10) !important; background:rgba(48,39,43,0.9) !important;
   border-radius:14px !important; padding:8px 12px !important; width:auto !important; flex:0 1 190px !important; }
-.tuc-lbl { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:15px; letter-spacing:2px; color:#8fe3d6; }
+.tuc-lbl { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:15px; letter-spacing:2px; color:#dcbb91; }
 .tuc-time { font-size:30px; line-height:1.1; color:#ffffff; }
-.tuc-what { font-size:12px; color:#dfe3ea; margin-top:2px; }
-.tuc.tuc-early .tuc-what b { color:#4fb3ff; } .tuc.tuc-sealed .tuc-what b { color:#ffcf6e; }
-.tuc.tuc-early { border-color:rgba(79,179,255,0.45) !important; } .tuc.tuc-sealed { border-color:rgba(255,207,110,0.45) !important; }
+.tuc-what { font-size:12px; color:#eee2d7; margin-top:2px; }
+.tuc.tuc-early .tuc-what b { color:#e9a5bb; } .tuc.tuc-sealed .tuc-what b { color:#e8c27c; }
+.tuc.tuc-early { border-color:rgba(233,165,187,0.45) !important; } .tuc.tuc-sealed { border-color:rgba(232,194,124,0.45) !important; }
 /* market trend box (top row, above the coin name) */
-.mkt { background:rgba(30,34,41,0.9); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px 8px; margin-bottom:8px; min-width:200px; }
+.mkt { background:rgba(48,39,43,0.9); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px 8px; margin-bottom:8px; min-width:200px; }
 .mkt-btns { display:flex; gap:4px; }
 .mkt-btns button { flex:1; font-size:11px; font-weight:700; padding:3px 0; border-radius:7px; border:1px solid transparent; cursor:pointer;
   color:#0f1115; font-family:'Inter', sans-serif; }
-.mkt-btns button.bull { background:#2de2a6; } .mkt-btns button.bear { background:#ff5c8a; } .mkt-btns button.neut { background:#5d6573; color:#f5f7fa; }
+.mkt-btns button.bull { background:#3dd69c; } .mkt-btns button.bear { background:#f05454; } .mkt-btns button.neut { background:#5d6573; color:#fbf4ec; }
 .mkt-btns button.sel { outline:2px solid #ffffff; outline-offset:1px; }
 .mkt-pane { display:none; font-size:12px; margin-top:5px; } .mkt-pane.show { display:block; }
 .mkt-pane b { font-size:13px; }
-.stage-pend { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:22px; letter-spacing:2px; color:#a3abb8; margin:4px 0; }
+.stage-pend { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:22px; letter-spacing:2px; color:#bcaaa1; margin:4px 0; }
 /* line-cross box (calls row, next to RSI) */
 .calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(180px,1.05fr) minmax(100px,0.5fr) minmax(100px,0.5fr) !important; }
 @media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr !important; } }
 .lx-box { text-align:center; }
 .lx-num { font-family:'Bungee', 'Inter', sans-serif; font-size:30px; line-height:1.05; }
 .lx-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
-.lx-sub { font-size:11px; color:#a3abb8; margin-top:3px; }
-.lx-clean { border-color:#2de2a6 !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:#2de2a6; }
-.lx-some { border-color:#ffcf6e !important; } .lx-some .lx-num, .lx-some .lx-zone { color:#ffcf6e; }
-.lx-chop { border-color:#ff5c8a !important; } .lx-chop .lx-num, .lx-chop .lx-zone { color:#ff5c8a; }
+.lx-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
+.lx-clean { border-color:#3dd69c !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:#3dd69c; }
+.lx-some { border-color:#e8c27c !important; } .lx-some .lx-num, .lx-some .lx-zone { color:#e8c27c; }
+.lx-chop { border-color:#f05454 !important; } .lx-chop .lx-num, .lx-chop .lx-zone { color:#f05454; }
 /* "FLIP" tag next to the calls (added 2026-09-25) - marks this window's
    real position as the flip-scalp entry, not the original locked call */
 .flip-badge { display:inline-block; background:#3d1a00; border:1px solid #d29922; color:#d29922;
                font-size:11px; font-weight:800; letter-spacing:0.5px; padding:2px 7px;
                border-radius:5px; vertical-align:middle; margin-left:2px; }
+/* ======================= BRAIN rose skin (2026-10-20 b): its own look - rosy grey, tan and cream, soft serifs ======================= */
+:root { --br-bg:#211b1e; --br-tile:rgba(56,45,50,0.88); --br-line:rgba(240,214,200,0.12);
+  --br-cream:#fbf4ec; --br-text:#eee2d7; --br-mute:#bcaaa1; --br-tan:#dcbb91; --br-blush:#e9a5bb;
+  --br-win:#e5b85c; --br-loss:#a99be0; --br-serif:'Fraunces', Georgia, 'Times New Roman', serif; --br-sans:'Nunito', 'Inter', -apple-system, sans-serif; }
+html, body { font-family:var(--br-sans) !important; }
+body { color:var(--br-text) !important; background-color:var(--br-bg) !important;
+  background-image:radial-gradient(1100px 520px at 100% -8%, rgba(233,165,187,0.16), transparent 62%),
+    radial-gradient(900px 600px at -10% 105%, rgba(220,187,145,0.13), transparent 60%),
+    linear-gradient(180deg, #211b1e 0%, #261f22 45%, #2c2428 100%) !important;
+  background-size:cover !important; background-position:center !important; background-repeat:no-repeat !important; background-attachment:fixed !important; }
+.b-logo { filter:drop-shadow(0 2px 10px rgba(233,165,187,0.30)); }
+.b-spark { fill:#e8c27c; }
+.g-logo { font-family:var(--br-serif) !important; font-style:italic; font-weight:800; font-size:46px; letter-spacing:0.5px;
+  font-variation-settings:"opsz" 144, "SOFT" 100; color:var(--br-cream) !important; text-shadow:0 2px 14px rgba(233,165,187,0.25) !important; }
+.g-tag { font-family:var(--br-serif) !important; font-style:italic; font-size:17px; letter-spacing:0.3px; color:var(--br-tan) !important; font-variation-settings:"SOFT" 100; }
+.g-live { font-family:var(--br-sans); font-style:normal; font-weight:800; font-size:12px; letter-spacing:1.5px; color:var(--br-blush) !important;
+  text-shadow:0 0 10px rgba(233,165,187,0.6) !important; }
+.card { background:linear-gradient(180deg, rgba(50,40,45,0.94) 0%, rgba(40,32,36,0.95) 100%) !important; border:1px solid var(--br-line) !important;
+  border-radius:26px !important; box-shadow:0 20px 50px rgba(10,5,8,0.45), inset 0 1px 0 rgba(255,240,230,0.05) !important; }
+.rs-tile, .scoreboard, .top-w, .rounds-panel, .tug, .sc-col, .rc, .mkt, .tuc, .sound-bar { background:var(--br-tile) !important;
+  border-color:var(--br-line) !important; border-radius:20px !important; }
+.stage-box { border-radius:22px !important; }
+.rs-title, .top-w-title, .sc-title, .press-head b, .tug-title, .sb-title, .tuc-lbl, .more-detail > summary b {
+  font-family:var(--br-serif) !important; font-weight:700 !important; text-transform:lowercase; font-variant-caps:small-caps;
+  font-variation-settings:"SOFT" 100; letter-spacing:1.2px !important; font-size:18px !important; color:var(--br-tan) !important; }
+.press-head b { color:var(--br-blush) !important; font-size:21px !important; }
+.big, .sb-dir, .sc-pct, .rsi-num, .fr-big, .tuc-time, .lx-num, .sk-num, .asset-label, .stage-pend {
+  font-family:var(--br-serif) !important; font-weight:800 !important; font-style:normal; letter-spacing:0 !important;
+  font-variant-numeric:lining-nums tabular-nums; font-variation-settings:"opsz" 72, "SOFT" 50; }
+.live-price-inline .big { font-size:34px !important; }
+.asset-label { font-style:italic; font-size:32px !important; }
+.asset-BTC { color:var(--br-win) !important; } .asset-XRP { color:var(--br-tan) !important; }
+.sb-tier, .tier-super, .tier-good { border-radius:999px !important; }
+.stage-early { border-color:var(--br-blush) !important; box-shadow:0 0 18px rgba(233,165,187,0.16) !important; }
+.stage-sealed { border-color:var(--br-tan) !important; box-shadow:0 0 18px rgba(220,187,145,0.18) !important; background:rgba(52,42,40,0.92) !important; }
+.tuc.tuc-early .tuc-what b { color:var(--br-blush) !important; } .tuc.tuc-sealed .tuc-what b { color:var(--br-tan) !important; }
+.tier-super { color:var(--br-win) !important; border-color:var(--br-win) !important; background:rgba(229,184,92,0.12) !important; }
+.size-mode-active { background:rgba(233,165,187,0.14) !important; border-color:var(--br-blush) !important; color:#f6d9e2 !important; }
+.mkt-btns button.sel { outline-color:var(--br-cream) !important; }
+.hint, .flat { color:var(--br-mute); }
+.calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(170px,1fr) minmax(110px,0.6fr) minmax(100px,0.5fr) minmax(110px,0.6fr) !important; }
+@media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr !important; } }
+.rsi-check { margin-top:7px; padding-top:6px; border-top:1px dashed var(--br-line); font-size:11px; text-align:left; }
+.rc-row { display:flex; justify-content:space-between; gap:6px; color:var(--br-mute); line-height:1.5; }
+.rc-row b { color:var(--br-text); font-variant-numeric:tabular-nums; }
+.rc-pick span, .rc-pick b { color:var(--br-cream); font-weight:800; }
+.rc-verdict { margin-top:3px; font-size:10.5px; color:var(--br-mute); text-align:center; }
+.rc-ok { color:var(--br-tan); font-weight:800; } .rc-off { color:var(--br-win); font-weight:800; }
+.sk-box { text-align:center; }
+.sk-num { font-size:32px; line-height:1.05; }
+.sk-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
+.sk-sub { font-size:11px; color:var(--br-mute); margin-top:3px; }
+.sk-chips { display:flex; gap:3px; justify-content:center; margin-top:6px; flex-wrap:wrap; }
+.sk-chips i, .sc-chips i { font-style:normal; font-size:10px; font-weight:800; width:17px; height:17px; line-height:17px; text-align:center; border-radius:50%; }
+.sk-win { border-color:var(--br-win) !important; box-shadow:0 0 16px rgba(229,184,92,0.16); } .sk-win .sk-num, .sk-win .sk-zone { color:var(--br-win); }
+.sk-loss { border-color:var(--br-loss) !important; box-shadow:0 0 16px rgba(169,155,224,0.16); } .sk-loss .sk-num, .sk-loss .sk-zone { color:var(--br-loss); }
+.skw { color:var(--br-win) !important; } .skl { color:var(--br-loss) !important; }
+.sk-chips i.w, .sc-chips i.w { background:rgba(229,184,92,0.20) !important; color:var(--br-win) !important; }
+.sk-chips i.l, .sc-chips i.l { background:rgba(169,155,224,0.22) !important; color:var(--br-loss) !important; }
+.sc-streak.win { color:var(--br-win) !important; background:rgba(229,184,92,0.12) !important; border-color:var(--br-win) !important; border-radius:999px !important; }
+.sc-streak.loss { color:var(--br-loss) !important; background:rgba(169,155,224,0.12) !important; border-color:var(--br-loss) !important; border-radius:999px !important; }
+.lx-clean { border-color:var(--br-tan) !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:var(--br-tan) !important; }
+.lx-chop { border-color:var(--br-blush) !important; } .lx-chop .lx-num, .lx-chop .lx-zone { color:var(--br-blush) !important; }
 </style>
 <script>
 let audioCtx = null;
@@ -6716,7 +6790,7 @@ window.onload = function() {
 };
 </script>
 </head><body>
-<header class="g-top"><div class="g-brand"><svg class="b-logo" viewBox="0 0 64 56" width="52" height="46" aria-hidden="true"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9ec7"/><stop offset="1" stop-color="#ff6fa8"/></linearGradient><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8ff0e0"/><stop offset="1" stop-color="#3fd0c0"/></linearGradient></defs><path d="M31 6 C25 2 17 4 15 10 C9 10 5 15 7 21 C2 24 2 32 7 35 C5 41 10 47 16 46 C18 51 26 53 31 49 Z" fill="url(#bg1)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M33 6 C39 2 47 4 49 10 C55 10 59 15 57 21 C62 24 62 32 57 35 C59 41 54 47 48 46 C46 51 38 53 33 49 Z" fill="url(#bg2)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M15 16 C19 15 21 18 24 17 M10 27 C15 25 17 29 22 27 M14 38 C18 36 21 40 25 38 M24 9 C24 13 27 14 27 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path d="M49 16 C45 15 43 18 40 17 M54 27 C49 25 47 29 42 27 M50 38 C46 36 43 40 39 38 M40 9 C40 13 37 14 37 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path class="b-spark" d="M58 2 L59.4 5.6 L63 7 L59.4 8.4 L58 12 L56.6 8.4 L53 7 L56.6 5.6 Z" fill="#ffd36e"/></svg><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div></header>
+<header class="g-top"><div class="g-brand"><svg class="b-logo" viewBox="0 0 64 56" width="52" height="46" aria-hidden="true"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7c3d3"/><stop offset="1" stop-color="#e595b0"/></linearGradient><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3e0c8"/><stop offset="1" stop-color="#d2ae86"/></linearGradient></defs><path d="M31 6 C25 2 17 4 15 10 C9 10 5 15 7 21 C2 24 2 32 7 35 C5 41 10 47 16 46 C18 51 26 53 31 49 Z" fill="url(#bg1)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M33 6 C39 2 47 4 49 10 C55 10 59 15 57 21 C62 24 62 32 57 35 C59 41 54 47 48 46 C46 51 38 53 33 49 Z" fill="url(#bg2)" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/><path d="M15 16 C19 15 21 18 24 17 M10 27 C15 25 17 29 22 27 M14 38 C18 36 21 40 25 38 M24 9 C24 13 27 14 27 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path d="M49 16 C45 15 43 18 40 17 M54 27 C49 25 47 29 42 27 M50 38 C46 36 43 40 39 38 M40 9 C40 13 37 14 37 18" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/><path class="b-spark" d="M58 2 L59.4 5.6 L63 7 L59.4 8.4 L58 12 L56.6 8.4 L53 7 L56.6 5.6 Z" fill="#ffd36e"/></svg><div class="g-logo">Brain</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div></header>
 <div class="view-bar"><span class="hint">Show:</span>
   <button class="size-mode-btn" data-view="BTC" onclick="setAssetView('BTC')">BTC only</button>
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
@@ -6728,10 +6802,10 @@ window.onload = function() {
     <summary>Sound &amp; alert settings</summary>
     <div class="sound-details-body">
       <span style="display:inline-block; vertical-align:middle; margin-left:6px;">
-        <label for="volume-slider" style="color:#a3abb8; font-size:13px; margin-right:6px;">Volume</label>
+        <label for="volume-slider" style="color:#bcaaa1; font-size:13px; margin-right:6px;">Volume</label>
         <input type="range" id="volume-slider" min="0" max="1" step="0.05"
                oninput="setMasterVolume(this.value)" style="vertical-align:middle;">
-        <span id="volume-label" style="color:#a3abb8; font-size:13px; margin-left:4px;">80%</span>
+        <span id="volume-label" style="color:#bcaaa1; font-size:13px; margin-left:4px;">80%</span>
       </span>
       <button id="toggle-BTC" onclick="toggleAssetSound('BTC')">BTC alerts: ON</button>
       <button id="toggle-XRP" onclick="toggleAssetSound('XRP')">XRP alerts: ON</button>
@@ -6763,6 +6837,7 @@ def fmt_price(x, decimals=2):
 
 
 import multi_exchange_flow as _flow
+import rsi_check as _rsi_check
 
 
 def _flow_record(venue, product_id, price, size, aggressor, tid=None, ts_ms=None):
@@ -7532,7 +7607,7 @@ def kalshi_arrow_html(name, d):
         '<svg class="knight-svg" viewBox="0 0 240 197" width="200" height="164" style="color:' + color + ';">'
         '<defs>'
         '<linearGradient id="st-' + n + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef2f7"/><stop offset="0.45" stop-color="#9aa5b1"/><stop offset="1" stop-color="#454e5a"/></linearGradient>'
-        '<linearGradient id="dk-' + n + '" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7d8794"/><stop offset="0.5" stop-color="#b8c1cc"/><stop offset="1" stop-color="#4a5360"/></linearGradient>'
+        '<linearGradient id="dk-' + n + '" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7d8794"/><stop offset="0.5" stop-color="#b8c1cc"/><stop offset="1" stop-color="#635158"/></linearGradient>'
         '<linearGradient id="bl-' + n + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b8cff"/><stop offset="1" stop-color="#0a2a5e"/></linearGradient>'
         '<radialGradient id="gl-' + n + '" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient>'
         '</defs>'
@@ -7540,43 +7615,43 @@ def kalshi_arrow_html(name, d):
         '<circle cx="95" cy="104" r="96" fill="url(#gl-' + n + ')"/>'
         '<ellipse cx="95" cy="193" rx="54" ry="6" fill="#000" opacity="0.4"/>'
         # legs (armoured greaves, boots), knee plates
-        '<path d="M74 146 H93 L91 186 H70 Z" fill="url(#dk-' + n + ')" stroke="#3b4350" stroke-width="2"/>'
-        '<path d="M97 146 H116 L120 186 H99 Z" fill="url(#dk-' + n + ')" stroke="#3b4350" stroke-width="2"/>'
-        '<ellipse cx="82" cy="162" rx="10" ry="8" fill="url(#st-' + n + ')" stroke="#3b4350" stroke-width="2"/>'
-        '<ellipse cx="108" cy="162" rx="10" ry="8" fill="url(#st-' + n + ')" stroke="#3b4350" stroke-width="2"/>'
+        '<path d="M74 146 H93 L91 186 H70 Z" fill="url(#dk-' + n + ')" stroke="#54454c" stroke-width="2"/>'
+        '<path d="M97 146 H116 L120 186 H99 Z" fill="url(#dk-' + n + ')" stroke="#54454c" stroke-width="2"/>'
+        '<ellipse cx="82" cy="162" rx="10" ry="8" fill="url(#st-' + n + ')" stroke="#54454c" stroke-width="2"/>'
+        '<ellipse cx="108" cy="162" rx="10" ry="8" fill="url(#st-' + n + ')" stroke="#54454c" stroke-width="2"/>'
         '<path d="M64 186 H94 L97 194 H62 Z" fill="#2b313a" stroke="#14181f" stroke-width="1.5"/>'
         '<path d="M96 186 H126 L128 194 H93 Z" fill="#2b313a" stroke="#14181f" stroke-width="1.5"/>'
         # torso: broad shoulders tapering to the waist, breastplate with ridge and plate lines
-        '<path d="M60 76 Q95 60 130 76 L119 130 H71 Z" fill="url(#st-' + n + ')" stroke="#3b4350" stroke-width="2.5"/>'
-        '<path d="M95 66 V128" stroke="#4a5360" stroke-width="2"/>'
-        '<path d="M76 100 Q95 108 114 100 M78 113 Q95 121 112 113" stroke="#4a5360" stroke-width="2" fill="none"/>'
+        '<path d="M60 76 Q95 60 130 76 L119 130 H71 Z" fill="url(#st-' + n + ')" stroke="#54454c" stroke-width="2.5"/>'
+        '<path d="M95 66 V128" stroke="#635158" stroke-width="2"/>'
+        '<path d="M76 100 Q95 108 114 100 M78 113 Q95 121 112 113" stroke="#635158" stroke-width="2" fill="none"/>'
         '<circle cx="95" cy="86" r="7.5" fill="currentColor" style="filter:drop-shadow(0 0 5px currentColor)"/>'
         # belt + short hip plates
         '<rect x="70" y="127" width="50" height="9" rx="2" fill="#8d6e3f" stroke="#4d3a1c" stroke-width="1.5"/><rect x="89" y="126" width="12" height="11" rx="2" fill="#d29922"/>'
-        '<path d="M72 136 H93 L91 148 H74 Z M97 136 H118 L116 148 H99 Z" fill="url(#dk-' + n + ')" stroke="#3b4350" stroke-width="1.5"/>'
+        '<path d="M72 136 H93 L91 148 H74 Z M97 136 H118 L116 148 H99 Z" fill="url(#dk-' + n + ')" stroke="#54454c" stroke-width="1.5"/>'
         # spiked pauldrons
-        '<path d="M44 80 Q44 60 64 62 Q76 66 76 82 Q60 90 44 80 Z" fill="url(#st-' + n + ')" stroke="#3b4350" stroke-width="2.5"/>'
-        '<path d="M114 82 Q114 66 126 62 Q146 60 146 80 Q130 90 114 82 Z" fill="url(#st-' + n + ')" stroke="#3b4350" stroke-width="2.5"/>'
-        '<path d="M50 64 L55 46 L63 62 Z M127 62 L135 46 L140 64 Z" fill="#dfe3ea" stroke="#3b4350" stroke-width="1.5"/>'
+        '<path d="M44 80 Q44 60 64 62 Q76 66 76 82 Q60 90 44 80 Z" fill="url(#st-' + n + ')" stroke="#54454c" stroke-width="2.5"/>'
+        '<path d="M114 82 Q114 66 126 62 Q146 60 146 80 Q130 90 114 82 Z" fill="url(#st-' + n + ')" stroke="#54454c" stroke-width="2.5"/>'
+        '<path d="M50 64 L55 46 L63 62 Z M127 62 L135 46 L140 64 Z" fill="#eee2d7" stroke="#54454c" stroke-width="1.5"/>'
         # shield (his left side): kite shield, rim, emblem in the sword colour
-        '<path d="M54 82 L70 108" stroke="#3b4350" stroke-width="17" stroke-linecap="round" fill="none"/>'
+        '<path d="M54 82 L70 108" stroke="#54454c" stroke-width="17" stroke-linecap="round" fill="none"/>'
         '<path d="M54 82 L70 108" stroke="url(#st-' + n + ')" stroke-width="12" stroke-linecap="round" fill="none"/>'
-        '<circle cx="84" cy="112" r="9" fill="url(#st-' + n + ')" stroke="#3b4350" stroke-width="2.5"/>'
+        '<circle cx="84" cy="112" r="9" fill="url(#st-' + n + ')" stroke="#54454c" stroke-width="2.5"/>'
         '<path d="M30 80 H84 V120 Q57 156 30 120 Z" fill="url(#bl-' + n + ')" stroke="#d0d7de" stroke-width="3"/>'
         '<path d="M57 88 V138 M38 102 H76" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
-        '<path d="M87 106 V118 M91 108 V116" stroke="#4a5360" stroke-width="1.6"/>'
+        '<path d="M87 106 V118 M91 108 V116" stroke="#635158" stroke-width="1.6"/>'
         # neck, horned helm with glowing visor and crest
-        '<rect x="85" y="60" width="20" height="10" fill="#4a5360"/>'
-        '<path d="M77 30 Q58 28 54 6 Q70 14 84 22 Z" fill="#dfe5ec" stroke="#3b4350" stroke-width="1.5"/>'
-        '<path d="M113 30 Q132 28 136 6 Q120 14 106 22 Z" fill="#dfe5ec" stroke="#3b4350" stroke-width="1.5"/>'
+        '<rect x="85" y="60" width="20" height="10" fill="#635158"/>'
+        '<path d="M77 30 Q58 28 54 6 Q70 14 84 22 Z" fill="#eee2d7" stroke="#54454c" stroke-width="1.5"/>'
+        '<path d="M113 30 Q132 28 136 6 Q120 14 106 22 Z" fill="#eee2d7" stroke="#54454c" stroke-width="1.5"/>'
         '<path d="M95 14 C86 -4 110 -8 120 6 C108 4 100 8 95 14 Z" fill="currentColor"/>'
-        '<path d="M74 54 V34 Q74 12 95 12 Q116 12 116 34 V54 Q106 64 95 64 Q84 64 74 54 Z" fill="url(#st-' + n + ')" stroke="#3b4350" stroke-width="2.5"/>'
+        '<path d="M74 54 V34 Q74 12 95 12 Q116 12 116 34 V54 Q106 64 95 64 Q84 64 74 54 Z" fill="url(#st-' + n + ')" stroke="#54454c" stroke-width="2.5"/>'
         '<rect x="78" y="34" width="34" height="9" rx="3" fill="#0b0f14"/>'
         '<rect x="81" y="36" width="10" height="4" rx="1.5" fill="currentColor" style="filter:drop-shadow(0 0 4px currentColor)"/>'
         '<rect x="99" y="36" width="10" height="4" rx="1.5" fill="currentColor" style="filter:drop-shadow(0 0 4px currentColor)"/>'
-        '<path d="M95 43 V62" stroke="#4a5360" stroke-width="2"/>'
+        '<path d="M95 43 V62" stroke="#635158" stroke-width="2"/>'
         # sword arm
-        '<path d="M126 82 L148 104 L160 94" stroke="#3b4350" stroke-width="17" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+        '<path d="M126 82 L148 104 L160 94" stroke="#54454c" stroke-width="17" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
         '<path d="M126 82 L148 104 L160 94" stroke="url(#st-' + n + ')" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
         # the sword: pivots about the hand; blade + glow take the prediction colour
         '<g class="sword" style="transform-origin:160px 94px; transform:rotate(' + ("%.1f" % ang) + 'deg);">'
@@ -7586,7 +7661,7 @@ def kalshi_arrow_html(name, d):
         '<path d="M176 94 H232" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1.6"/>'
         + blood_blade +
         '</g>'
-        '<circle cx="160" cy="94" r="10" fill="url(#st-' + n + ')" stroke="#3b4350" stroke-width="2.5"/>'
+        '<circle cx="160" cy="94" r="10" fill="url(#st-' + n + ')" stroke="#54454c" stroke-width="2.5"/>'
         + fx +
         '</svg>'
     )
@@ -7642,23 +7717,23 @@ def _rsi_gauge_svg(rsi1, rsi5):
         a = math.radians(180 - v / 100 * 180)
         return cx + rad * math.cos(a), cy - rad * math.sin(a)
     arcs = []
-    for z0, z1, col in ((0, 30, "#00e5ff"), (30, 70, "#343a45"), (70, 100, "#ff4dd2")):
+    for z0, z1, col in ((0, 30, "#00e5ff"), (30, 70, "#4a3c43"), (70, 100, "#ff4dd2")):
         x1, y1 = xy(z0, r); x2, y2 = xy(z1, r)
         arcs.append(f'<path d="M {x1:.1f} {y1:.1f} A {r} {r} 0 0 1 {x2:.1f} {y2:.1f}" stroke="{col}" stroke-width="14" fill="none"/>')
     for t in (30, 50, 70):
         a1, b1 = xy(t, r - 9); a2, b2 = xy(t, r + 9)
-        arcs.append(f'<line x1="{a1:.1f}" y1="{b1:.1f}" x2="{a2:.1f}" y2="{b2:.1f}" stroke="#121418" stroke-width="2"/>')
+        arcs.append(f'<line x1="{a1:.1f}" y1="{b1:.1f}" x2="{a2:.1f}" y2="{b2:.1f}" stroke="#211b1e" stroke-width="2"/>')
     out = "".join(arcs)
     if rsi5 is not None:
         tx, ty = xy(max(0, min(100, rsi5)), r + 13)
-        out += f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="5" fill="#e3b341" stroke="#121418" stroke-width="1.5"><title>5-minute RSI {rsi5:.0f}</title></circle>'
+        out += f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="5" fill="#e3b341" stroke="#211b1e" stroke-width="1.5"><title>5-minute RSI {rsi5:.0f}</title></circle>'
     if rsi1 is not None:
         nx, ny = xy(max(0, min(100, rsi1)), r - 12)
-        out += (f'<line x1="{cx}" y1="{cy}" x2="{nx:.1f}" y2="{ny:.1f}" stroke="#f5f7fa" stroke-width="3" stroke-linecap="round"/>'
-                f'<circle cx="{cx}" cy="{cy}" r="5" fill="#f5f7fa"/>'
-                f'<text x="{cx}" y="{cy + 26}" text-anchor="middle" fill="#f5f7fa" font-size="18" font-weight="800">{rsi1:.0f}</text>')
+        out += (f'<line x1="{cx}" y1="{cy}" x2="{nx:.1f}" y2="{ny:.1f}" stroke="#fbf4ec" stroke-width="3" stroke-linecap="round"/>'
+                f'<circle cx="{cx}" cy="{cy}" r="5" fill="#fbf4ec"/>'
+                f'<text x="{cx}" y="{cy + 26}" text-anchor="middle" fill="#fbf4ec" font-size="18" font-weight="800">{rsi1:.0f}</text>')
     else:
-        out += f'<text x="{cx}" y="{cy + 20}" text-anchor="middle" fill="#a3abb8" font-size="12">warming up</text>'
+        out += f'<text x="{cx}" y="{cy + 20}" text-anchor="middle" fill="#bcaaa1" font-size="12">warming up</text>'
     for t, col in ((30, "#00e5ff"), (70, "#ff4dd2")):
         lx, ly = xy(t, r - 24)
         out += f'<text x="{lx:.1f}" y="{ly + 4:.1f}" text-anchor="middle" fill="{col}" font-size="11" font-weight="700">{t}</text>'
@@ -8002,7 +8077,7 @@ def stage_summary_row(name, d):
 def _round_svg(rec, w=300, h=96, live=False):
     path = rec.get("path") or []
     if len(path) < 2:
-        return f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}"><text x="{w / 2}" y="{h / 2}" text-anchor="middle" fill="#a3abb8" font-size="11">collecting...</text></svg>'
+        return f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}"><text x="{w / 2}" y="{h / 2}" text-anchor="middle" fill="#bcaaa1" font-size="11">collecting...</text></svg>'
     m = max(0.01, max(abs(y) for _x, y in path)) * 1.15
     X = lambda e: max(0.0, min(900.0, e)) / 900 * w
     Y = lambda v: h / 2 - v / m * (h / 2 - 4)
@@ -8011,15 +8086,15 @@ def _round_svg(rec, w=300, h=96, live=False):
     cid = f'c{abs(hash((rec.get("ticker"), live))) % 10 ** 8}'
     out = [f'<defs><clipPath id="{cid}a"><rect x="0" y="0" width="{w}" height="{h / 2}"/></clipPath>'
            f'<clipPath id="{cid}b"><rect x="0" y="{h / 2}" width="{w}" height="{h / 2}"/></clipPath></defs>',
-           f'<polygon points="{area}" fill="#2de2a6" fill-opacity="0.22" clip-path="url(#{cid}a)"/>',
-           f'<polygon points="{area}" fill="#ff5c8a" fill-opacity="0.22" clip-path="url(#{cid}b)"/>']
+           f'<polygon points="{area}" fill="#3dd69c" fill-opacity="0.22" clip-path="url(#{cid}a)"/>',
+           f'<polygon points="{area}" fill="#f05454" fill-opacity="0.22" clip-path="url(#{cid}b)"/>']
     for e, lbl in ((240, "4:00"), (480, "8:00")):
         out.append(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#7f8fff" stroke-dasharray="2 3" stroke-width="1" opacity="0.7"/>'
-                   f'<text x="{X(e) + 2:.1f}" y="10" fill="#bfe9ff" font-size="9">{lbl}</text>')
-    out.append(f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#f5f7fa" stroke-width="1" opacity="0.55"/>')
-    out.append(f'<polyline points="{pts}" fill="none" stroke="#f5f7fa" stroke-width="1.6"/>')
+                   f'<text x="{X(e) + 2:.1f}" y="10" fill="#f6d9e2" font-size="9">{lbl}</text>')
+    out.append(f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#fbf4ec" stroke-width="1" opacity="0.55"/>')
+    out.append(f'<polyline points="{pts}" fill="none" stroke="#fbf4ec" stroke-width="1.6"/>')
     for e, sd in rec.get("events") or []:
-        out.append(f'<circle cx="{X(e):.1f}" cy="{h / 2}" r="3.2" fill="{"#2de2a6" if sd > 0 else "#ff5c8a"}" stroke="#121418" stroke-width="1"/>')
+        out.append(f'<circle cx="{X(e):.1f}" cy="{h / 2}" r="3.2" fill="{"#3dd69c" if sd > 0 else "#f05454"}" stroke="#211b1e" stroke-width="1"/>')
     return f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" preserveAspectRatio="none">{"".join(out)}</svg>'
 
 
@@ -8039,11 +8114,11 @@ def _kalshi_spark(pts, w=300, h=54):
     Y = lambda v: h - v * h
     line = " ".join(f"{X(e):.1f},{Y(v):.1f}" for e, v in pts)
     last = pts[-1][1]
-    col = "#2de2a6" if last >= 0.5 else "#ff5c8a"
+    col = "#3dd69c" if last >= 0.5 else "#f05454"
     marks = "".join(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#7f8fff" stroke-dasharray="2 3" opacity="0.6"/>'
                     for e in (240, 480))
     return (f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" preserveAspectRatio="none">{marks}'
-            f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#a3abb8" stroke-dasharray="3 3" opacity="0.6"/>'
+            f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#bcaaa1" stroke-dasharray="3 3" opacity="0.6"/>'
             f'<polyline points="{line}" fill="none" stroke="{col}" stroke-width="2.2"/>'
             f'<circle cx="{X(pts[-1][0]):.1f}" cy="{Y(last):.1f}" r="3.5" fill="{col}"/></svg>')
 
@@ -8098,7 +8173,8 @@ def build_kalshi_tile(name, d):
 @_never_break
 def build_rsi_box(name, d):
     """One small RSI(14) box: the number, colour-coded - OVERSOLD (30 or less), BEARISH (30-45), NORMAL (45-55), BULLISH (55-70),
-    OVERBOUGHT (70 or more). 1-minute candles, every exchange combined."""
+    OVERBOUGHT (70 or more). Since 2026-10-20 the big number is TradingView's Wilder RSI(14) on Coinbase 1-minute candles (live
+    candle included), cross-checked against a Webull-style simple-average RSI and BRAIN's all-exchange composite."""
     rm = d.get("rsi_multi") or {}
     r = rm.get("rsi1")
     if r is None:
@@ -8114,9 +8190,54 @@ def build_rsi_box(name, d):
     else:
         z, c = "OVERSOLD", "rz-os"
     r5 = rm.get("rsi5")
+    ck = rm.get("check") or {}
+    chk = ""
+    if ck:
+        def _n(v):
+            return f"{v:.0f}" if v is not None else "--"
+        ok = ck.get("agree")
+        gap = ck.get("gap_wb")
+        verdict = ('<span class="rc-ok">&#10003; matches</span>' if ok
+                   else f'<span class="rc-off">&#9888; {gap:.0f} pts apart</span>' if gap is not None else "")
+        tip = (f'Big number = TradingView RSI(14), {ck.get("source")} 1-min, live candle included ({ck.get("bars1")} candles). '
+               f'5-min: TradingView {_n(ck.get("tv5"))} / Webull-style {_n(ck.get("wb5"))}. ' + (ck.get("pick_why") or ""))
+        chk = (f'<div class="rsi-check" title="{_html_attr(tip)}">'
+               f'<div class="rc-row rc-pick"><span>&#9733; TradingView</span><b>{_n(ck.get("tv1"))}</b></div>'
+               f'<div class="rc-row"><span>Webull-style</span><b>{_n(ck.get("wb1"))}</b></div>'
+               f'<div class="rc-row"><span>All exchanges</span><b>{_n(ck.get("all1"))}</b></div>'
+               f'<div class="rc-verdict">{verdict} &middot; showing TradingView</div></div>')
+    src = "TradingView method" if ck else "all exchanges"
     return (f'<div class="rs-tile rsi-box {c}"><div class="rs-title">RSI (14)</div><div class="rsi-num">{r:.0f}</div>'
-            f'<div class="rsi-zone">{z}</div><div class="rsi-sub">1-min{f" &middot; 5-min {r5:.0f}" if r5 is not None else ""}</div>'
+            f'<div class="rsi-zone">{z}</div><div class="rsi-sub">1-min{f" &middot; 5-min {r5:.0f}" if r5 is not None else ""} &middot; {src}</div>{chk}'
             f'<span class="rsi-marker" data-rsi-name="{name}" data-rsi="{r:.1f}" style="display:none;"></span></div>')
+
+
+@_never_break
+def build_streak_box(name, d):
+    """Win / loss streak tile (2026-10-20): the sealed call's current run big, the early call's run under it, and the last 8
+    sealed results. Gold = win, lavender = loss - kept off green/red so it is never read as UP/DOWN."""
+    hist = _history.get(name, [])
+    runs = {}
+    for key, field in (("sealed", "sealed_correct"), ("early", "early_correct")):
+        res = [bool(h[field]) for h in hist if h.get(field) is not None]
+        runs[key] = (res, _streak_stats(res) if res else (None, 0, 0, 0))
+    sres, (st, sn, sbw, sbl) = runs["sealed"]
+    eres, (et_, en, _ebw, _ebl) = runs["early"]
+    if not sres and not eres:
+        return ('<div class="rs-tile sk-box"><div class="rs-title">STREAK</div><div class="sk-num flat">--</div>'
+                '<div class="sk-zone flat">no graded rounds yet</div><div class="sk-sub">first grade when this round settles</div></div>')
+    if sres:
+        cls, big, zone = ("sk-win", f"{sn}W", "SEALED &middot; WINS") if st else ("sk-loss", f"{sn}L", "SEALED &middot; LOSSES")
+        if sn == 1:
+            zone = zone.replace("WINS", "WIN").replace("LOSSES", "LOSS")
+    else:
+        cls, big, zone = ("sk-win", f"{en}W", "EARLY &middot; WIN") if et_ else ("sk-loss", f"{en}L", "EARLY &middot; LOSS")
+    early = (f'early <b class="{"skw" if et_ else "skl"}">{en}{"W" if et_ else "L"}</b>' if eres and sres else "")
+    best = f'best <b class="skw">{sbw}W</b> &middot; worst <b class="skl">{sbl}L</b>' if sres else ""
+    chips = "".join(f'<i class="{"w" if r_ else "l"}">{"W" if r_ else "L"}</i>' for r_ in (sres or eres)[-8:])
+    sub = " &middot; ".join(x for x in (early, best) if x)
+    return (f'<div class="rs-tile sk-box {cls}"><div class="rs-title">STREAK</div><div class="sk-num">{big}</div>'
+            f'<div class="sk-zone">{zone}</div><div class="sk-sub">{sub}</div><div class="sk-chips">{chips}</div></div>')
 
 
 @_never_break
@@ -8237,7 +8358,7 @@ def build_cross_box(name, d):
 @_never_break
 def build_round_strip(name, d):
     return (f'<div class="round-strip calls-row">{build_stage_box(name, d, "early")}{build_stage_box(name, d, "sealed")}'
-            f'{build_flip_radar(name, d)}{build_rsi_box(name, d)}{build_cross_box(name, d)}</div>')
+            f'{build_flip_radar(name, d)}{build_rsi_box(name, d)}{build_cross_box(name, d)}{build_streak_box(name, d)}</div>')
 
 
 def _streak_stats(results):
@@ -8299,10 +8420,10 @@ def build_scoreboard(name, d):
         td = f'{sum(today)}-{len(today) - sum(today)}' if today else "0-0"
         cols.append(
             f'<div class="sc-col"><div class="sc-title">{label}</div>'
-            f'<div class="sc-main"><span class="sc-pct">{w / n:.0%}</span><span class="sc-wl"><b class="up">{w}W</b> &middot; <b class="down">{n - w}L</b>'
+            f'<div class="sc-main"><span class="sc-pct">{w / n:.0%}</span><span class="sc-wl"><b class="skw">{w}W</b> &middot; <b class="skl">{n - w}L</b>'
             f'<br><span class="hint">{n} graded round{"s" if n != 1 else ""} since {first_k}</span></span></div>'
             f'<div class="sc-cur">{streak}</div>'
-            f'<div class="sc-stats">Best run: <b class="up">{bw}W</b> &middot; worst run: <b class="down">{bl}L</b> &middot; today: <b>{td}</b>'
+            f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; today: <b>{td}</b>'
             + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div></div>')
     no_call = sum(1 for h in hist if h.get("correct") is None)
     try:
@@ -8376,12 +8497,12 @@ def _cvd_svg(series, coin):
     pts = [((t - t0) / tspan * w, h - (c - lo) / span * h) for t, c, _q in series]
     zero_y = h - (0 - lo) / span * h
     last = vals[-1]
-    col = "#2de2a6" if last >= 0 else "#ff5c8a"
+    col = "#3dd69c" if last >= 0 else "#f05454"
     path = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
     area = f"0,{zero_y:.1f} " + path + f" {pts[-1][0]:.1f},{zero_y:.1f}"
     return (f'<svg class="cvd-svg" viewBox="0 0 {w} {h}" preserveAspectRatio="none" width="100%" height="{h}">'
             f'<polygon points="{area}" fill="{col}" fill-opacity="0.18"/>'
-            f'<line x1="0" y1="{zero_y:.1f}" x2="{w}" y2="{zero_y:.1f}" stroke="#a3abb8" stroke-dasharray="3 3" stroke-width="1"/>'
+            f'<line x1="0" y1="{zero_y:.1f}" x2="{w}" y2="{zero_y:.1f}" stroke="#bcaaa1" stroke-dasharray="3 3" stroke-width="1"/>'
             f'<polyline points="{path}" fill="none" stroke="{col}" stroke-width="2"/></svg>')
 
 
@@ -9170,9 +9291,9 @@ def render_html():
         _left = max(0, int(d["seconds_left"]))
         _frac = min(1.0, _left / 900.0)
         _cl = "clock-hot" if _left <= 30 else ("clock-warn" if _left <= 120 else "")
-        _stroke = "#ff5c8a" if _left <= 30 else ("#d29922" if _left <= 120 else "#5cc8ff")
+        _stroke = "#f05454" if _left <= 30 else ("#d29922" if _left <= 120 else "#e9a5bb")
         clock_html = (f'<div class="clock {_cl}" title="{d.get("ticker", "")}">'
-                      f'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#343a45" stroke-width="3"/>'
+                      f'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#4a3c43" stroke-width="3"/>'
                       f'<circle cx="12" cy="12" r="10" fill="none" stroke="{_stroke}" stroke-width="3" stroke-linecap="round" '
                       f'stroke-dasharray="{_frac * 62.83:.1f} 62.83" transform="rotate(-90 12 12)"/></svg>'
                       f'<span>{mins}:{secs:02d}</span></div>')
@@ -9263,7 +9384,7 @@ def render_html():
             state_css = "down" if armed else "flat"
             state_label = "REAL MONEY: ARMED" if armed else "Real money: off (paper only)"
             pnl_css = "up" if pnl_today >= 0 else "down"
-            err_html = f'<div class="hint" style="color:#ff5c8a;">{last_err}</div>' if last_err else ""
+            err_html = f'<div class="hint" style="color:#f05454;">{last_err}</div>' if last_err else ""
             size_label = (f"${size_dollars:.0f}/trade" if size_mode == "dollars"
                           else f"{size_percent:.1f}% of balance/trade")
             # rolling 1h/24h up-down %, off the REAL settled trades log for
@@ -10141,6 +10262,10 @@ def main():
     threading.Thread(target=_kraken_ws_run_forever, daemon=True).start()
     threading.Thread(target=_coinbase_l2_run_forever, daemon=True).start()
     threading.Thread(target=poll_loop, daemon=True).start()
+    try:
+        _rsi_check.start()
+    except Exception as _e:
+        print(f"[rsi-check] could not start: {_e!r}")
     try:
         _flow.HUB.on_trade = _flow_to_legacy
         _flow.ENGINE.listeners.append(_print_to_legacy)
