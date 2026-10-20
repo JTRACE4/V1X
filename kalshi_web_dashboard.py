@@ -32,6 +32,9 @@ plainly, never hidden.
 """
 import collections
 import csv
+import hashlib
+import hmac as _hmac
+import secrets
 import datetime as dt
 import http.server
 import json
@@ -2129,12 +2132,49 @@ def history_meta():
     return {"assets": out, "volume": HISTORY_ON_VOLUME, "railway": ON_RAILWAY}
 
 
+# ---- signed backups (2026-10-20): the dashboard URL is public, so the restore endpoint only takes rounds THIS server
+# signed when it handed them to a browser. A visitor can't add made-up rounds to pad the win rate.
+_SIGN_KEY = None
+# rounds backed up by the first backup version (from 12:55 ET until this version is deployed) are accepted unsigned - only
+# that window, so at most the rounds from those few hours could ever come in that way
+LEGACY_UNSIGNED_FROM = dt.datetime(2026, 10, 20, 16, 50, tzinfo=dt.timezone.utc).timestamp()
+# ... up to when THIS (signing) version started - whatever the old version backed up while Railway's deploy queue was paused
+LEGACY_UNSIGNED_TO = min(time.time(), dt.datetime(2026, 10, 21, 12, 0, tzinfo=dt.timezone.utc).timestamp())
+
+
+def _sign_key():
+    global _SIGN_KEY
+    if _SIGN_KEY is None:
+        k = os.environ.get("HISTORY_SIGNING_KEY")
+        if not k:
+            kf = os.path.join(_DATA_ROOT, "data_cache", ".history_key")
+            try:
+                with open(kf) as f:
+                    k = f.read().strip()
+            except Exception:
+                k = secrets.token_hex(32)
+                try:
+                    os.makedirs(os.path.dirname(kf), exist_ok=True)
+                    with open(kf, "w") as f:
+                        f.write(k)
+                except Exception:
+                    pass
+        _SIGN_KEY = k.encode()
+    return _SIGN_KEY
+
+
+def _sig(name, j):
+    return _hmac.new(_sign_key(), (name + "|" + j).encode(), hashlib.sha256).hexdigest()
+
+
 def history_export(name, after=0.0, limit=5000):
+    """Rows newer than `after`, each as {"j": exact JSON text, "s": signature} - the browser stores both untouched."""
     rows = []
     for h in list(_history.get(name, [])):
         t = _window_close_utc(h.get("ticker"))
         if t and t.timestamp() > after:
-            rows.append(h)
+            j = json.dumps(h, sort_keys=True, separators=(",", ":"))
+            rows.append({"j": j, "s": _sig(name, j)})
     return rows[:limit]
 
 
@@ -2142,11 +2182,28 @@ def history_restore(name, rows):
     """Additive merge: rows whose ticker the server does not have yet are added; nothing existing is changed or removed."""
     if not isinstance(rows, list) or not isinstance(name, str) or len(name) > 12:
         return 0
+    rejected = 0
     with _history_lock:
         cur = _history.setdefault(name, [])
         have = {h.get("ticker") for h in cur}
         add = []
-        for h in rows[:HISTORY_CAP]:
+        for item in rows[:HISTORY_CAP]:
+            if not isinstance(item, dict):
+                continue
+            if isinstance(item.get("j"), str) and isinstance(item.get("s"), str):
+                if len(item["j"]) > 20000 or not _hmac.compare_digest(item["s"], _sig(name, item["j"])):
+                    rejected += 1
+                    continue                                  # not signed by this server
+                try:
+                    h = json.loads(item["j"])
+                except Exception:
+                    continue
+            else:
+                h = item.get("row") if isinstance(item.get("row"), dict) else item
+                ct = _window_close_utc(h.get("ticker") if isinstance(h, dict) else None)
+                if ct is None or not (LEGACY_UNSIGNED_FROM <= ct.timestamp() <= LEGACY_UNSIGNED_TO):
+                    rejected += 1
+                    continue                                  # unsigned: only the pre-signing hour is allowed
             if not isinstance(h, dict) or len(h) > 80:
                 continue
             tk = h.get("ticker")
@@ -2156,6 +2213,8 @@ def history_restore(name, rows):
                      and (v is None or isinstance(v, (bool, int, float, str)) and (not isinstance(v, str) or len(v) <= 200))}
             add.append(clean)
             have.add(tk)
+        if rejected:
+            print(f"[history] restore: rejected {rejected} {name} rows without a valid signature")
         if not add:
             return 0
         merged = cur + add
@@ -6963,7 +7022,7 @@ function histPut(asset, rows) {
   return new Promise((res) => {
     try {
       const tx = histDb.transaction('rows', 'readwrite'); const st = tx.objectStore('rows');
-      rows.forEach(r => { if (r && r.ticker) st.put({k: asset + '|' + r.ticker, asset: asset, t: r._t || 0, row: r}); });
+      rows.forEach(r => { if (r && r.ticker) st.put({k: asset + '|' + r.ticker, asset: asset, t: r.t || 0, j: r.j, s: r.s}); });
       tx.oncomplete = () => res(true); tx.onerror = () => res(false);
     } catch (e) { res(false); }
   });
@@ -6984,15 +7043,17 @@ async function histSync() {
         const j = await (await fetch('/history_export?asset=' + encodeURIComponent(asset) + '&after=' + after, {cache: 'no-store'})).json();
         const rows = j.rows || [];
         if (!rows.length) break;
-        rows.forEach(r => { r._t = tickerClose(r.ticker); });
-        await histPut(asset, rows);
-        after = rows.reduce((m, r) => Math.max(m, r._t || 0), after);
+        const recs = [];
+        rows.forEach(x => { try { const r = JSON.parse(x.j); recs.push({ticker: r.ticker, t: tickerClose(r.ticker), j: x.j, s: x.s}); } catch (e) {} });
+        await histPut(asset, recs);
+        after = recs.reduce((m, r) => Math.max(m, r.t || 0), after);
         if (rows.length < 5000) break;
       }
       // 2) the server lost rounds this device still has -> put them back
       local = await histAll(asset);
       if (local.length > (sm.n || 0)) {
-        const rows = local.map(x => { const r = Object.assign({}, x.row); delete r._t; return r; });
+        // signed rows go back exactly as the server signed them; rows saved by the first (unsigned) backup version go as-is
+        const rows = local.map(x => x.j ? {j: x.j, s: x.s} : (() => { const r = Object.assign({}, x.row || {}); delete r._t; return {row: r}; })());
         for (let i = 0; i < rows.length; i += 3000) {
           const rsp = await fetch('/restore_history', {method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({asset: asset, rows: rows.slice(i, i + 3000)})});
