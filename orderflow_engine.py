@@ -61,10 +61,10 @@ WHALE_FALLBACK = {"BTC": (50_000, 250_000), "XRP": (10_000, 50_000)}   # (show, 
 REF_VENUES = ("coinbase", "kraken", "bitstamp", "gemini")   # real-dollar venues used for the price path (no USDT basis)
 
 KIND_LABEL = {
-    "whale": "WHALE PRINT", "sweep": "BOOK SWEEP", "xsweep": "MULTI-EXCHANGE SWEEP", "stoprun": "LIQUIDITY SWEEP",
-    "breakout": "BREAKOUT", "liq": "LIQUIDATION", "liqcascade": "LIQUIDATION CASCADE", "absorbed": "WALL ABSORBED",
-    "pulled": "WALL PULLED", "wall": "WALL PARKED", "burst": "INCOMING FLOW", "boom": "BOOM MOVE",
-    "sweep1m": "1-MIN SWEEP", "rapid": "CRYPTOMETER", "flip": "FLIP WARNING",
+    "whale": "WHALE", "sweep": "BIG ORDER", "xsweep": "RUSH", "stoprun": "FAKE BREAKOUT",
+    "breakout": "BREAKOUT", "liq": "FORCED SALE", "liqcascade": "FORCED-SALE WAVE", "absorbed": "BIG ORDER FILLED",
+    "pulled": "BIG ORDER CANCELED", "wall": "BIG ORDER WAITING", "burst": "SURGE", "boom": "FAST MOVE",
+    "sweep1m": "NEW HIGH/LOW", "rapid": "CRYPTOMETER", "flip": "FLIP WARNING",
 }
 
 
@@ -144,9 +144,9 @@ class Engine:
                 dq.popleft()
         vname = _venue_label(venue)
         if usd >= LIQ_ALERT_USD.get(asset, 1e12):
-            self.add_alert(asset, "liq", side, f"{liquidated.upper()} LIQUIDATED {_usd(usd)}",
-                           f"{vname} force-{'sold a long' if liquidated == 'long' else 'bought back a short'} at {_px(asset, price)}"
-                           f" - forced {'selling' if side == 'sell' else 'buying'}", usd=usd, price=price,
+            self.add_alert(asset, "liq", side, f"FORCED {'SALE' if liquidated == 'long' else 'BUY-BACK'}: {_usd(usd)}",
+                           f"A losing {'long' if liquidated == 'long' else 'short'} bet was force-closed on {vname} at {_px(asset, price)}. "
+                           f"That adds {'selling' if side == 'sell' else 'buying'} pressure.", usd=usd, price=price,
                            sev=3 if usd >= 4 * LIQ_ALERT_USD.get(asset, 1e12) else 2,
                            cooldown_key=("liq", asset, liquidated), cooldown=10)      # a burst becomes ONE cascade alert, not ten
         with self.lock:
@@ -154,9 +154,9 @@ class Engine:
         tot = sum(x[3] for x in same)
         if tot >= LIQ_CASCADE_USD.get(asset, 1e12):
             vs = sorted({_venue_label(x[1]) for x in same})
-            self.add_alert(asset, "liqcascade", side, f"{liquidated.upper()} LIQUIDATION CASCADE {_usd(tot)} in {LIQ_CASCADE_S}s",
-                           f"{len(same)} forced {'sells' if side == 'sell' else 'buys'} on {', '.join(vs)} - stops / margin calls "
-                           f"being run {'below' if side == 'sell' else 'above'} price", usd=tot, price=price, sev=3,
+            self.add_alert(asset, "liqcascade", side, f"WAVE OF FORCED {'SELLING' if liquidated == 'long' else 'BUYING'}: {_usd(tot)} in {LIQ_CASCADE_S} seconds",
+                           f"{len(same)} losing {'long' if side == 'sell' else 'short'} bets were force-closed on {', '.join(vs)}. "
+                           f"This usually pushes the price further {'DOWN' if side == 'sell' else 'UP'}.", usd=tot, price=price, sev=3,
                            cooldown_key=("liqc", asset, liquidated), cooldown=45)
 
     # ================================================================== alerts
@@ -250,16 +250,16 @@ class Engine:
             if traded:
                 # an ask wall eaten = buyers took all of it (bullish); a bid wall eaten = sellers hit all of it (bearish)
                 aside = "buy" if side == "ask" else "sell"
-                self.add_alert(asset, "absorbed", aside, f"{'SELL' if side == 'ask' else 'BUY'} WALL EATEN {_usd(w['max'])} @ {_px(asset, p)}",
-                               f"{'buyers lifted' if side == 'ask' else 'sellers hit'} the whole resting {'offer' if side == 'ask' else 'bid'} on {vname} "
-                               f"(stood {int(now - w['first'])}s) - {'resistance gone' if side == 'ask' else 'support gone'}",
+                self.add_alert(asset, "absorbed", aside, f"BIG {'SELL' if side == 'ask' else 'BUY'} ORDER ({_usd(w['max'])} at {_px(asset, p)}) GOT FULLY FILLED",
+                               f"{'Buyers lifted' if side == 'ask' else 'Sellers hit'} the whole resting {'offer' if side == 'ask' else 'bid'} on {vname} "
+                               f"(it sat there {int(now - w['first'])}s) - {'that ceiling is gone' if side == 'ask' else 'that floor is gone'}",
                                usd=w["max"], price=p, sev=2, cooldown_key=("wallx", asset, side, round(p, 4)), cooldown=60)
             else:
                 # pulled ask = sellers stepped away (less resistance above); pulled bid = support stepped away
                 aside = "buy" if side == "ask" else "sell"
-                self.add_alert(asset, "pulled", aside, f"{'SELL' if side == 'ask' else 'BUY'} WALL PULLED {_usd(w['max'])} @ {_px(asset, p)}",
-                               f"resting {'offer' if side == 'ask' else 'bid'} on {vname} vanished before price reached it (stood {int(now - w['first'])}s) - "
-                               f"liquidity yanked, possible spoof", usd=w["max"], price=p, sev=1,
+                self.add_alert(asset, "pulled", aside, f"BIG {'SELL' if side == 'ask' else 'BUY'} ORDER ({_usd(w['max'])} at {_px(asset, p)}) WAS CANCELED",
+                               f"A resting {'offer' if side == 'ask' else 'bid'} on {vname} was canceled before the price reached it (it sat there {int(now - w['first'])}s) - "
+                               f"it may have been a fake order meant to scare traders", usd=w["max"], price=p, sev=1,
                                cooldown_key=("wallp", asset, side, round(p, 4)), cooldown=60)
 
     def walls_now(self, asset, venue="coinbase"):
@@ -310,14 +310,14 @@ class Engine:
         show, alert = self._whale_thresholds(a)
         if p["usd"] >= alert:
             self.add_alert(a, "whale", p["side"], f"WHALE {'BUY' if p['side'] == 'buy' else 'SELL'} {_usd(p['usd'])}",
-                           f"{p['qty']:,.{2 if a == 'BTC' else 0}f} {a} market {'buy' if p['side'] == 'buy' else 'sell'} on {vname} @ "
-                           f"{_px(a, p['vwap'])} ({p['n']} fill{'s' if p['n'] != 1 else ''})", usd=p["usd"], price=p["vwap"],
+                           f"Someone {'bought' if p['side'] == 'buy' else 'sold'} {p['qty']:,.{2 if a == 'BTC' else 0}f} {a} in one go on {vname} at "
+                           f"{_px(a, p['vwap'])}.", usd=p["usd"], price=p["vwap"],
                            sev=3 if p["usd"] >= 4 * alert else 2, sound=False)    # the dashboard's whale voice already speaks these
         # ---- one order that swept several price levels
         if p["usd"] >= SWEEP_MIN_USD.get(a, 1e12) and p["bps"] >= SWEEP_MIN_BPS.get(a, 1e9) and p["n"] >= 3:
-            self.add_alert(a, "sweep", p["side"], f"{'BUYER' if p['side'] == 'buy' else 'SELLER'} SWEPT THE BOOK {_usd(p['usd'])}",
-                           f"one market {'buy' if p['side'] == 'buy' else 'sell'} on {vname} ate {p['bps']:.1f} bps of resting "
-                           f"{'offers' if p['side'] == 'buy' else 'bids'}: {_px(a, p['first'])} -> {_px(a, p['last'])} in {p['n']} fills",
+            self.add_alert(a, "sweep", p["side"], f"ONE BIG {'BUY' if p['side'] == 'buy' else 'SELL'} ORDER ({_usd(p['usd'])}) MOVED THE PRICE {'UP' if p['side'] == 'buy' else 'DOWN'}",
+                           f"One {'buy' if p['side'] == 'buy' else 'sell'} order on {vname} was so big it pushed the price from "
+                           f"{_px(a, p['first'])} to {_px(a, p['last'])} by itself.",
                            usd=p["usd"], price=p["last"], sev=3 if p["usd"] >= 3 * SWEEP_MIN_USD.get(a, 1e12) else 2,
                            cooldown_key=("sweep", a, p["side"], p["venue"]), cooldown=15)
 
@@ -335,9 +335,9 @@ class Engine:
             venues = {p["venue"] for p in mine}
             moved = move_bps >= XSWEEP_BPS.get(a, 1e9) if side == "buy" else move_bps <= -XSWEEP_BPS.get(a, 1e9)
             if tot >= XSWEEP_USD.get(a, 1e12) and len(venues) >= XSWEEP_MIN_VENUES and moved:
-                self.add_alert(a, "xsweep", side, f"SWEEP {'UP' if side == 'buy' else 'DOWN'} {_usd(tot)} in {XSWEEP_WINDOW_S:.0f}s",
-                               f"aggressive {'buying' if side == 'buy' else 'selling'} hit {len(venues)} exchanges at once and moved price "
-                               f"{move_bps:+.1f} bps ({_px(a, p0)} -> {_px(a, p1)})", usd=tot, price=p1, sev=3,
+                self.add_alert(a, "xsweep", side, f"{'BUYING' if side == 'buy' else 'SELLING'} RUSH: {_usd(tot)} in {XSWEEP_WINDOW_S:.0f} seconds",
+                               f"Heavy {'buying' if side == 'buy' else 'selling'} hit {len(venues)} exchanges at the same time and moved the price "
+                               f"from {_px(a, p0)} to {_px(a, p1)}.", usd=tot, price=p1, sev=3,
                                cooldown_key=("xsweep", a, side), cooldown=30)
 
     def _stoprun(self, a, now):
@@ -376,20 +376,20 @@ class Engine:
             age = now - e["t0"]
             if back and age <= STOPRUN_REVERT_S:
                 stops = sum(x[3] for x in liq if x[0] >= e["t0"] - 5 and x[2] == ("short" if which == "hi" else "long"))
-                extra = f"; {_usd(stops)} of {'shorts' if which == 'hi' else 'longs'} liquidated on the poke" if stops > 0 else ""
+                extra = f" ({_usd(stops)} of losing {'short' if which == 'hi' else 'long'} bets were force-closed on the way)" if stops > 0 else ""
                 poke_bps = abs(e["peak"] - e["level"]) / e["level"] * 1e4
                 self.add_alert(a, "stoprun", "sell" if which == "hi" else "buy",
-                               f"LIQUIDITY SWEEP OF THE {e['span']}-MIN {'HIGH' if which == 'hi' else 'LOW'} - REJECTED",
-                               f"price ran {poke_bps:.1f} bps past {_px(a, e['level'])} to {_px(a, e['peak'])} then fell back "
-                               f"{'under' if which == 'hi' else 'over'} it in {int(age)}s (stops taken, move failed - "
-                               f"{'bearish' if which == 'hi' else 'bullish'} reversal risk){extra}",
+                               f"FAKE BREAKOUT {'ABOVE' if which == 'hi' else 'BELOW'} THE {e['span']}-MIN {'HIGH' if which == 'hi' else 'LOW'} - THE PRICE CAME RIGHT BACK",
+                               f"The price poked {'above' if which == 'hi' else 'below'} {_px(a, e['level'])} (as far as {_px(a, e['peak'])}), then came back "
+                               f"{'under' if which == 'hi' else 'over'} it within {int(age)} seconds. The move failed, so the price may now turn "
+                               f"{'DOWN' if which == 'hi' else 'UP'}{extra}.",
                                price=close, sev=3, cooldown_key=("run", a, which, round(e["level"], 4)), cooldown=180)
                 st[which] = None
             elif age > STOPRUN_REVERT_S:
                 self.add_alert(a, "breakout", "buy" if which == "hi" else "sell",
-                               f"BROKE THE {e['span']}-MIN {'HIGH' if which == 'hi' else 'LOW'} AND HELD",
-                               f"price has stayed {'above' if which == 'hi' else 'below'} {_px(a, e['level'])} for {STOPRUN_REVERT_S}s "
-                               f"(went as far as {_px(a, e['peak'])}) - real breakout, not a sweep", price=close, sev=1, sound=False,
+                               f"REAL BREAKOUT: THE PRICE BROKE THE {e['span']}-MIN {'HIGH' if which == 'hi' else 'LOW'} AND STAYED THERE",
+                               f"Price has stayed {'above' if which == 'hi' else 'below'} {_px(a, e['level'])} for {STOPRUN_REVERT_S}s "
+                               f"(it reached {_px(a, e['peak'])}) - a real breakout, not a sweep", price=close, sev=1, sound=False,
                                cooldown_key=("run", a, which, round(e["level"], 4)), cooldown=180)
                 st[which] = None
 

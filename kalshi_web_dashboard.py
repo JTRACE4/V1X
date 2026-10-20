@@ -269,10 +269,14 @@ def stage_blend(kalshi_yes, fair_yes, flow_up):
 STAGE_TIERS = ((0.80, "SUPER"), (0.65, "GOOD"), (0.55, "WEAK"))   # blended chance of the called side
 CROSS_SKIP = 3                 # 3+ line crosses so far = too choppy -> skip; exactly 2 crosses knocks the confidence down a tier
 CROSS_BAND_PCT = 0.00003       # price must clear the line by 0.003% (~$3 on BTC) to count as being on a side - tick noise ignored
+CROSS_MIN_GAP_S = 15           # a new cross only counts 15+ seconds after the last COUNTED cross (user request 2026-10-20):
+                               # a quick whip back and forth over the line is one cross, not five. If price is still on the
+                               # new side once 15s have passed, that switch is counted then.
 MIN_RANGE_PCT = 0.00025        # the round's high-low so far under 0.025% (~$27 on BTC) = not enough price action to call
 ROUNDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_cache", "round_paths.json")
 ROUNDS_KEEP = 24
 _rounds = {}                   # asset name -> [finished round records], oldest first (persisted)
+_kalshi_path = {}              # asset name -> {"ticker", "pts": [[elapsed_s, yes_price]]} - the live Kalshi odds this round
 
 
 def round_line_stats(symbol, line, open_ts, end_ts=None):
@@ -283,7 +287,8 @@ def round_line_stats(symbol, line, open_ts, end_ts=None):
         return None
     end_ts = end_ts or time.time()
     band = line * CROSS_BAND_PCT
-    side = 0
+    side = 0                       # the side as last COUNTED
+    last_cross = -1e9
     crosses = ups = downs = 0
     events, path = [], []
     hi = lo = None
@@ -296,14 +301,17 @@ def round_line_stats(symbol, line, open_ts, end_ts=None):
         d = px - line
         sd = 1 if d > band else (-1 if d < -band else 0)
         if sd:
-            if side and sd != side:
+            if not side:
+                side = sd
+            elif sd != side and (t - last_cross) >= CROSS_MIN_GAP_S:
                 crosses += 1
                 if sd > 0:
                     ups += 1
                 else:
                     downs += 1
                 events.append((int(t - open_ts), sd))
-            side = sd
+                side = sd
+                last_cross = t
         b = int((t - open_ts) // 5)
         if b != last_b:
             path.append([int(t - open_ts), round(d / line * 100, 4)])
@@ -402,14 +410,16 @@ def _backfill_rounds_from_log():
             if not ln or len(pts) < 20:
                 continue
             band = ln * CROSS_BAND_PCT
-            side = 0; cr = up = dn = 0; ev = []; path = []
+            side = 0; cr = up = dn = 0; ev = []; path = []; last_c = -1e9
             for e, px in pts:
                 dd = px - ln
                 sd = 1 if dd > band else (-1 if dd < -band else 0)
                 if sd:
-                    if side and sd != side:
+                    if not side:
+                        side = sd
+                    elif sd != side and e - last_c >= CROSS_MIN_GAP_S:
                         cr += 1; up += sd > 0; dn += sd < 0; ev.append((int(e), sd))
-                    side = sd
+                        side = sd; last_c = e
                 path.append([int(e), round(dd / ln * 100, 4)])
             recs.append({"ticker": k[1], "line": ln, "crosses": cr, "up": up, "down": dn, "events": ev, "path": path[::2],
                          "source": "log"})
@@ -3604,29 +3614,29 @@ def _push_dashboard_alerts(asset, v):
         lb, rc = asset["sweep_lookback_minutes"], asset["sweep_recent_minutes"]
         up = bool(cl) and len(cl) > lb and max(cl[-rc:]) > max(cl[-(lb + 1):-rc])
         _eng.add_alert(name, "sweep1m", "sell" if up else "buy",
-                       f"1-MIN CANDLES SWEPT THE {lb}-MIN {'HIGH' if up else 'LOW'}",
-                       f"1-minute closes broke the {lb}-minute {'high' if up else 'low'} - resting liquidity there just got taken. "
-                       f"The bot's sweep filter blocks new calls for {rc} min (fast reversals follow these often)", sev=2,
+                       f"THE PRICE BROKE ITS {lb}-MIN {'HIGH' if up else 'LOW'}",
+                       f"The price just went past its {lb}-minute {'high' if up else 'low'}. Fast reversals often follow, "
+                       f"so the bot holds off on new calls for {rc} minutes.", sev=2,
                        cooldown_key=("sweep1m", name), cooldown=60)
     inc = v.get("incoming_ev")
     if inc:
-        _eng.add_alert(name, "burst", inc["side"], f"INCOMING {inc['side'].upper()} {_u(inc['usd'])} in 10s",
-                       f"one-sided aggressive {'buying' if inc['side'] == 'buy' else 'selling'} across {inc['venues']} exchanges "
-                       f"(biggest: {inc['top']}) - shows up before the chart moves", usd=inc["usd"], sev=3, sound=False)
+        _eng.add_alert(name, "burst", inc["side"], f"{'BUYING' if inc['side'] == 'buy' else 'SELLING'} SURGE: {_u(inc['usd'])} in 10 seconds",
+                       f"Mostly {'buyers' if inc['side'] == 'buy' else 'sellers'} across {inc['venues']} exchanges "
+                       f"(the most on {inc['top']}). This often shows up before the chart moves.", usd=inc["usd"], sev=3, sound=False)
     bw = v.get("book_walls") or {}
     if bw.get("alert_side"):
         w = bw.get("ask_wall") if bw["alert_side"] == "sell" else bw.get("bid_wall")
         if w:
-            _eng.add_alert(name, "wall", bw["alert_side"], f"{'SELL' if bw['alert_side'] == 'sell' else 'BUY'} WALL PARKED {_u(w[1])}",
+            _eng.add_alert(name, "wall", bw["alert_side"], f"BIG {'SELL' if bw['alert_side'] == 'sell' else 'BUY'} ORDER WAITING: {_u(w[1])}",
                            f"resting {'offer' if bw['alert_side'] == 'sell' else 'bid'} at {fmt_price(w[0], dec)} "
                            f"({w[2] * 100:.2f}% from price, Coinbase book) - "
-                           f"{'a seller lined up above' if bw['alert_side'] == 'sell' else 'a buyer lined up below'}",
+                           f"{'someone is waiting to sell above the price' if bw['alert_side'] == 'sell' else 'someone is waiting to buy below the price'}",
                            usd=w[1], price=w[0], sev=1, sound=False)
     sw = v.get("dramatic_swing")
     if sw:
         if True:
-            _eng.add_alert(name, "boom", "buy" if sw == "up" else "sell", f"BOOM - FAST MOVE {sw.upper()}",
-                           "in the last 60s price moved more than half of a rare 5-minute move"
+            _eng.add_alert(name, "boom", "buy" if sw == "up" else "sell", f"PRICE MOVING {sw.upper()} FAST",
+                           "In the last minute the price moved more than it usually does in 5 minutes"
                            + (" - AGAINST the locked call" if v.get("dramatic_vs_call") == "against" else ""),
                            sev=3 if v.get("dramatic_vs_call") == "against" else 2, sound=False,
                            cooldown_key=("boom", name, sw), cooldown=90)
@@ -4056,6 +4066,11 @@ def poll_loop():
                 except Exception:
                     rsi_multi = {}
                 locked.setdefault("open_ts", open_time_dt.timestamp())
+                _kp_rec = _kalshi_path.get(asset["name"])
+                if not _kp_rec or _kp_rec["ticker"] != ticker:
+                    _kp_rec = _kalshi_path[asset["name"]] = {"ticker": ticker, "pts": []}
+                if kalshi_price is not None:
+                    _kp_rec["pts"].append([int(elapsed_seconds), round(kalshi_price, 4)])
                 line_stats = round_line_stats(asset["symbol"], target, open_time_dt.timestamp()) if not is_gold else None
                 _crosses = line_stats["crosses"] if line_stats else None
                 _rng = line_stats["range_pct"] if line_stats else None
@@ -4385,6 +4400,7 @@ def poll_loop():
                     "incoming": incoming_ev,
                     "stage_calls": {k: dict(v) for k, v in stage_calls.items()},
                     "stage_just": stage_just,
+                    "kalshi_path": list((_kalshi_path.get(asset["name"]) or {}).get("pts", [])),
                     "line_stats": ({k: line_stats[k] for k in ("crosses", "up", "down", "events", "path", "range_pct")}
                                    if line_stats else None),
                     "stage_p_yes": stage_p_yes,
@@ -4482,6 +4498,9 @@ PAGE_TEMPLATE = r"""<!doctype html>
   }, 5000);
 })();
 </script><meta charset="utf-8"><title>Kalshi Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
 body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background:#0a1020; color:#e3e9f7; margin:0; padding:12px 24px 24px; }
 h1 { font-size: 15px; color:#9d9d9d; margin:0 0 8px; }
@@ -4911,6 +4930,60 @@ body { background:#0a1020; background-image:radial-gradient(1px 1px at 12% 18%, 
 h1 { color:#9fa9d8; } h1::before { content:"\263E  "; color:#ffd76a; }
 .card { background:rgba(17,26,46,0.92); border-color:#27345a; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.35); }
 .top-w, .tug { background:#0e1628; border-color:#27345a; border-radius:12px; }
+/* ---- 2026-10-20 (3): calm + clean - one typeface, tabular numbers, no flashing ---- */
+body, button, input, .card { font-family:'Inter', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; font-variant-numeric:tabular-nums; }
+body { font-size:14px; line-height:1.4; letter-spacing:0.1px; }
+h1 { font-size:13px; font-weight:600; letter-spacing:0.3px; }
+.card { padding:18px 20px; }
+body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
+.row { font-size:13px; padding:7px 0; }
+.label { font-weight:400; } .value { font-weight:600; }
+.hint { color:#93a0bf; }
+.boom, .rsi-hot, .fa-item.fa-fresh, .tier-super, .fr-ext, .incoming-banner, .rsi-pill, .smoke-streak, .fx-spark, .fx-drop { animation:none !important; }
+.fa-item.fa-fresh { box-shadow:inset 0 0 0 1px #ffd76a; }
+.boom { font-size:12px; padding:4px 12px; }
+#incoming-alerts, #rsi-alerts, #lock-toasts, .big-flip-alert, .whale-cross { display:none !important; }
+#top-banner { position:fixed; top:0; left:0; right:0; z-index:100002; padding:9px 18px; font-size:14px; font-weight:700; text-align:center;
+              cursor:pointer; background:#111a2e; border-bottom:2px solid currentColor; box-shadow:0 4px 16px rgba(0,0,0,0.45);
+              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#top-banner.tb-buy { color:#5ad1a0; } #top-banner.tb-sell { color:#ff6f86; }
+.rs-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#9fa9d8; margin-bottom:6px; text-transform:uppercase; }
+.rs-title b { color:#e3e9f7; }
+.round-strip { display:grid; grid-template-columns:minmax(260px,1.3fr) minmax(200px,1fr) minmax(200px,1fr); gap:12px; margin-bottom:12px; }
+@media (max-width:760px) { .round-strip { grid-template-columns:1fr 1fr; } .rs-odds { grid-column:1 / -1; } }
+.rs-tile { background:#0e1628; border:1px solid #27345a; border-radius:14px; padding:12px 14px; min-width:0; }
+.rs-clock { float:right; color:#e3e9f7; letter-spacing:0; font-family:'JetBrains Mono', Consolas, monospace; }
+.rs-odds-nums { display:flex; justify-content:space-between; font-size:15px; }
+.rs-odds-nums b { font-size:30px; font-weight:800; }
+.rs-odds-bar { position:relative; height:10px; border-radius:5px; background:#d94a63; overflow:hidden; margin:6px 0 4px; }
+.rs-odds-bar i { position:absolute; left:0; top:0; bottom:0; background:#2a9d74; transition:width 0.5s ease; }
+.rs-odds-bar b { position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px; background:#e3e9f7; opacity:0.8; }
+.rs-lean { font-size:15px; font-weight:700; margin-bottom:4px; }
+.rs-sub { display:flex; justify-content:space-between; gap:8px; font-size:11px; margin-top:2px; flex-wrap:wrap; }
+.rs-wait { color:#93a0bf; padding:18px 0; }
+.round-strip .stage-box { margin:0; width:auto; max-width:none; min-width:0; flex:none; border-radius:14px; justify-content:center; }
+.round-strip .sb-line { font-size:13px; }
+.round-strip .sb-dir { font-size:36px; }
+.sb-tier { font-size:15px; letter-spacing:1.5px; }
+.scoreboard { background:#0e1628; border:1px solid #27345a; border-radius:14px; padding:12px 14px; margin-bottom:12px; }
+.sc-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+@media (max-width:760px) { .sc-grid { grid-template-columns:1fr; } }
+.sc-col { background:#111a2e; border:1px solid #24304d; border-radius:10px; padding:10px 12px; min-width:0; }
+.sc-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#c9d3f0; margin-bottom:6px; }
+.sc-main { display:flex; align-items:center; gap:12px; }
+.sc-pct { font-size:30px; font-weight:800; color:#e3e9f7; line-height:1; }
+.sc-wl { font-size:14px; line-height:1.35; }
+.sc-cur { margin:8px 0 6px; }
+.sc-streak { display:inline-block; padding:4px 12px; border-radius:8px; font-size:14px; font-weight:800; letter-spacing:0.5px; }
+.sc-streak.win { color:#5ad1a0; background:rgba(90,209,160,0.12); border:1px solid #2a9d74; }
+.sc-streak.loss { color:#ff6f86; background:rgba(255,111,134,0.12); border:1px solid #d94a63; }
+.sc-stats { font-size:12px; color:#c9d3f0; }
+.sc-chips { display:flex; gap:3px; margin-top:7px; flex-wrap:wrap; }
+.sc-chips i { font-style:normal; font-size:10px; font-weight:800; width:17px; height:17px; line-height:17px; text-align:center; border-radius:4px; }
+.sc-chips i.w { background:rgba(90,209,160,0.18); color:#5ad1a0; } .sc-chips i.l { background:rgba(255,111,134,0.18); color:#ff6f86; }
+.sc-empty { font-size:12px; color:#93a0bf; }
+.sc-more { margin-top:8px; } .sc-more > summary { cursor:pointer; font-size:12px; }
+.streak-arrow { display:none; }
 /* "FLIP" tag next to the calls (added 2026-09-25) - marks this window's
    real position as the flip-scalp entry, not the original locked call */
 .flip-badge { display:inline-block; background:#3d1a00; border:1px solid #d29922; color:#d29922;
@@ -5498,6 +5571,7 @@ function checkReversalAlerts() {
 // not just a quick wiggle. Appended to document.body, not #content, since
 // #content gets wiped by the 1s refresh - same technique as showWhaleCrossing.
 function showBigFlipAlert(assetName, side) {
+  return;   // 2026-10-20: no screen-centre pop-up - the flip meter at the top shows it, the siren / voice still play
   const el = document.createElement('div');
   el.className = 'big-flip-alert ' + (side === 'YES' ? 'flip-up' : 'flip-down');
   const arrow = side === 'YES' ? '\u2B06' : '\u2B07';
@@ -5693,6 +5767,7 @@ function checkLossAlerts() {
 // request ("call out the call as soon as it calls the call"). No banner/sound
 // effect, just the narrator - a call lock isn't a win/loss event.
 function showLockToast(name, call, kp) {
+  return;   // 2026-10-20: calls are shown in the EARLY / SEALED tiles at the top - no pop-up toast
   // visible pop-up for a newly locked call - added 2026-10-04: the voice
   // announcement is silent whenever sound is off (it resets on every page
   // load), which made new calls look like they weren't showing at all.
@@ -5751,7 +5826,8 @@ function checkRsiAlerts() {
     }
     if (z && !rsiDismissed[name]) live[name] = {z: z, v: v};
   });
-  Array.from(box.children).forEach(ch => { if (!live[ch.getAttribute('data-name')]) ch.remove(); });
+  box.innerHTML = '';
+  return;   // 2026-10-20: no RSI pop-up pill - the RSI flip meter at the top shows the zone (sound + voice still play)
   Object.keys(live).forEach(name => {
     const z = live[name].z; const v = live[name].v;
     let pill = box.querySelector('[data-name="' + name + '"]');
@@ -5777,17 +5853,20 @@ function spokenUsd(v) {
   if (v >= 1e6) return (v / 1e6).toFixed(1) + ' million dollars';
   return Math.round(v / 1e3) + ' thousand dollars';
 }
+// 2026-10-20 per user request: no more big / flashing pop-ups. The ONLY thing that appears over the page is one slim,
+// steady banner along the top - and only for a $1 million+ event. Everything else just lands in the alert box at the top
+// of the card (and plays its sound / voice). A new banner replaces the old one instead of stacking.
+const BANNER_MIN_USD = 1000000;
 function showIncomingBanner(name, side, usd, head, detail) {
-  let box = document.getElementById('incoming-alerts');
-  if (!box) { box = document.createElement('div'); box.id = 'incoming-alerts'; document.body.appendChild(box); }
-  const el = document.createElement('div');
-  el.className = 'incoming-banner ' + (side === 'buy' ? 'incoming-buy' : 'incoming-sell');
-  const h = document.createElement('div'); h.className = 'incoming-head'; h.textContent = '\u26A0 ' + name + ' ' + head;
-  const d = document.createElement('div'); d.className = 'incoming-detail'; d.textContent = detail;
-  el.appendChild(h); el.appendChild(d);
+  if (!(usd >= BANNER_MIN_USD)) return;
+  let el = document.getElementById('top-banner');
+  if (!el) { el = document.createElement('div'); el.id = 'top-banner'; document.body.appendChild(el); }
+  el.className = side === 'buy' ? 'tb-buy' : 'tb-sell';
+  el.textContent = name + ' \u2022 ' + head + ' \u2022 ' + detail;
+  el.title = 'click to close';
   el.onclick = () => el.remove();
-  box.appendChild(el);
-  setTimeout(() => el.remove(), 16000);
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.remove(), 10000);
 }
 const alertedIncoming = new Set();
 function checkIncomingAlerts() {
@@ -5852,8 +5931,8 @@ function checkStageAlerts() {
 const alertedFlow = new Set();
 let flowAlertsPrimed = false;
 try { JSON.parse(sessionStorage.getItem('alertedFlow') || '[]').forEach(k => alertedFlow.add(k)); } catch (e) {}
-const FLOW_SPOKEN = { sweep: 'Book sweep', xsweep: 'Sweep across exchanges', stoprun: 'Liquidity sweep', liq: 'Liquidation',
-  liqcascade: 'Liquidation cascade', absorbed: 'Wall eaten', pulled: 'Wall pulled', sweep1m: 'Sweep', breakout: 'Breakout' };
+const FLOW_SPOKEN = { sweep: 'Big order', xsweep: 'Rush on every exchange', stoprun: 'Fake breakout', liq: 'Forced sale',
+  liqcascade: 'Wave of forced selling', absorbed: 'Big order filled', pulled: 'Big order canceled', sweep1m: 'New high or low', breakout: 'Breakout' };
 function checkFlowAlerts() {
   const now = Date.now() / 1000;
   document.querySelectorAll('.fa-item').forEach(el => {
@@ -5933,6 +6012,7 @@ function fmtUsdShort(v) {
   return '$' + Math.round(v / 1e3) + 'k';
 }
 function showWhaleCrossing(assetName, side, usd, venue) {
+  return;   // 2026-10-20: the swimming whale is gone - whale prints are listed in the alert box instead
   const card = document.querySelector('.card[data-asset="' + assetName + '"]');
   if (!card) return;
   const rect = card.getBoundingClientRect();
@@ -6361,9 +6441,9 @@ window.onload = function() {
       <button onclick="playWallAlert('sell'); showWhaleCrossing('XRP','sell')">Test SELL wall</button>
       <button onclick="playWallAlert('buy'); showWhaleCrossing('XRP','buy')">Test BUY wall</button>
       <button onclick="playReversalAlarm('XRP'); speakRaw('XRP. Swinging down, against your call.')">Test voice alert</button>
-      <button onclick="playWallAlert('sell'); showIncomingBanner('BTC','sell',2500000,'LIQUIDITY SWEEP OF THE 15-MIN HIGH - REJECTED','test banner - price ran past the high and fell straight back'); speakRaw('BTC. Liquidity sweep, down.')">Test sweep alert</button>
+      <button onclick="playWallAlert('sell'); showIncomingBanner('BTC','sell',2500000,'FAKE BREAKOUT ABOVE THE 15-MIN HIGH','test banner - the price poked above the high and came right back'); speakRaw('BTC. Fake breakout, down.')">Test fake-breakout alert</button>
       <button onclick="showLockToast('BTC','SEALED 8-min: UP - SUPER',''); speakRaw('BTC. Sealed call locked. UP. super.')">Test sealed-call voice</button>
-      <div class="hint">Browsers block audio until you click something on the page first - click "enable" once per visit. Test buttons work regardless, so you can learn each one ahead of time. Whale sound = a big single trade just hit the tape (rises for a buy, drops for a sell). Voice alerts only actually speak during a real BOOM/whale/wall event - the test button here plays one on demand so you can check it works without waiting for one.</div>
+      <div class="hint">Browsers block audio until you click something on the page first - click "enable" once per visit. Test buttons work regardless, so you can learn each one ahead of time. Whale sound = a big single trade just hit the tape (rises for a buy, drops for a sell). Voice alerts only speak during a real fast move, whale or big-order event - the test button here plays one on demand so you can check it works without waiting for one.</div>
     </div>
   </details>
 </div>
@@ -7089,7 +7169,7 @@ def streak_windows_html(records, name):
         rows.append(f'<tr><td>{label}</td><td>{total}</td><td>{rec}</td><td>{pct_html}</td>'
                     f'<td>{no_call or "-"}</td><td>{("<span class=warn>" + str(offline) + "</span>") if offline else "-"}</td>'
                     f'<td>{best_w or "-"}</td><td>{best_l or "-"}</td><td>{pnl_html}</td></tr>')
-    return (f'<details class="streak-pull" data-pat="STREAK|{name}"><summary style="display:none;"></summary>'
+    return (f'<details class="streak-pull" data-pat="STREAK|{name}" open><summary style="display:none;"></summary>'
             f'<table class="press-table"><tr><th>Window</th><th title="15-minute windows that have closed in this range">Windows</th>'
             f'<th title="calls the bot made that won - lost">Won - lost</th><th>Win %</th>'
             f'<th title="windows the bot ran but did not lock a call">No call</th>'
@@ -7318,7 +7398,7 @@ def rsi_flip_risk(name, d):
     want = "sell" if hot else "buy"
     if _ENG.recent_kind(name, ("stoprun",), side=want, within=240):
         score += 15
-        reasons.append(f"liquidity sweep of the {'high' if hot else 'low'} just rejected")
+        reasons.append(f"a fake breakout {'above the high' if hot else 'below the low'} just failed")
     score = max(0.0, min(100.0, score))
     level = "LOW" if score < 25 else ("WATCH" if score < 50 else ("HIGH" if score < 75 else "EXTREME"))
     return {"score": score, "level": level, "direction": direction, "reasons": reasons, "r1": r1, "r5": r5, "net10": net, "chg10": chg}
@@ -7329,7 +7409,7 @@ def build_rsi_flip_widget(name, d):
     fr = rsi_flip_risk(name, d)
     r1, r5 = rm.get("rsi1"), rm.get("rsi5")
     if r1 is None:
-        zone, zcls = "warming up (needs ~20 min of history)", "flat"
+        zone, zcls = "warming up (needs about 20 minutes of history)", "flat"
     elif r1 >= 75:
         zone, zcls = "OVERBOUGHT - WARNING", "rsi-hot rsi-hot-over"
     elif r1 >= 70:
@@ -7348,7 +7428,7 @@ def build_rsi_flip_widget(name, d):
                if lv != "LOW" else '<span class="hint">nothing stretched</span>')
         bar = (f'<div class="fr-track"><i class="{lcls}" style="width:{max(fr["score"], 2):.0f}%"></i></div>'
                f'<div class="fr-line"><span class="{lcls}"><b>FLIP RISK {lv}</b> {fr["score"]:.0f}/100</span> {way}</div>')
-        why = ("<br>".join(fr["reasons"])) if fr["reasons"] else "RSI in the middle - no overbought / oversold stretch"
+        why = ("<br>".join(fr["reasons"])) if fr["reasons"] else "RSI is in the middle - not overbought or oversold."
         bar += f'<div class="fr-why hint">{why}</div>'
     else:
         bar = '<div class="fr-line hint">flip risk: warming up</div>'
@@ -7357,8 +7437,8 @@ def build_rsi_flip_widget(name, d):
             f'<div class="{zcls}" style="font-weight:800;font-size:14px;">{zone.upper() if r1 is not None and (r1 >= 70 or r1 <= 30) else zone}</div>'
             f'<div class="hint">1-min RSI <b>{"%.0f" % r1 if r1 is not None else "--"}</b> &middot; 5-min RSI <b>{"%.0f" % r5 if r5 is not None else "--"}</b> '
             f'<span title="gold dot on the dial">(&#9679; = 5-min)</span></div>{bar}</div></div>'
-            f'<div class="hint top-note">watch only - an extreme RSI alone did NOT predict reversals in this project&#39;s 15-min back-test '
-            f'(trends often run straight through 70 / 30). It means more when the divergence or a rejected sweep shows up with it.</div></div>')
+            f'<div class="hint top-note">Watch only: an extreme RSI alone did NOT predict reversals in this project&#39;s 15-min back-test '
+            f'(trends often run straight through 70 / 30). It means more when a divergence or a failed fake breakout shows up with it.</div></div>')
 
 
 def _stage_ref(d):
@@ -7389,10 +7469,10 @@ def build_flip_chance_widget(name, d):
     gauge = build_flip_gauge_svg(pct) if pct is not None else '<div class="hint">waiting for Kalshi&#39;s price</div>'
     if call in ("YES", "NO"):
         other = "NO" if call == "YES" else "YES"
-        cap = (f'chance the {label} <span class="{"up" if call == "YES" else "down"}">{"UP" if call == "YES" else "DOWN"} ({call})</span> '
-               f'flips to <span class="{"up" if other == "YES" else "down"}">{"UP" if other == "YES" else "DOWN"}</span> before close')
+        cap = (f'Chance the {label} (<span class="{"up" if call == "YES" else "down"}">{"UP" if call == "YES" else "DOWN"}</span>) '
+               f'flips to <span class="{"up" if other == "YES" else "down"}">{"UP" if other == "YES" else "DOWN"}</span> before the close')
     else:
-        cap = "no call locked yet - showing the chance the current Kalshi favourite flips"
+        cap = "No call is locked yet, so this shows the chance that Kalshi's current favorite flips."
     marker = ""
     if pct is not None:
         mkey = f'{name}::{d.get("ticker", "")}' + (f"::{key}" if key else "")
@@ -7420,18 +7500,18 @@ def build_alert_box(name):
             f'<span class="fa-tag {side_cls}">{arrow} {a["label"]}</span> <b class="{side_cls}">{a["title"]}</b> '
             f'<span class="fa-age hint">{_ago(a["ts"])}</span><div class="fa-detail">{a["detail"]}</div></div>')
     if not items:
-        items.append('<div class="hint fa-empty">quiet - no whale prints, sweeps, liquidation cascades or pulled walls in the last 20 min. '
-                     'Anything that shows up lands here (and makes a sound).</div>')
+        items.append('<div class="hint fa-empty">Quiet - no whales, big orders, fake breakouts or forced sales in the last 20 minutes. '
+                     'Anything that shows up will land here and play a sound.</div>')
     h = _flow.HUB.feed_health()
     lt = _ENG.liq_totals(name, 300)
     liq_txt = ""
     if lt["n"]:
-        liq_txt = (f' &middot; liquidations 5m (streamed): <span class="down">longs {_usd_short(lt["long"])}</span> / '
+        liq_txt = (f' &middot; forced sales, last 5 min: <span class="down">longs {_usd_short(lt["long"])}</span> / '
                    f'<span class="up">shorts {_usd_short(lt["short"])}</span>')
-    return (f'<div class="top-w top-alerts"><div class="top-w-title">WHALE &amp; LIQUIDITY ALERTS <span class="hint">sweeps &middot; stop-runs &middot; '
-            f'whale prints &middot; liquidations &middot; walls pulled / eaten</span></div>'
+    return (f'<div class="top-w top-alerts"><div class="top-w-title">WHALE &amp; LIQUIDITY ALERTS <span class="hint">whales &middot; big orders &middot; '
+            f'fake breakouts &middot; forced sales</span></div>'
             f'<div class="fa-list">{"".join(items)}</div>'
-            f'<div class="hint fa-foot">{h["n_live"]} exchange feeds live{liq_txt}</div></div>')
+            f'<div class="hint fa-foot">{h["n_live"]} exchange feed{"s" if h["n_live"] != 1 else ""} live{liq_txt}</div></div>')
 
 
 def _html_attr(s):
@@ -7489,13 +7569,13 @@ def build_stage_box(name, d, key):
         cls += " stage-up" if up else " stage-down"
         hold_html = ""
         if holding is not None:
-            hold_html = (f'<div class="sb-line">now <span class="{"up" if holding >= 0.5 else "down"}"><b>{holding:.0%}</b> '
-                         f'{"holding" if holding >= 0.5 else "AGAINST"}</span></div>')
+            hold_html = (f'<div class="sb-line">Kalshi now: <span class="{"up" if holding >= 0.5 else "down"}"><b>{holding:.0%}</b> - '
+                         f'{"holding" if holding >= 0.5 else "going AGAINST it"}</span></div>')
         body = (f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>'
                 f'<div class="sb-tier {_TIER_CLS.get(tier, "")}">{tier}</div>'
                 f'<div class="sb-line">{p_side:.0%} sure &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
-                f'{"" if c.get("crosses") == 1 else "es"}</div>'
-                + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs line at {mk}</div>' if diff is not None else "")
+                f'{"" if c.get("crosses") == 1 else "es"} so far</div>'
+                + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line at {mk}</div>' if diff is not None else "")
                 + hold_html
                 + (f'<div class="sb-note">{c["why"]}</div>' if c.get("why") else ""))
         tip = (f'chance of UP when it locked: {p_up:.1%} = blend of Kalshi {c.get("kalshi_yes")}, fair value {c.get("fair_yes")}, '
@@ -7504,11 +7584,11 @@ def build_stage_box(name, d, key):
         cls += " stage-skip"
         body = (f'<div class="sb-dir flat">NO CALL</div><div class="sb-tier tier-skip">SKIPPED</div>'
                 f'<div class="sb-line">{c.get("why", "")}</div>'
-                f'<div class="sb-line hint">it was leaning {"UP" if (c.get("p_yes") or 0.5) >= 0.5 else "DOWN"} '
+                f'<div class="sb-line hint">It was leaning {"UP" if (c.get("p_yes") or 0.5) >= 0.5 else "DOWN"} '
                 f'{max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)):.0%}</div>')
         tip = "skipped: 50/50, too many line crosses, not enough price action - or (sealed only) not strong enough"
     elif c.get("missed"):
-        body = (f'<div class="sb-dir flat">MISSED</div><div class="sb-line">dashboard was not running at {mk} this round</div>')
+        body = (f'<div class="sb-dir flat">MISSED</div><div class="sb-line">The dashboard wasn&#39;t running at {mk} this round.</div>')
         tip = "only locks live at its mark - never back-filled"
     else:
         el = d.get("elapsed_seconds") or 0
@@ -7519,10 +7599,10 @@ def build_stage_box(name, d, key):
         if p is not None:
             pc, pt, pw = stage_decide(p, (d.get("stage_parts") or {}).get("flow"), ls.get("crosses"), ls.get("range_pct"), key == "sealed")
             if pc:
-                prev = (f'<div class="sb-line">right now: <span class="{"up" if pc == "YES" else "down"}"><b>{"UP" if pc == "YES" else "DOWN"} '
+                prev = (f'<div class="sb-line">Right now: <span class="{"up" if pc == "YES" else "down"}"><b>{"UP" if pc == "YES" else "DOWN"} '
                         f'{pt}</b></span></div>')
             else:
-                prev = f'<div class="sb-line">right now: <span class="flat"><b>would skip</b></span> - {pw}</div>'
+                prev = f'<div class="sb-line">Right now: <span class="flat"><b>it would skip</b></span> ({pw})</div>'
         body = (f'<div class="sb-dir flat sb-count">{wait // 60}:{wait % 60:02d}</div><div class="sb-line">until it locks</div>{prev}')
         tip = "locks automatically at the mark and is graded at settlement"
     rec = stage_record(_history.get(name, []), key)
@@ -7561,9 +7641,10 @@ def stage_summary_row(name, d):
         n = ls.get("crosses", 0)
         cr = (f'<div class="row cross-row"><span class="label">Line crosses this round</span><span class="value">'
               f'<b class="{"down" if n >= CROSS_SKIP else ("warn" if n == 2 else "up")}" style="font-size:18px;">{n}</b> '
-              f'<span class="hint">(crossed UP &#9650;{ls.get("up", 0)} &middot; DOWN &#9660;{ls.get("down", 0)}) - '
-              f'{"choppy: calls get skipped" if n >= CROSS_SKIP else ("2 crosses lowers the call one confidence level" if n == 2 else "clean so far")}</span></span></div>')
-    return cr + '<div class="row stage-sum"><span class="label">Call track record</span><span class="value">' + " &nbsp;|&nbsp; ".join(bits) + '</span></div>'
+              f'<span class="hint">(&#9650; {ls.get("up", 0)} up &middot; &#9660; {ls.get("down", 0)} down) - '
+              f'{"choppy, so calls get skipped" if n >= CROSS_SKIP else ("2 crosses lower the call by one confidence level" if n == 2 else "clean so far")}'
+              f' &middot; a cross only counts 15+ seconds after the last one</span></span></div>')
+    return cr      # the per-call track record now lives in the SCOREBOARD at the top
 
 
 def _round_svg(rec, w=300, h=96, live=False):
@@ -7597,6 +7678,139 @@ def _round_label(ticker):
     o = (t - dt.timedelta(minutes=15)).astimezone(ZoneInfo("America/New_York"))
     c = t.astimezone(ZoneInfo("America/New_York"))
     return f'{o.strftime("%I:%M").lstrip("0")}-{c.strftime("%I:%M %p").lstrip("0")}'
+
+
+def _kalshi_spark(pts, w=300, h=54):
+    if not pts or len(pts) < 2:
+        return f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}"></svg>'
+    X = lambda e: max(0, min(900, e)) / 900 * w
+    Y = lambda v: h - v * h
+    line = " ".join(f"{X(e):.1f},{Y(v):.1f}" for e, v in pts)
+    last = pts[-1][1]
+    col = "#5ad1a0" if last >= 0.5 else "#ff6f86"
+    marks = "".join(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#7f8fff" stroke-dasharray="2 3" opacity="0.6"/>'
+                    for e in (240, 480))
+    return (f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" preserveAspectRatio="none">{marks}'
+            f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#93a0bf" stroke-dasharray="3 3" opacity="0.6"/>'
+            f'<polyline points="{line}" fill="none" stroke="{col}" stroke-width="2.2"/>'
+            f'<circle cx="{X(pts[-1][0]):.1f}" cy="{Y(last):.1f}" r="3.5" fill="{col}"/></svg>')
+
+
+@_never_break
+def build_kalshi_tile(name, d):
+    kp = d.get("kalshi_price")
+    if kp is None:
+        return '<div class="rs-tile rs-odds"><div class="rs-title">KALSHI ODDS &middot; LIVE</div><div class="rs-wait">waiting for Kalshi&#39;s price...</div></div>'
+    up = round(kp * 100)
+    dn = 100 - up
+    edge = abs(kp - 0.5)
+    side = "UP" if kp >= 0.5 else "DOWN"
+    if edge < 0.02:
+        lean, lcls = "50/50 - no lean", "flat"
+    elif edge < 0.10:
+        lean, lcls = f"leaning {side} (slight)", "up" if side == "UP" else "down"
+    elif edge < 0.25:
+        lean, lcls = f"leaning {side}", "up" if side == "UP" else "down"
+    else:
+        lean, lcls = f"strongly {side}", "up" if side == "UP" else "down"
+    pts = d.get("kalshi_path") or []
+    chg = ""
+    if len(pts) >= 2:
+        now_e = pts[-1][0]
+        ref = next((v for e, v in reversed(pts) if now_e - e >= 30), pts[0][1])
+        c = round((pts[-1][1] - ref) * 100)
+        if c:
+            chg = f'<span class="{"up" if c > 0 else "down"}">{"&#9650;" if c > 0 else "&#9660;"} UP {c:+d}&cent; in the last 30s</span>'
+        else:
+            chg = '<span class="flat">steady over the last 30s</span>'
+    mins, secs = divmod(max(0, int(d.get("seconds_left") or 0)), 60)
+    return (f'<div class="rs-tile rs-odds"><div class="rs-title">KALSHI ODDS &middot; LIVE <span class="rs-clock">{mins}:{secs:02d} left</span></div>'
+            f'<div class="rs-odds-nums"><span class="up">UP <b>{up}%</b></span><span class="down"><b>{dn}%</b> DOWN</span></div>'
+            f'<div class="rs-odds-bar"><i style="width:{up}%"></i><b></b></div>'
+            f'<div class="rs-lean {lcls}">{lean}</div>{_kalshi_spark(pts)}<div class="rs-sub">{chg}'
+            f'<span class="hint">This round &middot; dashed lines mark 4:00 and 8:00</span></div></div>')
+
+
+@_never_break
+def build_round_strip(name, d):
+    return (f'<div class="round-strip">{build_kalshi_tile(name, d)}{build_stage_box(name, d, "early")}'
+            f'{build_stage_box(name, d, "sealed")}</div>')
+
+
+def _streak_stats(results):
+    cur_t, cur_n = None, 0
+    for r in reversed(results):
+        if cur_t is None:
+            cur_t, cur_n = r, 1
+        elif r == cur_t:
+            cur_n += 1
+        else:
+            break
+    best_w = best_l = run = 0
+    prev = None
+    for r in results:
+        run = run + 1 if r == prev else 1
+        prev = r
+        if r:
+            best_w = max(best_w, run)
+        else:
+            best_l = max(best_l, run)
+    return cur_t, cur_n, best_w, best_l
+
+
+@_never_break
+def build_scoreboard(name, d):
+    """Win / loss record since launch for each call, the CURRENT streak of each (win or loss), the best and worst runs,
+    today's record, and the last 15 results."""
+    hist = _history.get(name, [])
+    et = ZoneInfo("America/New_York")
+    first = next((_window_close_utc(h.get("ticker")) for h in hist if _window_close_utc(h.get("ticker"))), None)
+    since = first.astimezone(et).strftime("%b %d, %Y") if first else "today"
+    now_et = dt.datetime.now(dt.timezone.utc).astimezone(et)
+    day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
+    cols = []
+    for key, label, field in (("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"),
+                              ("bot", "BOT CALL (auto-buy)", "correct")):
+        rows = [h for h in hist if h.get(field) is not None]
+        res = [bool(h[field]) for h in rows]
+        n, w = len(res), sum(res)
+        today = [bool(h[field]) for h in rows if (_window_close_utc(h.get("ticker")) or day0) > day0]
+        if key == "bot":
+            first_k = since
+        else:
+            fk = next((_window_close_utc(h.get("ticker")) for h in rows if _window_close_utc(h.get("ticker"))), None)
+            first_k = fk.astimezone(et).strftime("%b %d") if fk else "-"
+        if not n:
+            cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">No graded rounds yet. '
+                        f'The first one is graded when this round settles.</div></div>')
+            continue
+        ct, cn, bw, bl = _streak_stats(res)
+        streak = (f'<span class="sc-streak {"win" if ct else "loss"}">{cn} {("WIN" if cn == 1 else "WINS") if ct else ("LOSS" if cn == 1 else "LOSSES")} IN A ROW</span>')
+        chips = "".join(f'<i class="{"w" if r else "l"}">{"W" if r else "L"}</i>' for r in res[-15:])
+        pnl = ""
+        if key in ("early", "sealed"):
+            r_ = stage_record(hist, key)
+            pnl = f'<span class="{"up" if r_["pnl"] >= 0 else "down"}">{r_["pnl"]:+,.0f}</span> on $100/call'
+        elif d.get("bet_pnl"):
+            pnl = f'<span class="{"up" if d["bet_pnl"]["total"] >= 0 else "down"}">{d["bet_pnl"]["total"]:+,.0f}</span> on $100/call'
+        td = f'{sum(today)}-{len(today) - sum(today)}' if today else "0-0"
+        cols.append(
+            f'<div class="sc-col"><div class="sc-title">{label}</div>'
+            f'<div class="sc-main"><span class="sc-pct">{w / n:.0%}</span><span class="sc-wl"><b class="up">{w}W</b> &middot; <b class="down">{n - w}L</b>'
+            f'<br><span class="hint">{n} graded round{"s" if n != 1 else ""} since {first_k}</span></span></div>'
+            f'<div class="sc-cur">{streak}</div>'
+            f'<div class="sc-stats">Best run: <b class="up">{bw}W</b> &middot; worst run: <b class="down">{bl}L</b> &middot; today: <b>{td}</b>'
+            + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div></div>')
+    no_call = sum(1 for h in hist if h.get("correct") is None)
+    try:
+        pull = streak_windows_html(hist, name)
+    except Exception:
+        pull = ""
+    return (f'<div class="scoreboard"><div class="rs-title">SCOREBOARD &middot; since launch ({since}) &middot; '
+            f'<b>{len(hist):,}</b> round{"s" if len(hist) != 1 else ""} tracked{f' <span class="hint">(the bot made no call in {no_call:,} of them)</span>' if no_call else ''}</div>'
+            f'<div class="sc-grid">{"".join(cols)}</div>'
+            + (f'<details class="sc-more" data-pat="SCORE|{name}"><summary class="hint">Hour-by-hour and today breakdown</summary>{pull}</details>' if pull else "")
+            + '</div>')
 
 
 @_never_break
@@ -7734,9 +7948,9 @@ def build_pressure_bar(asset_name, d=None):
             rows_.append(f'<tr><td class="{sc}"><b>{"&#9650; BUY" if p["side"] == "buy" else "&#9660; SELL"}</b></td><td><b>{_usd_short(p["usd"])}</b></td>'
                          f'<td>{_coin_amt(coin, p["qty"])} {coin}</td><td>{_flow.VENUES.get(p["venue"], (p["venue"], ""))[0]}</td>'
                          f'<td>{p["n"]}</td><td>{p["bps"]:.1f}</td><td class="hint">{_ago(p["ts"])}</td></tr>')
-        tape = ('<details class="press-more" data-pat="TAPE|' + asset_name + '" open><summary class="hint">biggest market orders, last 3 min '
-                '(fills of one order added back together, aggr.trade style)</summary><table class="press-table"><tr><th>side</th><th>size</th>'
-                f'<th>{coin}</th><th>exchange</th><th>fills</th><th>bps swept</th><th></th></tr>' + "".join(rows_) + '</table></details>')
+        tape = ('<details class="press-more" data-pat="TAPE|' + asset_name + '" open><summary class="hint">biggest single orders in the last 3 minutes '
+                '(all the pieces of one order added back together)</summary><table class="press-table"><tr><th>side</th><th>size</th>'
+                f'<th>{coin}</th><th>exchange</th><th>fills</th><th>price moved (bps)</th><th></th></tr>' + "".join(rows_) + '</table></details>')
     book = ""
     if s["book_pct"] is not None:
         bpct = s["book_pct"] * 100
@@ -7868,9 +8082,9 @@ def render_html():
 
         lean_class = "up" if d["leaning"] == "YES" else ("down" if d["leaning"] == "NO" else "flat")
         if d.get("sweep_just_fired"):
-            sweep_html = '<span class="warn">*** SWEEP JUST DETECTED ***</span>'
+            sweep_html = '<span class="warn">the price just broke its recent high or low - the bot is waiting</span>'
         elif d["swept"]:
-            sweep_html = '<span class="warn">still elevated (recent sweep window)</span>'
+            sweep_html = '<span class="warn">waiting - the price broke its recent high or low a moment ago</span>'
         else:
             sweep_html = '<span>clear</span>'
 
@@ -8194,13 +8408,13 @@ def render_html():
             # you're locked NO). Green = with your call, red = against it.
             if vs_call == "against":
                 css = "boom-down"
-                text = f'*** BOOM - SWINGING {swing.upper()} ({swing_side}) - AGAINST YOUR LOCKED CALL ***'
+                text = f'FAST MOVE {swing.upper()} - going against the locked call'
             elif vs_call == "with":
                 css = "boom-up"
-                text = f'*** BOOM - SWINGING {swing.upper()} ({swing_side}) - CONFIRMING YOUR CALL ***'
+                text = f'FAST MOVE {swing.upper()} - in favor of the locked call'
             else:
                 css = "boom-up" if swing == "up" else "boom-down"
-                text = f'*** BOOM - SWINGING {swing.upper()} ({swing_side}) FOR SURE ***'
+                text = f'FAST MOVE {swing.upper()} in the last minute'
             boom_html = f'<span class="boom {css}">{text}</span>'
         if d.get("boom_just_fired"):
             boom_html += (f'<span class="boom-alert" data-boom-name="{name}" data-boom-swing="{swing}" '
@@ -8378,10 +8592,7 @@ def render_html():
         except Exception as _se:
             _streak_pull = ""
             print(f"[streak] history table failed: {_se!r}")
-        flip_meter_html = (f'<div class="row flip-combo">{flip_counts_html}'
-                           f'<div class="flip-right"><div class="flip-streak"><span class="hint">Current streak</span> '
-                           f'<span class="streak-arrow" data-name="{name}" onclick="toggleStreakPull(&#39;{name}&#39;)">&#9662;</span><br>{streak_html}</div></div></div>'
-                           f'<div class="streak-pull-wrap">{_streak_pull}</div>')
+        flip_meter_html = f'<div class="row flip-combo">{flip_counts_html}</div>'      # the streak moved to the scoreboard
         flip_counts_html = ""
         try:
             pressure_html = build_pressure_bar(name, d)
@@ -8781,6 +8992,8 @@ def render_html():
         parts.append(f'''
         <div class="card" data-asset="{name}">
           {experimental_html}
+          {build_round_strip(name, d)}
+          {build_scoreboard(name, d)}
           {build_top_strip(name, d)}
           <div class="head-row">
             <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{clock_html}{boom_html}{win_alert_html}{lock_alert_html}</div>
@@ -8793,8 +9006,6 @@ def render_html():
               <div class="lbl" style="margin-top:2px;">{', '.join(d.get("live_venues") or []) or 'connecting...'}</div>
               {(f'<div class="kalshi-mini">Kalshi <span class="up">UP {round((d["kalshi_price"]) * 100)}c</span> &middot; <span class="down">DOWN {round((1 - d["kalshi_price"]) * 100)}c</span></div>') if d.get("kalshi_price") is not None else ""}
             </div>
-            {build_stage_box(name, d, "early")}
-            {build_stage_box(name, d, "sealed")}
             <div class="callbox">
               <div class="lbl">My call</div>
               {call_html}
@@ -8820,7 +9031,7 @@ def render_html():
           {vs_btc_window_html}
           <div class="row"><span class="label">Spot momentum (1min)</span><span class="value">{f'{d["spot_ret"]:+.4%}' if d.get("spot_ret") is not None else '--'}</span></div>
           <div class="row"><span class="label">RSI (14, 1-min, {d.get("rsi_src", "Coinbase")}) - watch only, NOT used for calls (tested backwards here)</span><span class="value">{rsi_html}</span></div>
-          <div class="row"><span class="label">Sweep status</span><span class="value">{sweep_html}</span></div>
+          <div class="row"><span class="label">Recent high / low break</span><span class="value">{sweep_html}</span></div>
           {choppiness_row_html}
           {whale_row_html}
           {book_walls_row_html}
