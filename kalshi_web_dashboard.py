@@ -327,6 +327,37 @@ def round_line_stats(symbol, line, open_ts, end_ts=None):
             "range_pct": ((hi - lo) / line) if hi is not None else None, "side": side}
 
 
+# ---- sit-out rules + late call (2026-10-20, user request) ----
+SITOUT_CROSSES = 4            # 4+ line crosses at the mark = the line is being fought over -> sit this one out
+SITOUT_LATE_CROSSES = 2       # or 2+ crosses after the 5:00 mark (still flipping deep into the round)
+SITOUT_PACE = 0.5             # volume under half its normal pace ...
+SITOUT_DIST_PCT = 0.0002      # ... with price within 0.02% of the line = no real move to read
+LATE_MIN_SURE = 0.80          # a skipped round gets a LATE CALL once BRAIN is this sure ...
+LATE_MIN_DIST_PCT = 0.0004    # ... price is 0.04%+ clear of the line ...
+LATE_QUIET_S = 90             # ... no line cross in the last 90 seconds ...
+LATE_MAX_FLIP = 30            # ... the steadied flip risk of that side is 30% or less ...
+LATE_MIN_LEFT_S = 75          # ... and there is still 75+ seconds left
+
+
+def sitout_reason(name, elapsed, line_stats, spot, line):
+    """None, or the plain-words reason to sit a round out."""
+    ls = line_stats or {}
+    n = ls.get("crosses") or 0
+    late = sum(1 for e in (ls.get("events") or []) if e[0] >= 300)
+    if n >= SITOUT_CROSSES:
+        return f"line flips are active ({n} crosses)"
+    if elapsed >= 300 and late >= SITOUT_LATE_CROSSES:
+        return f"still flipping after the 5-minute mark ({late} crosses since 5:00)"
+    try:
+        vg = _flow.HUB.volume_gauge(name) if name in _flow.ASSETS else None
+        pace = (vg["total"] / vg["median"]) if (vg and vg.get("median")) else None
+    except Exception:
+        pace = None
+    if pace is not None and pace < SITOUT_PACE and spot and line and abs(spot - line) / line < SITOUT_DIST_PCT:
+        return f"volume is very low ({pace:.1f}x normal) and price hasn't made a real move"
+    return None
+
+
 STAGE_WAIT_S = 60             # a toss-up at the mark: keep watching up to 60s for it to clear 55%, then decide anyway
 STAGE_CALL_MIN = 0.55          # call right away once the blended chance of one side reaches 55%
 STAGE_FORCE_MIN = 0.52         # after the 60s wait: still call (WEAK) if the minute's average leans 52%+ one way
@@ -4197,7 +4228,12 @@ def poll_loop():
                             hist[-1][f"{_sk}_tier"] = _c.get("tier")
                             hist[-1][f"{_sk}_reversal"] = bool(_c.get("reversal"))
                             hist[-1][f"{_sk}_zone80"] = _c.get("zone80")
+                            hist[-1][f"{_sk}_sitout"] = bool(_c.get("sitout"))
                             hist[-1][f"{_sk}_payout"] = _c.get("rev_payout")
+                        _lt = _sc_prev.get("late") or {}
+                        if _lt.get("call"):
+                            hist[-1]["decided_call"] = _lt["call"]
+                            hist[-1]["decided_correct"] = _lt["call"] == actual_side
                         del hist[:-HISTORY_CAP]
                         _save_history()
                     # new window starts UNLOCKED - no call has formed yet
@@ -4450,6 +4486,16 @@ def poll_loop():
                         _call, _tier, _why = _rev["call"], _rev["tier"], _rev["why"]
                     elif _rev:
                         _rev = None
+                    _sitout = None
+                    if _call:
+                        try:
+                            _sitout = sitout_reason(asset["name"], elapsed_seconds, line_stats, live_price, target)
+                        except Exception as _se:
+                            print(f"[sit-out] {_se!r}")
+                    _lean = _call
+                    if _sitout:
+                        _why = f"leaning {'UP' if _call == 'YES' else 'DOWN'}, but {_sitout} - sit this one out"
+                        _call, _tier, _rev = None, None, None
                     _z80 = _z80roi = None
                     try:
                         _rule = (_bt.decisions().get("rule80") or {}).get(_sk)
@@ -4462,7 +4508,7 @@ def poll_loop():
                     except Exception as _ze:
                         print(f"[80% rule] {_ze!r}")
                     stage_calls[_sk] = {
-                        "zone80": _z80, "zone80_roi": _z80roi,
+                        "zone80": _z80, "zone80_roi": _z80roi, "sitout": bool(_sitout), "lean": _lean,
                         "reversal": bool(_rev), "rev_payout": _rev["payout"] if _rev else None,
                         "rev_score": _rev["score"] if _rev else None,
                         "call": _call, "tier": _tier, "skipped": _call is None, "why": _why,
@@ -4479,6 +4525,31 @@ def poll_loop():
                     print(f"[{asset['name']}] {_lab} ({_mk}): {(_call + ' ' + _tier) if _call else 'SKIPPED'} at {int(elapsed_seconds) // 60}:"
                           f"{int(elapsed_seconds) % 60:02d} - {stage_p_yes:.1%} UP, {_crosses} crosses {('- ' + _why) if _why else ''} {ticker}")
                     _save_locked_state()
+                # LATE CALL: the sealed call sat the round out, then price clearly decided -> call it once, out loud
+                try:
+                    _sc = stage_calls.get("sealed") or {}
+                    if (_sc.get("skipped") and "late" not in stage_calls and stage_p_yes is not None and live_price and target
+                            and elapsed_seconds > 480 and seconds_left >= LATE_MIN_LEFT_S):
+                        _side = 1 if live_price > target else -1
+                        _ps2 = stage_p_yes if _side > 0 else 1 - stage_p_yes
+                        _cs2, _ag2, _op2 = signal_consensus(stage_sig)
+                        _evs = (line_stats or {}).get("events") or []
+                        _quiet = not _evs or (elapsed_seconds - _evs[-1][0]) >= LATE_QUIET_S
+                        _fr2 = flip_risk_sustained(asset["name"], _side, live_price, target, seconds_left, elapsed_seconds,
+                                                   (line_stats or {}).get("crosses") or 0, _evs, ticker)
+                        if (_ps2 >= LATE_MIN_SURE and _cs2 == _side and _ag2 >= 3 and _op2 == 0 and _quiet
+                                and abs(live_price - target) / target >= LATE_MIN_DIST_PCT and _fr2 and _fr2["score"] <= LATE_MAX_FLIP):
+                            _lc = "YES" if _side > 0 else "NO"
+                            stage_calls["late"] = {"call": _lc, "tier": "SUPER" if _ps2 >= 0.9 else "GOOD", "p_yes": round(stage_p_yes, 4),
+                                                   "spot": round(live_price, price_decimals), "line": target, "elapsed": int(elapsed_seconds),
+                                                   "seconds_left": int(seconds_left), "ts": time.time(),
+                                                   "kp": ((kalshi_price if _lc == "YES" else 1 - kalshi_price) if kalshi_price is not None else None)}
+                            stage_just = "late"
+                            print(f"[{asset['name']}] LATE CALL - price has decided: {_lc} at {int(elapsed_seconds) // 60}:"
+                                  f"{int(elapsed_seconds) % 60:02d} ({_ps2:.0%} sure) {ticker}")
+                            _save_locked_state()
+                except Exception as _le:
+                    print(f"[late call] {_le!r}")
                 _log_intrawindow_price({
                     "yes_bid": fresh_quote[0] if fresh_quote is not None else active.get("yes_bid_dollars"),
                     "yes_ask": fresh_quote[1] if fresh_quote is not None else active.get("yes_ask_dollars"),
@@ -5362,6 +5433,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .sb-z80 { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#7be0b0; }
 .sb-line.k-agree, .sb-line.k-agree * { color:#ffffff !important; font-weight:800; }
 .sb-line.k-disagree, .sb-line.k-disagree * { color:#000000 !important; font-weight:800; }
+.sb-late { display:inline-block; margin:2px 0 4px; padding:2px 9px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#e5b85c; }
 .twap-lock { margin-top:4px; padding:4px 6px; border:1px dashed #4a3c43; border-radius:8px; }
 .twap-avg { font-weight:800; font-size:18px; line-height:1.2; }
 .twap-need { font-size:12px; line-height:1.3; }
@@ -6583,9 +6655,28 @@ function checkStageAlerts() {
     try { sessionStorage.setItem('alertedStages', JSON.stringify(Array.from(alertedStages).slice(-40))); } catch (e) {}
     const tier = el.getAttribute('data-tier') || '', why = el.getAttribute('data-why') || '';
     const what = stage === 'sealed' ? 'SEALED 8-min' : 'EARLY 4-min';
+    const coinName = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
     if (!call) {
-      showLockToast(name, what + ' call SKIPPED', why);
-      if (soundEnabled && assetSoundEnabled[name] !== false) speakDelayed(name + '. ' + (stage === 'sealed' ? 'Sealed' : 'Early') + ' call skipped. ' + why + '.', 300);
+      const lean = el.getAttribute('data-lean');
+      const sit = el.getAttribute('data-sitout') === '1';
+      const why2 = (why.split(', but ')[1] || why).replace(' - sit this one out', '');
+      showLockToast(name, what + (sit ? ' - SIT THIS ONE OUT' : ' call SKIPPED'), why);
+      if (soundEnabled && assetSoundEnabled[name] !== false) {
+        playCallChime('early');
+        const label = stage === 'sealed' ? 'Call' : 'Early call';
+        speakUrgent(sit && lean
+          ? coinName + '. ' + label + ': leaning ' + (lean === 'YES' ? 'up' : 'down') + ', but ' + why2 + '. Sit this one out.'
+          : coinName + '. ' + label + ' skipped. ' + why + '.', 650);
+      }
+      return;
+    }
+    if (stage === 'late') {
+      const dirL = call === 'YES' ? 'up' : 'down';
+      showLockToast(name, 'LATE CALL - price has decided: ' + dirL.toUpperCase(), '');
+      if (soundEnabled && assetSoundEnabled[name] !== false) {
+        playCallChime('sealed');
+        speakUrgent(coinName + '. Late call. Price has decided: ' + dirL + '.', 650);
+      }
       return;
     }
     const dir = call === 'YES' ? 'UP' : 'DOWN';
@@ -7293,6 +7384,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="speakRaw('Voice check. Whale buy: 2.4 million dollars.')">Test voice</button>
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin. Early call: up. Good confidence, 68 percent sure.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('Bitcoin. Call locked: down. Super confidence, 84 percent sure.'),650)">Test call locked</button>
+      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('X R P. Call: leaning down, but line flips are active. Sit this one out.'),650)">Test sit out</button>
+      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('Bitcoin. Late call. Price has decided: up.'),650)">Test late call</button>
       <button onclick="playWallAlert('sell'); showWhaleCrossing('XRP','sell')">Test SELL wall</button>
       <button onclick="playWallAlert('buy'); showWhaleCrossing('XRP','buy')">Test BUY wall</button>
       <button onclick="playReversalAlarm('XRP'); speakRaw('XRP. Swinging down, against your call.')">Test voice alert</button>
@@ -8481,13 +8574,40 @@ def build_stage_box(name, d, key):
                 + hold_html + _sig_html(c.get("signals"))
                 + (f'<!--OWNER--><div class="sb-note">{c["why"]}</div><!--/OWNER-->' if c.get("why") else ""))
         tip = "locked call - graded when the round settles"
+    elif c.get("skipped") and key == "sealed" and ((d.get("stage_calls") or {}).get("late") or {}).get("call"):
+        lt = d["stage_calls"]["late"]
+        up = lt["call"] == "YES"
+        cls += " stage-up" if up else " stage-down"
+        el_ = lt.get("elapsed", 0)
+        live_kp = d.get("kalshi_price")
+        holding = (live_kp if up else 1 - live_kp) if live_kp is not None else None
+        hold_html = ""
+        if holding is not None:
+            agree = holding >= 0.5
+            hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}">Kalshi now: <span><b>{holding:.0%}</b> - '
+                         f'{"holding" if agree else "going AGAINST it"}</span></div>')
+        p_side = (lt.get("p_yes") or 0.5) if up else 1 - (lt.get("p_yes") or 0.5)
+        body = (f'<div class="sb-late">&#9201; LATE CALL &middot; PRICE HAS DECIDED</div>'
+                f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>'
+                f'<div class="sb-tier {_TIER_CLS.get(lt.get("tier") or "GOOD", "")}">{lt.get("tier") or "GOOD"}</div>'
+                f'<div class="sb-line">{p_side:.0%} sure &middot; called at {el_ // 60}:{el_ % 60:02d}</div>{hold_html}'
+                f'<div class="sb-line hint">Sat out at 8:00 - {_html_attr(c.get("why") or "")}</div>')
+        tip = "the sealed call sat this round out, then price clearly decided"
     elif c.get("skipped"):
         cls += " stage-skip"
-        body = (f'<div class="sb-dir flat">NO CALL</div><div class="sb-tier tier-skip">SKIPPED</div>'
-                f'<div class="sb-line">{c.get("why", "")}</div>'
-                f'<div class="sb-line hint">It was leaning {"UP" if (c.get("p_yes") or 0.5) >= 0.5 else "DOWN"} '
-                f'{max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)):.0%}</div>')
-        tip = "skipped only when the round stayed a coin flip for a full minute after the mark"
+        lean = c.get("lean")
+        if c.get("sitout") and lean:
+            body = (f'<div class="sb-dir flat">SIT THIS ONE OUT</div><div class="sb-tier tier-skip">NO CALL</div>'
+                    f'<div class="sb-line">Leaning <b class="{"up" if lean == "YES" else "down"}">{"UP" if lean == "YES" else "DOWN"}</b> '
+                    f'{max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)):.0%}</div>'
+                    f'<div class="sb-line hint">{_html_attr(c.get("why") or "")}</div>'
+                    + ('<div class="sb-line hint">Watching for price to decide - a late call can still come.</div>' if key == "sealed" else ""))
+        else:
+            body = (f'<div class="sb-dir flat">NO CALL</div><div class="sb-tier tier-skip">SKIPPED</div>'
+                    f'<div class="sb-line">{c.get("why", "")}</div>'
+                    f'<div class="sb-line hint">It was leaning {"UP" if (c.get("p_yes") or 0.5) >= 0.5 else "DOWN"} '
+                    f'{max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)):.0%}</div>')
+        tip = "sits out a choppy or dead round instead of guessing"
     elif c.get("missed"):
         body = (f'<div class="sb-dir flat">MISSED</div><div class="sb-line">The dashboard wasn&#39;t running at {mk} this round.</div>')
         tip = "only locks live at its mark - never back-filled"
@@ -8524,9 +8644,15 @@ def build_stage_box(name, d, key):
     alert = ""
     if (c.get("call") or c.get("skipped")) and (d.get("stage_just") == key or time.time() - (c.get("ts") or 0) < 25):
         alert = (f'<span class="stage-alert" data-name="{name}" data-stage="{key}" data-call="{c.get("call") or ""}" '
-                 f'data-tier="{c.get("tier") or ""}" data-why="{_html_attr(c.get("why") or "") if not c.get("call") else ""}" data-rev="{1 if c.get("reversal") else 0}" '
+                 f'data-tier="{c.get("tier") or ""}" data-why="{_html_attr(c.get("why") or "") if not c.get("call") else ""}" data-rev="{1 if c.get("reversal") else 0}" data-lean="{c.get("lean") or ""}" data-sitout="{1 if c.get("sitout") else 0}" '
                  f'data-sure="{round(max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)) * 100)}" '
                  f'data-key="{name}::{d.get("ticker", "")}::{key}" style="display:none;"></span>')
+    lt_ = (d.get("stage_calls") or {}).get("late") or {}
+    if key == "sealed" and lt_.get("call") and (d.get("stage_just") == "late" or time.time() - (lt_.get("ts") or 0) < 25):
+        alert += (f'<span class="stage-alert" data-name="{name}" data-stage="late" data-call="{lt_["call"]}" data-tier="{lt_.get("tier") or ""}" '
+                  f'data-why="" data-rev="0" data-lean="" data-sitout="0" '
+                  f'data-sure="{round(max(lt_.get("p_yes") or 0.5, 1 - (lt_.get("p_yes") or 0.5)) * 100)}" '
+                  f'data-key="{name}::{d.get("ticker", "")}::late" style="display:none;"></span>')
     return (f'<div class="{cls}" title="{_html_attr(tip)}"><div class="sb-title">{title}</div>{body}{rec_html}{alert}</div>')
 
 
@@ -9311,6 +9437,12 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
                       f'<td>{sum(agg[k])}</td></tr>' for k in keys)
         return (f'<details class="wr-more"><summary>{title}</summary><table class="press-table"><tr><th>{title.split()[0]}</th>'
                 f'<th>W-L</th><th>win %</th><th>rounds</th></tr>{trs}</table></details>')
+    if call == "sealed":
+        dl = [bool(h["decided_correct"]) for h in _history.get(name, []) if h.get("decided_correct") is not None
+              and (since is None or ((_window_close_utc(h.get("ticker")) or now_et) > since))]
+        if dl:
+            grid += (f'<div class="wr-rev">&#9201; Late calls (price has decided): <b class="skw">{sum(dl)}W</b> - '
+                     f'<b class="skl">{len(dl) - sum(dl)}L</b> ({sum(dl) / len(dl):.0%}) &middot; not part of the streak</div>')
     z8 = [r for r in sel if r.get("z80")]
     if z8:
         zw = sum(r["ok"] for r in z8)
