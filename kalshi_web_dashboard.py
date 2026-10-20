@@ -6554,6 +6554,25 @@ function checkLockAlerts() {
 // ---- 2026-10-20: the 4:00 EARLY call and the 8:00 SEALED call - pop-up + voice the moment each one locks
 const alertedStages = new Set();
 try { JSON.parse(sessionStorage.getItem('alertedStages') || '[]').forEach(k => alertedStages.add(k)); } catch (e) {}
+// early call = soft two-note chime; call locked (sealed) = a firmer three-note chime
+function playCallChime(stage) {
+  try {
+    const ctx = ensureAudioCtx();
+    const now = ctx.currentTime;
+    const notes = stage === 'sealed' ? [523, 659, 784] : [659, 784];
+    notes.forEach((f, i) => {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'sine';
+      const t0 = now + i * 0.12;
+      o.frequency.setValueAtTime(f, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(vol(0.35), t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.45);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0); o.stop(t0 + 0.5);
+    });
+  } catch (e) {}
+}
 function checkStageAlerts() {
   document.querySelectorAll('.stage-alert').forEach(el => {
     const name = el.getAttribute('data-name'), stage = el.getAttribute('data-stage'), call = el.getAttribute('data-call');
@@ -6569,10 +6588,17 @@ function checkStageAlerts() {
       return;
     }
     const dir = call === 'YES' ? 'UP' : 'DOWN';
-    showLockToast(name, what + ': ' + dir + ' - ' + tier, '');
+    const rev = el.getAttribute('data-rev') === '1', sure = el.getAttribute('data-sure');
+    showLockToast(name, what + ': ' + dir + ' - ' + tier + (rev ? ' - REVERSAL' : ''), '');
     if (soundEnabled && assetSoundEnabled[name] !== false) {
-      if (stage === 'sealed') { playWallAlert(call === 'YES' ? 'buy' : 'sell'); }
-      speakDelayed(name + '. ' + (stage === 'sealed' ? 'Sealed call locked. ' : 'Early call. ') + dir + '. ' + tier.toLowerCase() + '.', 300);
+      // 2026-10-20: both calls are read out loud, in full
+      playCallChime(stage);
+      const coin = name === 'BTC' ? 'Bitcoin' : (name === 'XRP' ? 'X R P' : name);
+      const conf = { SUPER: 'super confident', GOOD: 'good confidence', WEAK: 'weak confidence' }[tier] || tier.toLowerCase();
+      const line = stage === 'sealed'
+        ? coin + '. Call locked. ' + dir + '. ' + conf + (sure ? ', ' + sure + ' percent sure' : '') + '.' + (rev ? ' This is a reversal call.' : '')
+        : coin + '. Early call. ' + dir + '. ' + conf + (sure ? ', ' + sure + ' percent' : '') + '.' + (rev ? ' Reversal.' : '');
+      speakUrgent(line, 650);
     }
   });
 }
@@ -7262,6 +7288,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playWhaleSound('sell'); showWhaleCrossing('BTC','sell')">Test whale SELL</button>
       <button onclick="playFlipSound(); speakDelayed('BTC. Flip radar critical, 74 percent.', 900)">Test flip alert</button>
       <button onclick="speakRaw('Voice check. Whale buy. 2.4 million dollars.')">Test voice</button>
+      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin. Early call. UP. good confidence, 68 percent.'),650)">Test early call</button>
+      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('Bitcoin. Call locked. DOWN. super confident, 84 percent sure.'),650)">Test call locked</button>
       <button onclick="playWallAlert('sell'); showWhaleCrossing('XRP','sell')">Test SELL wall</button>
       <button onclick="playWallAlert('buy'); showWhaleCrossing('XRP','buy')">Test BUY wall</button>
       <button onclick="playReversalAlarm('XRP'); speakRaw('XRP. Swinging down, against your call.')">Test voice alert</button>
@@ -8494,7 +8522,8 @@ def build_stage_box(name, d, key):
     alert = ""
     if (c.get("call") or c.get("skipped")) and (d.get("stage_just") == key or time.time() - (c.get("ts") or 0) < 25):
         alert = (f'<span class="stage-alert" data-name="{name}" data-stage="{key}" data-call="{c.get("call") or ""}" '
-                 f'data-tier="{c.get("tier") or ""}" data-why="{_html_attr(c.get("why") or "")}" '
+                 f'data-tier="{c.get("tier") or ""}" data-why="{_html_attr(c.get("why") or "")}" data-rev="{1 if c.get("reversal") else 0}" '
+                 f'data-sure="{round(max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)) * 100)}" '
                  f'data-key="{name}::{d.get("ticker", "")}::{key}" style="display:none;"></span>')
     return (f'<div class="{cls}" title="{_html_attr(tip)}"><div class="sb-title">{title}</div>{body}{rec_html}{alert}</div>')
 
