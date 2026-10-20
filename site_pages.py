@@ -387,48 +387,36 @@ def admin_page(user, db, email_on, flash="", reset_links=None):
 # ------------------------------------------------------------------------------------------------ how to use
 GUIDE = [
     ("The basics", [
-        ("What BRAIN does", "Every 15 minutes there's a new BTC (and XRP) up-or-down round. BRAIN watches price across the big exchanges every "
-         "second and makes two calls each round: will it finish ABOVE the round's line (UP) or BELOW it (DOWN)?"),
-        ("The line", "The target price for this round. Rounds settle on the average price of the final 60 seconds, from the "
-         "CF Benchmarks index (Coinbase, Kraken, Bitstamp, Gemini). BRAIN's live price uses those same exchanges."),
-        ("Time until call", "Countdown to the next call. EARLY locks at 4:00 into the round, SEALED at 8:00."),
+        ("What BRAIN does", "Every 15 minutes there's a new round: will the price finish above or below the round's line? "
+         "BRAIN gives you its read on each round."),
+        ("The line", "The target price for the round. Above it at the end = UP. Below it = DOWN."),
+        ("Time until call", "A countdown to BRAIN's next call."),
     ]),
     ("The calls", [
-        ("EARLY call (4:00)", "First read of the round. More time left = more can change."),
-        ("SEALED call (8:00)", "The main call. Locked and never changed. This is the one the streak counts."),
-        ("SUPER / GOOD / WEAK", "Confidence. SUPER = the reads strongly agree, GOOD = solid, WEAK = leaning but close. "
-         "Only skipped when it's a true coin flip for a full minute."),
-        ("↺ REVERSAL", "BRAIN is calling the side that's LOSING right now - because flip risk is high and RSI + momentum point "
-         "the other way. Shows the payout (e.g. ~4.5x). Riskier, pays more. Turned off automatically if the backtest "
-         "shows reversals lose money."),
-        ("★ 80% SETUP", "This exact kind of setup won 80%+ in the backtest on rounds it had never seen. Shows its money result too - "
-         "an 80% winner bought at 85¢ can still lose money."),
+        ("Early call", "BRAIN's first read, partway into the round. Things can still change."),
+        ("Sealed call", "BRAIN's main call. Once it's sealed it never changes. This is the one the streak counts."),
+        ("SUPER / GOOD / WEAK", "How confident the call is. SUPER is the strongest, WEAK is the least sure."),
+        ("↺ Reversal", "A bolder call on the side that's behind right now. Bigger payout, more risk."),
+        ("★ Setup", "This call matches a setup that has done well before."),
     ]),
     ("The tiles", [
-        ("FLIP RADAR", "Chance the call on screen flips before the close: LOW 0-20%, WATCH 21-45%, HIGH 46-70%, CRITICAL 71%+. "
-         "Built from live selling/buying pressure, how close price is to the line, line crosses, order-book walls and the "
-         "final-minute average. Pressure has to hold 10 seconds before it can jump above 20%."),
-        ("RSI (14)", "Overbought (70+) or oversold (30-) - stretched moves often snap back."),
-        ("LINE CROSSES", "How many times price crossed the line this round. 0-1 = clean, 2 = some chop, 3+ = choppy."),
-        ("STREAK", "Sealed-call wins or losses in a row. Gold = wins, lavender = losses."),
-        ("Win-rate badge (top right)", "Current streak + win %. Tap it for every round: today, this week, all-time, by day and by week."),
-        ("BUY PRESSURE", "Coins bought vs sold right now across every exchange (each trade counted once)."),
-        ("Projected settlement", "In the last minute: the running 60-second average the round settles on, and what the remaining "
-         "seconds must average to flip it. LOCKED = basically out of reach."),
+        ("Flip Radar", "How likely the call is to flip before the round ends. LOW is calm, CRITICAL means it's in trouble."),
+        ("RSI", "Shows if price has run up or dropped a lot very fast. Big moves like that often cool off."),
+        ("Line crosses", "How many times price has crossed the line this round. More crosses = a choppier, harder round."),
+        ("Streak", "Sealed-call wins or losses in a row."),
+        ("Win-rate badge", "Your win rate and streak. Tap it to see every past round."),
+        ("Buy pressure", "Whether buyers or sellers are more active right now."),
+        ("Kalshi row", "White = the market agrees with the call. Black = the market disagrees."),
     ]),
     ("Alerts", [
-        ("WHALE", "One giant market order."),
-        ("⟳ WALL MOVED", "A big resting order was pulled and re-placed at a new price. Sell wall moving DOWN = a seller chasing price "
-         "lower (bearish). Buy wall moving UP = a buyer chasing it higher (bullish)."),
-        ("× PULLED / SPOOF", "A big order right next to price vanished without being re-placed - liquidity pulled, often a fake wall."),
-        ("FILLED", "A big wall got eaten - that floor or ceiling is gone."),
-        ("FAKE BREAKOUT", "Price poked past the recent high/low and snapped right back."),
-        ("FORCED SALE", "Liquidations on futures exchanges - extra pressure in that direction."),
+        ("Whale", "Someone just made a very large trade."),
+        ("Wall moved / pulled", "A large waiting order was moved or removed. Big orders moving around can push price."),
+        ("Fake breakout", "Price jumped past a recent high or low and quickly came back."),
     ]),
     ("Good habits", [
-        ("Use the tiers", "SUPER and GOOD are the strong calls. Treat WEAK and REVERSAL as smaller-size ideas."),
-        ("Watch the radar late", "A HIGH or CRITICAL radar after 8:00 is your warning the sealed call is in trouble."),
-        ("Nothing is certain", "Any 15-minute round can flip on one big order. BRAIN is for information and education only - not financial advice."),
+        ("Start small", "Learn how the calls behave before you put real money behind them."),
+        ("Trust the strong calls more", "SUPER and GOOD calls are BRAIN's most confident. Be careful with WEAK and Reversal."),
+        ("Nothing is certain", "Any round can flip at the last second. BRAIN is for information and education only - not financial advice."),
     ]),
 ]
 
