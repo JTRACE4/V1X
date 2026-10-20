@@ -328,10 +328,71 @@ STAGE_CALL_MIN = 0.55          # call right away once the blended chance of one 
 STAGE_FORCE_MIN = 0.52         # after the 60s wait: still call (WEAK) if the minute's average leans 52%+ one way
 
 
-SIGNAL_NAMES = (("kalshi", "Kalshi"), ("line", "price vs line"), ("candles", "candles"), ("flow", "buys vs sells"))
+SIGNAL_NAMES = (("kalshi", "Kalshi"), ("line", "price vs line"), ("candles", "candles"), ("flow", "buys vs sells"), ("trend", "trend"))
 
 
-def stage_signals(kalshi_yes, spot, line, closes, flow_2m, flow_round):
+def _ema(vals, n):
+    k = 2 / (n + 1)
+    e = vals[0]
+    for v in vals[1:]:
+        e = v * k + e * (1 - k)
+    return e
+
+
+def trend_read(cs):
+    """The TREND group (added 2026-10-20 from the indicator list the user shared): three classic trend tools on 1-minute
+    candles, grouped into ONE vote so correlated indicators are not counted three times -
+      EMA 12 / 25 / 50 stacked in order (12 > 25 > 50 = up),
+      SuperTrend (7, 2x ATR) direction,
+      DMI / ADX (14): +DI vs -DI, only when ADX is 20+ (a real trend, not chop).
+    +1 / -1 when at least 2 of the 3 agree, else 0. Returns (vote, details)."""
+    if not cs or len(cs) < 55:
+        return 0, {}
+    cl = [c[4] for c in cs]
+    e12, e25, e50 = _ema(cl[-120:], 12), _ema(cl[-120:], 25), _ema(cl[-120:], 50)
+    ema_v = 1 if e12 > e25 > e50 else (-1 if e12 < e25 < e50 else 0)
+    # SuperTrend
+    n, mult = 7, 2.0
+    trs = [max(cs[i][2] - cs[i][3], abs(cs[i][2] - cs[i - 1][4]), abs(cs[i][3] - cs[i - 1][4])) for i in range(1, len(cs))]
+    atr = sum(trs[:n]) / n
+    up_band = dn_band = None
+    st_dir = 1
+    for i in range(n, len(cs)):
+        atr = (atr * (n - 1) + trs[i - 1]) / n
+        mid = (cs[i][2] + cs[i][3]) / 2
+        ub, lb = mid + mult * atr, mid - mult * atr
+        if up_band is not None:
+            ub = ub if (ub < up_band or cs[i - 1][4] > up_band) else up_band
+            lb = lb if (lb > dn_band or cs[i - 1][4] < dn_band) else dn_band
+        if up_band is not None:
+            if st_dir == 1 and cs[i][4] < lb:
+                st_dir = -1
+            elif st_dir == -1 and cs[i][4] > ub:
+                st_dir = 1
+        up_band, dn_band = ub, lb
+    # DMI / ADX (Wilder, 14)
+    m = 14
+    pdm, ndm, tr2 = [], [], []
+    for i in range(1, len(cs)):
+        upm, dnm = cs[i][2] - cs[i - 1][2], cs[i - 1][3] - cs[i][3]
+        pdm.append(upm if upm > dnm and upm > 0 else 0.0)
+        ndm.append(dnm if dnm > upm and dnm > 0 else 0.0)
+        tr2.append(trs[i - 1])
+    sp, sn, st_ = sum(pdm[:m]), sum(ndm[:m]), sum(tr2[:m])
+    dxs = []
+    pdi = ndi = 0.0
+    for i in range(m, len(tr2)):
+        sp, sn, st_ = sp - sp / m + pdm[i], sn - sn / m + ndm[i], st_ - st_ / m + tr2[i]
+        pdi, ndi = (100 * sp / st_ if st_ else 0.0), (100 * sn / st_ if st_ else 0.0)
+        dxs.append(100 * abs(pdi - ndi) / (pdi + ndi) if (pdi + ndi) else 0.0)
+    adx = sum(dxs[-m:]) / min(m, len(dxs)) if dxs else 0.0
+    dmi_v = (1 if pdi > ndi else -1) if adx >= 20 else 0
+    tot = ema_v + st_dir + dmi_v
+    vote = 1 if tot >= 2 else (-1 if tot <= -2 else 0)
+    return vote, {"ema": ema_v, "supertrend": st_dir, "dmi": dmi_v, "adx": round(adx, 1), "pdi": round(pdi, 1), "ndi": round(ndi, 1)}
+
+
+def stage_signals(kalshi_yes, spot, line, closes, flow_2m, flow_round, trend=0):
     """Four independent reads, each +1 (UP), -1 (DOWN) or 0 (no lean). User request 2026-10-20: "if the candles align and the
     market is leaning a way and the buys to sales indicate a direction, even on a 50/50 give a call if the data all leans
     one way."
@@ -354,6 +415,7 @@ def stage_signals(kalshi_yes, spot, line, closes, flow_2m, flow_round):
     f2 = 1 if (flow_2m is not None and flow_2m >= 0.53) else (-1 if (flow_2m is not None and flow_2m <= 0.47) else 0)
     fr = 1 if (flow_round is not None and flow_round >= 0.52) else (-1 if (flow_round is not None and flow_round <= 0.48) else 0)
     sig["flow"] = f2 if f2 else fr
+    sig["trend"] = trend
     return sig
 
 
@@ -379,10 +441,10 @@ def stage_decide(p_yes, flow_up, crosses, range_pct=None, sealed=False, signals=
     ps = max(p_yes, 1 - p_yes)
     notes = []
     cs, agree, oppose = signal_consensus(signals or {})
-    if ps < STAGE_CALL_MIN and cs and agree >= 3 and oppose == 0:
+    if ps < STAGE_CALL_MIN and cs and agree >= 3 and oppose == 0:     # 3+ of the 5 reads, none against
         # near 50/50 on price, but the reads line up: call it - WEAK, because the market itself is not sure yet
         side = "YES" if cs > 0 else "NO"
-        notes.append(f"near 50/50, but {agree} of 4 reads lean {'UP' if cs > 0 else 'DOWN'}")
+        notes.append(f"near 50/50, but {agree} of {len(signals)} reads lean {'UP' if cs > 0 else 'DOWN'}")
         return side, "WEAK", " + ".join(notes)
     idx = 0 if ps >= 0.80 else (1 if ps >= 0.65 else 2)
     my = 1 if side == "YES" else -1
@@ -391,10 +453,10 @@ def stage_decide(p_yes, flow_up, crosses, range_pct=None, sealed=False, signals=
         against = sum(1 for v in signals.values() if v == -my)
         if against >= 2 and idx < 2:
             idx += 1
-            notes.append(f"{against} of 4 reads point the other way")
-        elif with_ == 4 and idx > 0 and ps >= (0.75 if idx == 1 else 0.60):
+            notes.append(f"{against} of {len(signals)} reads point the other way")
+        elif with_ >= len(signals) - 1 and against == 0 and idx > 0 and ps >= (0.75 if idx == 1 else 0.60):
             idx -= 1
-            notes.append("all 4 reads agree")
+            notes.append(f"{with_} of {len(signals)} reads agree")
     if crosses is not None and crosses >= 3 and idx < 2:
         idx += 1
         notes.append(f"{crosses} line crosses")
@@ -4135,7 +4197,12 @@ def poll_loop():
                     _f2 = _flow.HUB.window_detail(asset["name"], 120)["pct"] if asset["name"] in _flow.ASSETS else None
                 except Exception:
                     _f2 = None
-                stage_sig = stage_signals(kalshi_price, live_price, target, spot_closes, _f2, _tn["ex_up"] if _tn else None)
+                try:
+                    _cs1 = _mtf.books[asset["symbol"]].series(60, 120) if (_mtf is not None and asset["symbol"] in _mtf.books) else None
+                    _trend_v, _trend_d = trend_read(_cs1)
+                except Exception:
+                    _trend_v, _trend_d = 0, {}
+                stage_sig = stage_signals(kalshi_price, live_price, target, spot_closes, _f2, _tn["ex_up"] if _tn else None, _trend_v)
                 _stage_wait = locked.setdefault("stage_wait", {})
                 for _sk, _mark, _lab, _mk in STAGE_CALLS:
                     if _sk in stage_calls or elapsed_seconds < _mark:
@@ -7761,7 +7828,7 @@ def _sig_html(sig):
         v = sig.get(k, 0)
         bits.append(f'<span class="{"up" if v > 0 else ("down" if v < 0 else "flat")}">{lab} {"&#9650;" if v > 0 else ("&#9660;" if v < 0 else "&#8211;")}</span>')
     cs, agree, oppose = signal_consensus(sig)
-    tail = (f' &middot; <b>{agree} of 4 {"UP" if cs > 0 else "DOWN"}</b>' if cs else " &middot; <b>mixed</b>")
+    tail = (f' &middot; <b>{agree} of {len(sig)} {"UP" if cs > 0 else "DOWN"}</b>' if cs else " &middot; <b>mixed</b>")
     return f'<div class="sb-sig">{" ".join(bits)}{tail}</div>'
 
 
