@@ -328,7 +328,47 @@ STAGE_CALL_MIN = 0.55          # call right away once the blended chance of one 
 STAGE_FORCE_MIN = 0.52         # after the 60s wait: still call (WEAK) if the minute's average leans 52%+ one way
 
 
-def stage_decide(p_yes, flow_up, crosses, range_pct=None, sealed=False):
+SIGNAL_NAMES = (("kalshi", "Kalshi"), ("line", "price vs line"), ("candles", "candles"), ("flow", "buys vs sells"))
+
+
+def stage_signals(kalshi_yes, spot, line, closes, flow_2m, flow_round):
+    """Four independent reads, each +1 (UP), -1 (DOWN) or 0 (no lean). User request 2026-10-20: "if the candles align and the
+    market is leaning a way and the buys to sales indicate a direction, even on a 50/50 give a call if the data all leans
+    one way."
+      kalshi  - Kalshi's own price leans 51%+ one way
+      line    - the live price is clearly above / below the line (0.003%+)
+      candles - the last ~3 one-minute candles moved 0.02%+ one way (live price vs the close 3 candles ago)
+      flow    - buyers vs sellers (aggressors, every exchange): last 2 minutes 53%+ one way, or this round 52%+ one way"""
+    sig = {}
+    sig["kalshi"] = 0 if kalshi_yes is None else (1 if kalshi_yes >= 0.51 else (-1 if kalshi_yes <= 0.49 else 0))
+    if spot and line:
+        d_ = (spot - line) / line
+        sig["line"] = 1 if d_ > CROSS_BAND_PCT else (-1 if d_ < -CROSS_BAND_PCT else 0)
+    else:
+        sig["line"] = 0
+    if spot and closes and len(closes) >= 3 and closes[-3]:
+        mv = spot / closes[-3] - 1
+        sig["candles"] = 1 if mv >= 0.0002 else (-1 if mv <= -0.0002 else 0)
+    else:
+        sig["candles"] = 0
+    f2 = 1 if (flow_2m is not None and flow_2m >= 0.53) else (-1 if (flow_2m is not None and flow_2m <= 0.47) else 0)
+    fr = 1 if (flow_round is not None and flow_round >= 0.52) else (-1 if (flow_round is not None and flow_round <= 0.48) else 0)
+    sig["flow"] = f2 if f2 else fr
+    return sig
+
+
+def signal_consensus(sig):
+    """(side_sign, agree, oppose): the side most reads point to, how many point that way, how many point the other way."""
+    if not sig:
+        return 0, 0, 0
+    up = sum(1 for v in sig.values() if v > 0)
+    dn = sum(1 for v in sig.values() if v < 0)
+    if up == dn:
+        return 0, up, dn
+    return (1, up, dn) if up > dn else (-1, dn, up)
+
+
+def stage_decide(p_yes, flow_up, crosses, range_pct=None, sealed=False, signals=None):
     """(call or None, tier, note). Rules since 2026-10-20 (user: "give me a call almost every round unless it's close close
     close"): call the side with the higher blended chance. SUPER = 80%+, GOOD = 65%+, otherwise WEAK. Line crosses no
     longer skip a call: 3+ crosses lower it one level (SUPER -> GOOD -> WEAK). Flow pointing the other way stops a SUPER.
@@ -337,8 +377,24 @@ def stage_decide(p_yes, flow_up, crosses, range_pct=None, sealed=False):
         return None, None, "no price data yet"
     side = "YES" if p_yes >= 0.5 else "NO"
     ps = max(p_yes, 1 - p_yes)
-    idx = 0 if ps >= 0.80 else (1 if ps >= 0.65 else 2)
     notes = []
+    cs, agree, oppose = signal_consensus(signals or {})
+    if ps < STAGE_CALL_MIN and cs and agree >= 3 and oppose == 0:
+        # near 50/50 on price, but the reads line up: call it - WEAK, because the market itself is not sure yet
+        side = "YES" if cs > 0 else "NO"
+        notes.append(f"near 50/50, but {agree} of 4 reads lean {'UP' if cs > 0 else 'DOWN'}")
+        return side, "WEAK", " + ".join(notes)
+    idx = 0 if ps >= 0.80 else (1 if ps >= 0.65 else 2)
+    my = 1 if side == "YES" else -1
+    if signals:
+        with_ = sum(1 for v in signals.values() if v == my)
+        against = sum(1 for v in signals.values() if v == -my)
+        if against >= 2 and idx < 2:
+            idx += 1
+            notes.append(f"{against} of 4 reads point the other way")
+        elif with_ == 4 and idx > 0 and ps >= (0.75 if idx == 1 else 0.60):
+            idx -= 1
+            notes.append("all 4 reads agree")
     if crosses is not None and crosses >= 3 and idx < 2:
         idx += 1
         notes.append(f"{crosses} line crosses")
@@ -4075,6 +4131,11 @@ def poll_loop():
                 stage_calls = locked.setdefault("stage_calls", {})
                 stage_just = None
                 _flow_now = stage_parts.get("flow")
+                try:
+                    _f2 = _flow.HUB.window_detail(asset["name"], 120)["pct"] if asset["name"] in _flow.ASSETS else None
+                except Exception:
+                    _f2 = None
+                stage_sig = stage_signals(kalshi_price, live_price, target, spot_closes, _f2, _tn["ex_up"] if _tn else None)
                 _stage_wait = locked.setdefault("stage_wait", {})
                 for _sk, _mark, _lab, _mk in STAGE_CALLS:
                     if _sk in stage_calls or elapsed_seconds < _mark:
@@ -4091,19 +4152,27 @@ def poll_loop():
                     _waited = elapsed_seconds - _mark
                     _use_p = None
                     _why_extra = ""
+                    _cs, _agree, _oppose = signal_consensus(stage_sig)
                     if _ps >= STAGE_CALL_MIN:
                         _use_p = stage_p_yes
+                    elif _cs and _agree >= 3 and _oppose == 0:
+                        _use_p = stage_p_yes                 # 50/50 on price, but candles / line / flow / Kalshi line up
                     elif _waited >= STAGE_WAIT_S:
                         _avg = sum(_w) / len(_w)
-                        if max(_avg, 1 - _avg) >= STAGE_FORCE_MIN:
+                        if max(_avg, 1 - _avg) >= STAGE_FORCE_MIN and not (_cs and _cs != (1 if _avg >= 0.5 else -1) and _agree >= 2):
                             _use_p = _avg
                             _why_extra = f"close round - called on the {int(_waited)}s average"
+                        elif _cs and _agree >= 2 and _oppose == 0:
+                            _use_p = stage_p_yes
+                            _why_extra = f"close round - {_agree} reads lean {'UP' if _cs > 0 else 'DOWN'}, none against"
                     if _use_p is None and _waited < STAGE_WAIT_S:
                         continue                       # still a toss-up: keep watching (up to 60s)
                     if _use_p is None:
                         _call, _tier, _why = None, None, f"stayed a coin flip for a full minute ({_ps:.0%})"
                     else:
-                        _call, _tier, _why = stage_decide(_use_p, _flow_now, _crosses)
+                        _call, _tier, _why = stage_decide(_use_p, _flow_now, _crosses, signals=stage_sig)
+                        if _why_extra and _cs and _agree >= 2 and _oppose == 0 and max(_use_p, 1 - _use_p) < STAGE_CALL_MIN:
+                            _call, _tier = ("YES" if _cs > 0 else "NO"), "WEAK"
                         _why = " + ".join(x for x in (_why, _why_extra) if x)
                     stage_calls[_sk] = {
                         "call": _call, "tier": _tier, "skipped": _call is None, "why": _why,
@@ -4112,7 +4181,7 @@ def poll_loop():
                         "flow_up": round(_flow_now, 4) if _flow_now is not None else None,
                         "kp": ((kalshi_price if _call == "YES" else 1 - kalshi_price) if (kalshi_price is not None and _call) else None),
                         "spot": round(live_price, price_decimals) if live_price is not None else None, "line": target,
-                        "crosses": _crosses, "range_pct": _rng,
+                        "crosses": _crosses, "range_pct": _rng, "signals": dict(stage_sig),
                         "rsi": rsi_multi.get("rsi1"), "elapsed": int(elapsed_seconds), "seconds_left": int(seconds_left),
                         "ts": time.time(),
                     }
@@ -4420,6 +4489,7 @@ def poll_loop():
                     "incoming": incoming_ev,
                     "stage_calls": {k: dict(v) for k, v in stage_calls.items()},
                     "stage_just": stage_just,
+                    "stage_sig": stage_sig,
                     "kalshi_path": list((_kalshi_path.get(asset["name"]) or {}).get("pts", [])),
                     "line_stats": ({k: line_stats[k] for k in ("crosses", "up", "down", "events", "path", "range_pct")}
                                    if line_stats else None),
@@ -5016,6 +5086,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#e3e9f7; }
 .press-top { border-bottom:none; margin-bottom:10px; }
 .press-sub { font-size:11px; margin:-2px 0 3px; }
+.sb-sig { font-size:11px; margin-top:4px; line-height:1.45; }
+.sb-sig span { white-space:nowrap; margin:0 2px; }
 .chip-lbl { font-size:11px; align-self:center; }
 .press-split-lab { flex:0 0 210px; }
 .calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(190px,1.1fr) minmax(110px,0.55fr); }
@@ -7634,7 +7706,7 @@ def build_stage_box(name, d, key):
                 f'<div class="sb-line">{p_side:.0%} sure &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
                 f'{"" if c.get("crosses") == 1 else "es"} so far</div>'
                 + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line, locked at {c.get("elapsed", 0) // 60}:{c.get("elapsed", 0) % 60:02d}</div>' if diff is not None else "")
-                + hold_html
+                + hold_html + _sig_html(c.get("signals"))
                 + (f'<div class="sb-note">{c["why"]}</div>' if c.get("why") else ""))
         tip = (f'chance of UP when it locked: {p_up:.1%} = blend of Kalshi {c.get("kalshi_yes")}, fair value {c.get("fair_yes")}, '
                f'flow {c.get("flow_up")}')
@@ -7655,8 +7727,10 @@ def build_stage_box(name, d, key):
         ls = d.get("line_stats") or {}
         prev = ""
         if p is not None:
-            pc, pt, pw = stage_decide(p, (d.get("stage_parts") or {}).get("flow"), ls.get("crosses"))
-            if max(p, 1 - p) < STAGE_CALL_MIN:
+            sg = d.get("stage_sig") or {}
+            pc, pt, pw = stage_decide(p, (d.get("stage_parts") or {}).get("flow"), ls.get("crosses"), signals=sg)
+            _cs, _ag, _op = signal_consensus(sg)
+            if max(p, 1 - p) < STAGE_CALL_MIN and not (_cs and _ag >= 3 and _op == 0):
                 pc = None
                 pw = "a coin flip right now - it will wait up to 60s"
             if pc:
@@ -7664,7 +7738,8 @@ def build_stage_box(name, d, key):
                         f'{pt}</b></span></div>')
             else:
                 prev = f'<div class="sb-line">Right now: <span class="flat"><b>it would skip</b></span> ({pw})</div>'
-        body = (f'<div class="sb-dir flat sb-count">{wait // 60}:{wait % 60:02d}</div><div class="sb-line">until it locks</div>{prev}')
+        body = (f'<div class="sb-dir flat sb-count">{wait // 60}:{wait % 60:02d}</div><div class="sb-line">until it locks</div>{prev}'
+                f'{_sig_html(d.get("stage_sig"))}')
         tip = "locks automatically at the mark and is graded at settlement"
     rec = stage_record(_history.get(name, []), key)
     rec_html = (f'<div class="sb-rec">{rec["wins"]}/{rec["n"]} right ({rec["wins"] / rec["n"]:.0%})</div>' if rec["n"]
@@ -7678,6 +7753,18 @@ def build_stage_box(name, d, key):
 
 
 @_never_break
+def _sig_html(sig):
+    if not sig:
+        return ""
+    bits = []
+    for k, lab in SIGNAL_NAMES:
+        v = sig.get(k, 0)
+        bits.append(f'<span class="{"up" if v > 0 else ("down" if v < 0 else "flat")}">{lab} {"&#9650;" if v > 0 else ("&#9660;" if v < 0 else "&#8211;")}</span>')
+    cs, agree, oppose = signal_consensus(sig)
+    tail = (f' &middot; <b>{agree} of 4 {"UP" if cs > 0 else "DOWN"}</b>' if cs else " &middot; <b>mixed</b>")
+    return f'<div class="sb-sig">{" ".join(bits)}{tail}</div>'
+
+
 def stage_summary_row(name, d):
     """Track record per call and per confidence tier, with $100-a-call P&L."""
     hist = _history.get(name, [])
