@@ -5739,6 +5739,17 @@ body { background:#15110f !important; }
   font:800 14px 'Nunito', 'Inter', sans-serif; cursor:pointer; white-space:nowrap; min-height:40px; -webkit-tap-highlight-color:transparent; }
 .snd-toggle.on { border-color:#3dd69c; background:rgba(61,214,156,0.16); color:#c9f7e6; }
 .snd-toggle + .wr-badge { margin-left:8px; }
+#flip-watch { position:fixed; top:0; left:0; right:0; z-index:100003; display:flex; flex-direction:column; gap:0;
+  padding-top:env(safe-area-inset-top, 0px); box-shadow:0 6px 18px rgba(0,0,0,0.45); }
+.fw-item { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; padding:9px max(16px, env(safe-area-inset-right, 0px)) 9px max(16px, env(safe-area-inset-left, 0px));
+  font:700 14px 'Nunito', 'Inter', sans-serif; color:#fbf4ec; background:#2a2226; border-bottom:2px solid #8a7a72; }
+.fw-item b { font-weight:900; letter-spacing:1px; }
+.fw-dir, .fw-rel { font-weight:900; }
+.fw-t { margin-left:auto; font-variant-numeric:tabular-nums; color:#eee2d7; }
+.fw-with { background:linear-gradient(90deg, rgba(61,214,156,0.28), #2a2226 70%); border-bottom-color:#3dd69c; } .fw-with .fw-rel { color:#7be0b0; }
+.fw-against { background:linear-gradient(90deg, rgba(240,84,84,0.30), #2a2226 70%); border-bottom-color:#f05454; } .fw-against .fw-rel { color:#ff9a9a; }
+body.has-flip-watch { padding-top:46px; }
+@media (max-width:760px) { .fw-item { font-size:13px; } body.has-flip-watch { padding-top:64px; } }
 @media (max-width:760px) { #sound-reminder { bottom:calc(72px + env(safe-area-inset-bottom, 0px)) !important; max-width:calc(100vw - 32px); } }
 @media (max-width:760px) {
   .snd-toggle { position:fixed; right:max(12px, env(safe-area-inset-right, 0px)); bottom:calc(12px + env(safe-area-inset-bottom, 0px));
@@ -6313,6 +6324,64 @@ function checkBuildingAlerts() {
     const coin = name === 'BTC' ? 'Bitcoin' : name;
     speakUrgent(why === 'crit' ? 'A flip is happening on ' + coin + '.' : 'Heads up: a flip might be happening on ' + coin + '.', 0);
   });
+}
+
+// ---- 2026-10-21: FLIP WATCH - only once a flip is CONFIRMED ("A flip is happening": radar held 70%+ for 3s, or Kalshi's
+// other side climbed from <=30% to 45%+). Then a bar pinned to the top says where that coin is heading right now - UP or
+// DOWN, WITH or AGAINST BRAIN's call, and how strong (Kalshi's odds) - and a voice update plays every 45 seconds until the
+// round ends.
+const WATCH_EVERY_MS = 45000;
+const flipWatch = {};          // coin -> {key, since, lastSpoke}
+function _strengthWord(p) { return p >= 0.8 ? 'strong' : (p >= 0.65 ? 'solid' : (p >= 0.55 ? 'leaning' : 'a toss-up')); }
+function updateFlipWatch() {
+  const now = Date.now(), live = {};
+  document.querySelectorAll('.flip-chance-value[data-flip-src="radar"]').forEach(el => {
+    const key = el.getAttribute('data-flip-chance-key') || '';
+    const name = key.split('::')[0];
+    const pct = parseFloat(el.getAttribute('data-flip-chance-pct'));
+    if (!name || isNaN(pct)) return;
+    const call = el.getAttribute('data-call'), callName = el.getAttribute('data-call-name') || 'none';
+    const kup = parseFloat(el.getAttribute('data-kup')), left = parseInt(el.getAttribute('data-left') || '0', 10);
+    const above = el.getAttribute('data-above') === '1';
+    const roundKey = key.split('::').slice(0, 2).join('::');
+    let w = flipWatch[name];
+    if (w && w.key !== roundKey) { delete flipWatch[name]; w = null; }           // new round: start fresh
+    const confirmed = flipFired.has(key + '::crit');
+    if (!w && confirmed && left > 20) { w = flipWatch[name] = { key: roundKey, since: now, lastSpoke: now }; }   // first update 45s after the alert
+    if (w && left <= 5) { delete flipWatch[name]; w = null; }
+    if (!w) return;
+    const hasK = !isNaN(kup) && kup >= 0;
+    const goingUp = hasK ? kup >= 0.5 : above;
+    const strength = hasK ? Math.max(kup, 1 - kup) : null;
+    const real = (callName === 'sealed' || callName === 'early' || callName === 'bot') && (call === 'YES' || call === 'NO');
+    const withCall = real ? ((call === 'YES') === goingUp) : null;
+    live[name] = { name, goingUp, strength, withCall, callName, left, pct };
+    if (soundEnabled && assetSoundEnabled[name] !== false && now - w.lastSpoke >= WATCH_EVERY_MS) {
+      w.lastSpoke = now;
+      const coin = name === 'BTC' ? 'Bitcoin' : name;
+      const mins = Math.floor(left / 60), secs = left % 60;
+      const tl = mins ? mins + (secs >= 30 ? ' and a half minutes' : (mins === 1 ? ' minute' : ' minutes')) + ' left' : secs + ' seconds left';
+      const callWord = callName === 'sealed' ? 'the sealed call' : (callName === 'early' ? 'the early call' : 'the call');
+      speak(coin + ' flip update: heading ' + (goingUp ? 'up' : 'down')
+        + (withCall === null ? '' : (withCall ? ', with ' + callWord : ', against ' + callWord))
+        + (strength !== null ? '. ' + (sw => sw.charAt(0).toUpperCase() + sw.slice(1))(_strengthWord(strength)) + ', ' + Math.round(strength * 100) + ' percent on Kalshi' : '')
+        + '. ' + tl + '.', false, 20000);
+    }
+  });
+  let bar = document.getElementById('flip-watch');
+  const names = Object.keys(live);
+  if (!names.length) { if (bar) bar.remove(); document.body.classList.remove('has-flip-watch'); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'flip-watch'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
+  document.body.classList.add('has-flip-watch');
+  bar.innerHTML = names.map(n => {
+    const v = live[n], cls = v.withCall === null ? 'fw-neutral' : (v.withCall ? 'fw-with' : 'fw-against');
+    const callWord = v.callName === 'sealed' ? 'sealed call' : (v.callName === 'early' ? 'early call' : 'call');
+    const rel = v.withCall === null ? '' : (v.withCall ? 'WITH the ' + callWord : 'AGAINST the ' + callWord);
+    const st = v.strength !== null ? _strengthWord(v.strength) + ' &middot; ' + Math.round(v.strength * 100) + '% on Kalshi' : '';
+    const t = Math.floor(v.left / 60) + ':' + String(v.left % 60).padStart(2, '0');
+    return '<div class="fw-item ' + cls + '"><b>' + n + ' FLIP WATCH</b><span class="fw-dir">' + (v.goingUp ? '&#9650; heading UP' : '&#9660; heading DOWN') + '</span>'
+      + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span>' + st + '</span>' : '') + '<span class="fw-t">' + t + ' left</span></div>';
+  }).join('');
 }
 
 // "favorable regime" alert - added 2026-08-31 per real backtested data: BTC's
@@ -7329,6 +7398,7 @@ async function refresh() {
   renderExpanded();
   checkFlipAlerts();
   checkBuildingAlerts();
+  updateFlipWatch();
   checkRegimeAlerts();
   checkReversalAlerts();
   checkCertainFlipAlerts();
@@ -7526,6 +7596,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="speakRaw('A flip is happening on XRP.')">Test flip alert</button>
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure. Good confidence.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure. Super confidence.'),650)">Test sealed call</button>
+      <button onclick="speakRaw('Bitcoin flip update: heading down, against the sealed call. Solid, 78 percent on Kalshi. 3 and a half minutes left.')">Test flip update</button>
       <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('2.4 million dollar whale buy on Bitcoin.'),1300)">Test whale WITH the move</button>
       <button onclick="playDenied(); setTimeout(()=>speakRaw('850 thousand dollar whale sell on XRP, against the move.'),1300)">Test whale AGAINST the move</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
@@ -9369,9 +9440,12 @@ def build_flip_radar(name, d):
     p = fr["parts"]
     tip = (f'momentum {p["momentum"]:+.0f} &middot; cushion {p["cushion"]:+.0f} &middot; crosses {p["crosses"]:+.0f} &middot; '
            f'book walls {p["book"]:+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
+    _cname = key or ("bot" if which == "the bot's call" else "none")
     marker = (f'<span class="flip-chance-value" data-flip-src="radar" data-flip-chance-key="{name}::{d.get("ticker", "")}{("::" + key) if key else ""}" '
               f'data-flip-chance-pct="{pct:.2f}" data-k-opp="{(((1 - kp) if call == "YES" else kp) if kp is not None else -1):.3f}" '
-              f'style="display:none;"></span>')
+              f'data-call="{call}" data-call-name="{_cname}" '
+              f'data-kup="{kp if kp is not None else -1:.3f}" data-left="{int(d.get("seconds_left") or 0)}" '
+              f'data-above="{1 if spot >= line else 0}" style="display:none;"></span>')
     return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
             f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
