@@ -57,10 +57,37 @@ label{display:block;font-weight:700;font-size:13px;margin:12px 0 5px;color:var(-
 """
 
 
+# link preview (2026-10-20): what iMessage / Discord / Slack / X show when the BRAIN link is pasted. The dashboard fills these
+# in at startup - base = the public site address, desc = a callable returning a live one-line summary (BTC / XRP prices + odds).
+OG = {"base": "", "desc": None}
+
+
+def og_tags():
+    base = OG.get("base") or ""
+    try:
+        desc = (OG["desc"]() if OG.get("desc") else "") or ""
+    except Exception:
+        desc = ""
+    desc = desc or "Live BTC and XRP prices with Kalshi's 15-minute odds - BRAIN's read on every round."
+    img = f"{base}/og.png?t={int(time.time() // 60)}"
+    t = "BRAIN - live BTC & XRP odds on Kalshi"
+    return (f'<meta name="description" content="{E(desc)}">'
+            '<meta property="og:type" content="website"><meta property="og:site_name" content="BRAIN">'
+            f'<meta property="og:title" content="{E(t)}"><meta property="og:description" content="{E(desc)}">'
+            f'<meta property="og:url" content="{E(base + "/")}">'
+            f'<meta property="og:image" content="{E(img)}"><meta property="og:image:secure_url" content="{E(img)}">'
+            '<meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200">'
+            '<meta property="og:image:height" content="630">'
+            '<meta property="og:image:alt" content="BRAIN - live BTC and XRP prices with Kalshi UP / DOWN odds">'
+            '<meta name="twitter:card" content="summary_large_image">'
+            f'<meta name="twitter:title" content="{E(t)}"><meta name="twitter:description" content="{E(desc)}">'
+            f'<meta name="twitter:image" content="{E(img)}">')
+
+
 def page(title, body, extra_css="", extra_head="", scripts=""):
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            f'<title>{E(title)}</title><meta name="theme-color" content="#211b1e">'
+            f'<title>{E(title)}</title><meta name="theme-color" content="#211b1e">{og_tags()}'
             '<link rel="icon" type="image/png" href="/static/logo-64.png"><link rel="apple-touch-icon" href="/static/logo-180.png">'
             f'{FONTS}{extra_head}'
             f'<style>{BASE_CSS}{extra_css}</style></head><body>{body}{scripts}</body></html>')

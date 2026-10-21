@@ -10929,10 +10929,65 @@ def _tts_trim_cache(keep=3000):
         pass
 
 
+# ================================================================ link preview card (2026-10-20)
+# /og.png - the picture iMessage / Discord show when the BRAIN link is pasted. Public market numbers only: live BTC / XRP
+# price + 24h change, Kalshi's current UP / DOWN odds, the round's line + time left, and the combined sealed-call record.
+_og_cache = {"t": 0.0, "png": None}
+_og_lock = threading.Lock()
+
+
+def _og_data():
+    out = {"site": (_auth.public_url() or "").replace("https://", "").replace("http://", "")}
+    for a in ("BTC", "XRP"):
+        st = _public_state(a)
+        try:
+            tk = _pub.ticker(a)
+        except Exception:
+            tk = {}
+        ok = st and "error" not in st
+        kp = st.get("kalshi_price") if ok else None
+        out[a] = {"price": tk.get("price") or (st.get("spot_price") if ok else None), "chg24": tk.get("chg24"),
+                  "kalshi_up": kp if isinstance(kp, (int, float)) and 0 <= kp <= 1 else None,
+                  "line": st.get("target_price") if ok else None, "seconds_left": st.get("seconds_left") if ok else None}
+    try:
+        w = n = 0
+        for a in ("BTC", "XRP"):
+            stt = _wr_stats(_wr_rows(a, "sealed"))
+            w += stt["w"]
+            n += stt["n"]
+        out["record"] = {"n": n, "pct": w / n * 100} if n else None
+    except Exception:
+        out["record"] = None
+    return out
+
+
+def og_png():
+    with _og_lock:
+        if _og_cache["png"] and time.time() - _og_cache["t"] < 20:
+            return _og_cache["png"]
+        import og_card
+        png = og_card.render_png(_og_data())
+        _og_cache.update(t=time.time(), png=png)
+        return png
+
+
+def og_desc():
+    d = _og_data()
+    parts = []
+    for a in ("BTC", "XRP"):
+        c = d[a]
+        if c["price"] is None:
+            continue
+        px = f"${c['price']:,.4f}" if a == "XRP" else f"${c['price']:,.2f}"
+        k = c["kalshi_up"]
+        parts.append(f"{a} {px}" + (f" - Kalshi UP {round(k * 100)}% / DOWN {100 - round(k * 100)}%" if k is not None else ""))
+    return (" | ".join(parts) + ". Live 15-minute rounds on BRAIN.") if parts else ""
+
+
 # ================================================================ accounts + public site (2026-10-20)
 # "/" is the public welcome page (free live chart, news, money habits). The dashboard lives at "/app" and needs an approved
 # account; a device that logged in once stays recognized. Trading controls are owner-only.
-PUBLIC_GET = {"/", "/login", "/signup", "/forgot", "/reset", "/setup", "/logout", "/terms", "/auth/approve", "/auth/deny",
+PUBLIC_GET = {"/og.png", "/", "/login", "/signup", "/forgot", "/reset", "/setup", "/logout", "/terms", "/auth/approve", "/auth/deny",
               "/health", "/favicon.ico"}
 OWNER_ONLY = {"/admin", "/arm_live", "/set_live_size", "/set_flip_target", "/set_flip_max_price", "/set_main_max_price",
               "/set_buy_delay", "/set_main_sell_price", "/set_flip_sell_mode", "/set_flip_hold_if_certain",
@@ -11039,6 +11094,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, _site.landing(user))
         if path == "/health":
             return self._send(200, "ok", "text/plain")
+        if path == "/og.png":
+            try:
+                return self._send(200, og_png(), "image/png", [("Cache-Control", "public, max-age=60")])
+            except Exception as _oe:
+                print(f"[og] {_oe!r}")
+                return self._send(302, "", "text/plain", [("Location", "/static/hero.jpg")])
         if path == "/favicon.ico":
             fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "logo-64.png")
             with open(fp, "rb") as f_:
@@ -11820,6 +11881,7 @@ def main():
     migrate_history_from_old_server()       # before listening: Railway still routes visitors to the old server meanwhile
     _auth.load()
     _pub.configure(get_state=_public_state, get_ticks=get_tick_history)
+    _site.OG.update(base=_auth.public_url(), desc=og_desc)
     if not _auth.has_owner():
         print("[auth] no owner account yet - open /setup and use OWNER_SETUP_CODE to create it")
     _load_locked_state()
