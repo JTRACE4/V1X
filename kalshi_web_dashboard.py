@@ -1080,6 +1080,10 @@ LIVE_MAX_ENTRY_PRICE_DEFAULT = 0.80  # 2026-10-21: 0.80 - sealed calls bought 55
                                        # setting at all (unlike the flip strategy's own cap) -
                                        # fixed that at the same time.
 _live_max_entry_price = LIVE_MAX_ENTRY_PRICE_DEFAULT
+# 2026-10-21 (b): each coin has its OWN cap for the sealed-call auto-buy - the backtest found different best bands:
+# BTC 55-80c and XRP 55-85c were the only bands that made money in BOTH halves of the record (see LIVE_STRATEGY_V).
+LIVE_MAX_ENTRY_BY_ASSET_DEFAULT = {"BTC": 0.80, "XRP": 0.85}
+_live_max_entry_by_asset = dict(LIVE_MAX_ENTRY_BY_ASSET_DEFAULT)
 # lock strategy only buys the favorite - refuse a fill under the same 58%
 # confidence floor the call itself requires (checked on the LIVE order book
 # at buy time). Added 2026-10-03: real lock fills under 60c (mostly from the
@@ -1092,9 +1096,13 @@ LIVE_MIN_LOCK_ENTRY_PRICE = 0.55   # 2026-10-21: 0.55 (was 0.58) - sealed calls 
 #   SEALED call at any price ............................... 145 trades, 79% won, +$355
 #   SEALED call at 55-80c (now) ............................ 72 trades, 78% won, +$808 (+11.3% on money spent)
 #   SEALED call over 80c ................................... 64 trades, won less than the price needed, -$398
+# Re-run 2026-10-21 8:11 AM (147 graded sealed calls), split per coin, each half of the record scored separately:
+#   BTC any price -$208 (1st half -$50, 2nd -$158)   BTC 55-80c +$199 (1st +$42, 2nd +$158)   <- BTC uses 55-80c
+#   XRP any price +$474 (1st +$637, 2nd -$163)       XRP 55-85c +$758 (1st +$453, 2nd +$306)  <- XRP uses 55-85c
+#   together: any price +$266 on 147 trades vs these bands +$957 on 93 trades, worst drawdown $389 vs $861
 # No stop loss / protective sell / take-profit: there is no per-second Kalshi price history saved for past rounds, so there
 # is no data showing an early exit would have beaten holding to settlement - per the request, none is added.
-LIVE_STRATEGY_V = 2
+LIVE_STRATEGY_V = 3
 # assets whose CALLS (leaning/confidence/lock) still use the /markets list
 # endpoint's ~30s-cached price, the pre-2026-10-03 behavior. XRP reverted
 # 2026-10-03 per user request: on live prices its calls locked ~1 min
@@ -1323,7 +1331,12 @@ def _load_live_trading_state():
     if (isinstance(saved.get("main_sell_price"), (int, float))
             and 0.01 <= saved["main_sell_price"] <= 0.99):
         _live_main_sell_price = float(saved["main_sell_price"])
+    _mx = saved.get("max_entry_by_asset") or {}
+    for a in LIVE_ASSETS:
+        if isinstance(_mx.get(a), (int, float)) and 0.01 <= _mx[a] <= 0.99:
+            _live_max_entry_by_asset[a] = float(_mx[a])
     if int(saved.get("strategy_v") or 1) < LIVE_STRATEGY_V:
+        _live_max_entry_by_asset.update(LIVE_MAX_ENTRY_BY_ASSET_DEFAULT)
         # one-time switch to the sealed-call settings (2026-10-21): 55-80c band, hold to settlement, no protective sell
         _live_max_entry_price = LIVE_MAX_ENTRY_PRICE_DEFAULT
         _live_main_sell_price = None
@@ -1393,7 +1406,8 @@ def _save_live_trading_state():
                        "protect_min_confidence": _live_protect_min_confidence,
                        "max_entry_price": _live_max_entry_price,
                        "main_sell_price": _live_main_sell_price,
-                       "buy_delay_candles": dict(_live_buy_delay_candles), "strategy_v": LIVE_STRATEGY_V}, f)
+                       "buy_delay_candles": dict(_live_buy_delay_candles), "strategy_v": LIVE_STRATEGY_V,
+                       "max_entry_by_asset": dict(_live_max_entry_by_asset)}, f)
         os.replace(tmp, LIVE_TRADING_STATE_FILE)
     except OSError:
         pass  # persistence is a nice-to-have - never let it crash the poll loop/request handler
@@ -1534,7 +1548,8 @@ def place_live_buy(asset_name, ticker, side_yesno, strategy="lock", entry_signal
         # the flip-scalp strategy has its OWN configurable price cap, separate
         # from the main strategy's - added 2026-09-25 per user request ("choose
         # the price on the flip too... don't want it [buying] at a lot")
-        max_entry_price = _live_flip_max_entry_price if strategy == "flip" else _live_max_entry_price
+        max_entry_price = (_live_flip_max_entry_price if strategy == "flip"
+                           else _live_max_entry_by_asset.get(asset_name, _live_max_entry_price))
 
         # start from whatever's ALREADY filled for this ticker (from an
         # earlier poll's single attempt, in attempt_num mode) instead of
@@ -5805,8 +5820,8 @@ async function armLive(assetName, nextState, strategy) {
          'it off or the daily loss limit trips.\n\nAre you sure?')
       : ('Arm REAL MONEY trading on ' + assetName + '?\n\n' +
          'This will spend real dollars the moment ' + assetName + '\'s SEALED call (8:00) locks - ' +
-         'buy that side and hold to settlement, no stop loss, only when the price is 55 to 80 cents ' +
-         '(the band that made money on record). It stays armed until you turn it off or it auto-disarms on hitting the ' +
+         'buy that side and hold to settlement, no stop loss, only in the price band that made money on record ' +
+         '(BTC 55-80 cents, XRP 55-85 cents). It stays armed until you turn it off or it auto-disarms on hitting the ' +
          'daily loss limit.\n\nAre you sure?');
     const ok = confirm(msg);
     if (!ok) return;
@@ -5865,7 +5880,7 @@ async function setFlipMaxPrice(cardName) {
 async function setMainMaxPrice(cardName) {
   const el = document.getElementById('mainmaxprice-input-' + cardName);
   if (!el || el.value === '') return;
-  await fetch('/set_main_max_price?pct=' + encodeURIComponent(el.value));
+  await fetch('/set_main_max_price?asset=' + encodeURIComponent(cardName) + '&pct=' + encodeURIComponent(el.value));
   refresh();
 }
 
@@ -10562,7 +10577,7 @@ def render_html():
                 size_dollars = _live_size_dollars
                 size_percent = _live_size_percent
                 consecutive_losses = _live_consecutive_losses
-                main_max_price = _live_max_entry_price
+                main_max_price = _live_max_entry_by_asset.get(name, _live_max_entry_price)
                 main_sell_price = _live_main_sell_price
                 buy_delay = _live_buy_delay_candles.get(name, 0)
             def _hold_time_str(ts_iso):
@@ -10646,7 +10661,7 @@ def render_html():
                 {f' (currently {consecutive_losses} in a row)' if size_mode == "percent" and consecutive_losses else ''}</div>
               <div class="hint">Real up/down - last 1h: {_real_windowed_span(real_1h)}</div>
               <div class="hint">Real up/down - last 24h: {_real_windowed_span(real_24h)}</div>
-              <div class="hint">Max entry price (skip buys over this):
+              <div class="hint">Buys the SEALED call only between {LIVE_MIN_LOCK_ENTRY_PRICE:.0%} and this price, then holds to settlement (no stop loss) - {name} max:
                 <input type="number" id="mainmaxprice-input-{name}"
                        value="{main_max_price * 100:.0f}"
                        min="1" max="99" step="1"
@@ -11538,6 +11553,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "size_dollars": _live_size_dollars,
                     "size_percent": _live_size_percent,
                     "max_entry_price": _live_max_entry_price,
+                    "max_entry_by_asset": dict(_live_max_entry_by_asset),
                     "main_sell_price": _live_main_sell_price,
                     "buy_delay_candles": dict(_live_buy_delay_candles),
                     "loss_limit_mode": _live_size_mode,
@@ -11713,11 +11729,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 except ValueError:
                     ok = False
                 else:
+                    _ma = (qs.get("asset") or [""])[0]
                     if 1 <= val <= 99:
-                        _live_max_entry_price = round(val / 100.0, 4)
+                        if _ma in LIVE_ASSETS:
+                            _live_max_entry_by_asset[_ma] = round(val / 100.0, 4)
+                        else:
+                            _live_max_entry_price = round(val / 100.0, 4)
+                            for _a in LIVE_ASSETS:
+                                _live_max_entry_by_asset[_a] = _live_max_entry_price
                     else:
                         ok = False
-                resp = {"ok": ok, "max_entry_price": _live_max_entry_price}
+                resp = {"ok": ok, "max_entry_price": _live_max_entry_price, "max_entry_by_asset": dict(_live_max_entry_by_asset)}
             if ok:
                 _save_live_trading_state()
             body = json.dumps(resp).encode()
