@@ -1068,7 +1068,7 @@ _locked = {}   # asset name -> {"ticker", "my_call", "predicted_price", "target"
 # this page, the same one the "$100 per locked call" row measures) - never a
 # second entry on the same window, never an exit before settlement.
 LIVE_ASSETS = ("XRP", "BTC")  # extended to BTC 2026-09-22 per user request - was XRP-only
-LIVE_MAX_ENTRY_PRICE_DEFAULT = 0.70  # added 2026-09-22 as a hardcoded 0.80 per user request
+LIVE_MAX_ENTRY_PRICE_DEFAULT = 0.80  # 2026-10-21: 0.80 - sealed calls bought 55-80c made money, 80c+ lost (see LIVE_STRATEGY_V). Was 0.70 - added 2026-09-22 as a hardcoded 0.80 per user request
                                        # ("not buy in over 80%"), made a CONFIGURABLE setting and
                                        # dropped to 0.70 default 2026-09-28 after a real losing
                                        # morning: 22 real trades, 13 won (59%) but net -$135.19 -
@@ -1085,7 +1085,16 @@ _live_max_entry_price = LIVE_MAX_ENTRY_PRICE_DEFAULT
 # at buy time). Added 2026-10-03: real lock fills under 60c (mostly from the
 # stale list-endpoint price) were 14 positions, 5 won, -$715 - more than the
 # account's total net loss.
-LIVE_MIN_LOCK_ENTRY_PRICE = 0.58
+LIVE_MIN_LOCK_ENTRY_PRICE = 0.55   # 2026-10-21: 0.55 (was 0.58) - sealed calls at 55-58c won 7 of 10, under 55c lost
+# 2026-10-21 (user request: "match the auto buy to the most profitable calls, no stop loss unless one is recommended").
+# Graded rounds Oct 20 1:00 PM - Oct 21 7:45 AM ET, $100 a trade, Kalshi fee included, BTC + XRP together:
+#   old 'locked first call' at 58-70c (what auto-buy used) .. 50 trades, 60% won, -$496
+#   SEALED call at any price ............................... 145 trades, 79% won, +$355
+#   SEALED call at 55-80c (now) ............................ 72 trades, 78% won, +$808 (+11.3% on money spent)
+#   SEALED call over 80c ................................... 64 trades, won less than the price needed, -$398
+# No stop loss / protective sell / take-profit: there is no per-second Kalshi price history saved for past rounds, so there
+# is no data showing an early exit would have beaten holding to settlement - per the request, none is added.
+LIVE_STRATEGY_V = 2
 # assets whose CALLS (leaning/confidence/lock) still use the /markets list
 # endpoint's ~30s-cached price, the pre-2026-10-03 behavior. XRP reverted
 # 2026-10-03 per user request: on live prices its calls locked ~1 min
@@ -1314,6 +1323,17 @@ def _load_live_trading_state():
     if (isinstance(saved.get("main_sell_price"), (int, float))
             and 0.01 <= saved["main_sell_price"] <= 0.99):
         _live_main_sell_price = float(saved["main_sell_price"])
+    if int(saved.get("strategy_v") or 1) < LIVE_STRATEGY_V:
+        # one-time switch to the sealed-call settings (2026-10-21): 55-80c band, hold to settlement, no protective sell
+        _live_max_entry_price = LIVE_MAX_ENTRY_PRICE_DEFAULT
+        _live_main_sell_price = None
+        for a in LIVE_ASSETS:
+            _live_protect_armed[a] = False
+        print("[LIVE] settings moved to the sealed-call strategy: buy 55-80c, hold to settlement, no stop loss")
+        try:
+            threading.Timer(1.0, _save_live_trading_state).start()
+        except Exception:
+            pass
     delays = saved.get("buy_delay_candles") or {}
     for a in LIVE_ASSETS:
         if isinstance(delays.get(a), int) and 0 <= delays[a] <= LIVE_BUY_DELAY_MAX_CANDLES:
@@ -1373,7 +1393,7 @@ def _save_live_trading_state():
                        "protect_min_confidence": _live_protect_min_confidence,
                        "max_entry_price": _live_max_entry_price,
                        "main_sell_price": _live_main_sell_price,
-                       "buy_delay_candles": dict(_live_buy_delay_candles)}, f)
+                       "buy_delay_candles": dict(_live_buy_delay_candles), "strategy_v": LIVE_STRATEGY_V}, f)
         os.replace(tmp, LIVE_TRADING_STATE_FILE)
     except OSError:
         pass  # persistence is a nice-to-have - never let it crash the poll loop/request handler
@@ -4595,11 +4615,15 @@ def poll_loop():
                 # default 0). Elapsed time since the lock = seconds-left at the
                 # lock minus seconds-left now. The 90s retry window below only
                 # starts once the wait is over.
+                # 2026-10-21: auto-buy follows the SEALED (8:00) call - the most profitable call on record - not the old
+                # 'locked first call'. Delay is counted from the moment the sealed call locked.
+                _lb_sc = (locked.get("stage_calls") or {}).get("sealed") or {}
+                _lb_call = _lb_sc.get("call")
                 _lb_delay_s = _live_buy_delay_candles.get(asset["name"], 0) * 60
-                _lb_waited = (locked.get("locked_seconds_left") is None
-                              or (locked["locked_seconds_left"] - seconds_left) >= _lb_delay_s)
+                _lb_waited = (_lb_sc.get("seconds_left") is None
+                              or (_lb_sc["seconds_left"] - seconds_left) >= _lb_delay_s)
                 if (asset["name"] in LIVE_ASSETS and _live_armed.get(asset["name"])
-                        and locked["my_call"] is not None
+                        and _lb_call is not None
                         and _lb_waited
                         and active["ticker"] not in _live_buy_gave_up):
                     _lb_ticker = active["ticker"]
@@ -4625,8 +4649,9 @@ def poll_loop():
                     # meter comes back down and the call still stands, the buy
                     # goes ahead. Only if the warning lasts until the window is
                     # about to close does it give up (and log that).
-                    _lb_flip_hot = certain_flip or (cur_flip_chance is not None
-                                                      and cur_flip_chance >= CERTAIN_FLIP_MIN_CHANCE)
+                    _lb_fc = flip_chance_vs_locked_call(kalshi_price, _lb_call, confidence)
+                    _lb_flip_hot = ((certain_flip and _lb_call == locked["my_call"])
+                                    or (_lb_fc is not None and _lb_fc >= CERTAIN_FLIP_MIN_CHANCE))
                     if _lb_flip_hot:
                         _lb_fully_filled = False
                         if _lb_ticker not in _live_buy_paused_logged:
@@ -4640,7 +4665,7 @@ def poll_loop():
                             _live_append_log({
                                 "ts": dt.datetime.now(dt.timezone.utc).isoformat(), "event": "buy",
                                 "asset": asset["name"], "ticker": _lb_ticker, "strategy": "lock",
-                                "side": locked["my_call"].lower(), "contracts": 0, "price": None,
+                                "side": _lb_call.lower(), "contracts": 0, "price": None,
                                 "cost_dollars": 0.0, "payoff_dollars": None, "order_id": "", "filled": False,
                                 "entry_flip_chance": "", "entry_swing_pct": "",
                                 "flip_sell_mode": "", "flip_hold_if_certain": "",
@@ -4651,7 +4676,7 @@ def poll_loop():
                         if _lb_ticker not in _live_buy_deadline:
                             _live_buy_deadline[_lb_ticker] = _lb_now + LIVE_BUY_RETRY_WINDOW_SECONDS
                         _lb_attempt_n = _live_buy_attempt_n.get(_lb_ticker, 0)
-                        _lb_fully_filled = place_live_buy(asset["name"], _lb_ticker, locked["my_call"].lower(),
+                        _lb_fully_filled = place_live_buy(asset["name"], _lb_ticker, _lb_call.lower(),
                                                             attempt_num=_lb_attempt_n)
                         _live_buy_attempt_n[_lb_ticker] = _lb_attempt_n + 1
                         # a FAILED order (API error, insufficient balance, timeout) must not
@@ -4673,7 +4698,7 @@ def poll_loop():
                                 _live_append_log({
                                     "ts": dt.datetime.now(dt.timezone.utc).isoformat(), "event": "buy",
                                     "asset": asset["name"], "ticker": _lb_ticker, "strategy": "lock",
-                                    "side": locked["my_call"].lower(), "contracts": 0, "price": None,
+                                    "side": _lb_call.lower(), "contracts": 0, "price": None,
                                     "cost_dollars": 0.0, "payoff_dollars": None, "order_id": "", "filled": False,
                                     "entry_flip_chance": "", "entry_swing_pct": "",
                                     "flip_sell_mode": "", "flip_hold_if_certain": "",
@@ -5773,15 +5798,15 @@ async function armLive(assetName, nextState, strategy) {
          'daily loss limit trips.\n\nAre you sure?')
       : strategy === 'protect'
       ? ('Arm PROTECTIVE SELL on ' + assetName + '?\n\n' +
-         'Only when holding a real-money "Locked first call" position: sells it early, before ' +
+         'Only when holding a real-money sealed-call position: sells it early, before ' +
          'settlement, the instant the flip signal crosses your set confidence bar AGAINST it - ' +
          'cutting the loss instead of riding it to close. Separate from flip-scalp (which BUYS ' +
          'the new direction) - this only SELLS your existing position. Stays armed until you turn ' +
          'it off or the daily loss limit trips.\n\nAre you sure?')
       : ('Arm REAL MONEY trading on ' + assetName + '?\n\n' +
-         'This will spend real dollars the instant ' + assetName + '\'s "Locked first call" ' +
-         'fires - buy and hold to settlement, no exit before then, skipping any entry priced ' +
-         'over 80 cents. It stays armed until you turn it off or it auto-disarms on hitting the ' +
+         'This will spend real dollars the moment ' + assetName + '\'s SEALED call (8:00) locks - ' +
+         'buy that side and hold to settlement, no stop loss, only when the price is 55 to 80 cents ' +
+         '(the band that made money on record). It stays armed until you turn it off or it auto-disarms on hitting the ' +
          'daily loss limit.\n\nAre you sure?');
     const ok = confirm(msg);
     if (!ok) return;
