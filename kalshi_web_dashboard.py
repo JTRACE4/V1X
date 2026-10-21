@@ -5678,6 +5678,16 @@ body[data-view="both"] .rsi-box, body[data-view="both"] .lx-box, body[data-view=
 body[data-view="both"] .card { min-width:0; }
 body[data-view="both"] .press-split-lab { flex:1 1 100%; }
 body[data-view="both"] .sc-wl { min-width:0; }
+/* ---- 2026-10-20 (6): same look as the welcome page - BRAIN in caps, and the island / palm-tree night scene behind everything ---- */
+.app-bg { position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden; }
+.app-bg picture, .app-bg img { display:block; width:100%; height:100%; object-fit:cover; object-position:50% 72%; }
+.app-bg img { filter:brightness(0.55) saturate(1.05); }
+.app-bg::after { content:""; position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(11,16,22,0.55) 0%, rgba(11,16,22,0.15) 30%, rgba(26,20,23,0.45) 65%, rgba(26,20,23,0.80) 100%); }
+body { background:#15110f !important; }
+.g-logo { font-style:normal !important; font-weight:800 !important; letter-spacing:-0.5px !important; font-size:48px !important;
+  font-variation-settings:"SOFT" 100, "opsz" 144 !important; text-shadow:0 0 30px rgba(233,165,187,0.35), 0 2px 0 rgba(0,0,0,0.35) !important; }
+@media (max-width:760px) { .g-logo { font-size:38px !important; } }
 </style>
 <script>
 let audioCtx = null;
@@ -7391,7 +7401,7 @@ window.onload = function() {
 };
 </script>
 </head><body>
-<header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">Brain</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
+<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
 <div id="vol-warn" class="vol-warn" style="display:none;">&#9888; Round history is NOT on a Railway volume - every redeploy wipes it.
 This page keeps a backup on this device and puts it back after a wipe, but add a volume to fix it for good:
