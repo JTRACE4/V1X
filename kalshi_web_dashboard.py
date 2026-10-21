@@ -8412,6 +8412,8 @@ import backtest_engine as _bt
 import auth as _auth
 import public_data as _pub
 import site_pages as _site
+import kalshi_creds as _kcreds
+import kalshi_live_bot as _klb
 
 
 def _coin_amt(asset, q):
@@ -11021,6 +11023,66 @@ def _tts_trim_cache(keep=3000):
         pass
 
 
+# ================================================================ Kalshi API key on the Admin page (2026-10-21)
+from cryptography.hazmat.primitives import serialization
+
+
+def _kalshi_key_status():
+    st = _kcreds.info()
+    st["env"] = bool(os.environ.get("KALSHI_API_KEY_ID") and (os.environ.get("KALSHI_PRIVATE_KEY") or os.environ.get("KALSHI_PRIVATE_KEY_PATH")))
+    st["balance"] = None
+    st["error"] = None
+    if st["set"] or st["env"]:
+        try:
+            st["balance"] = KalshiClient().get_balance_dollars()
+        except Exception as e:
+            st["error"] = str(e)[:160]
+    return st
+
+
+def _kalshi_key_save(key_id, pem_text):
+    """Check the key against Kalshi (a balance read), then store it encrypted. Returns (ok, message)."""
+    global _live_client
+    key_id = (key_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,80}", key_id):
+        return False, "That doesn't look like a Kalshi API key ID (letters, numbers and dashes)."
+    if not _kcreds.can_store():
+        return False, "The server has no secret to encrypt the key with - add KALSHI_CREDS_SECRET in Railway first."
+    pem = _kcreds.clean_pem(pem_text)
+    try:
+        pk = serialization.load_pem_private_key(pem, password=None)
+    except Exception:
+        return False, "The private key didn't read. Paste the whole key, including the BEGIN and END lines."
+    test = KalshiClient.__new__(KalshiClient)
+    test.key_id, test.private_key = key_id, pk
+    try:
+        bal = test.get_balance_dollars()
+    except Exception as e:
+        msg = str(e)
+        if "401" in msg or "403" in msg:
+            return False, "Kalshi rejected that key (check the key ID matches this private key, and the key is active)."
+        return False, "Couldn't reach Kalshi to check the key: " + msg[:120]
+    _kcreds.save(key_id, pem)
+    with _live_lock:
+        _live_client = None                     # next order uses the new key
+    print(f"[kalshi key] saved key ...{key_id[-4:]} (balance ${bal:,.2f})")
+    return True, f"Kalshi key saved and working - balance ${bal:,.2f}."
+
+
+def _kalshi_key_remove():
+    global _live_client
+    _kcreds.remove()
+    with _live_lock:
+        _live_client = None
+        for a in LIVE_ASSETS:                   # no key = no trading: switch every auto-buy off
+            _live_armed[a] = False
+            _live_flip_armed[a] = False
+            _live_protect_armed[a] = False
+    _save_live_trading_state()
+    print("[kalshi key] removed - all auto-buy switched off")
+    return True, "Kalshi key removed. Auto-buy is switched off for every coin."
+
+
 # ================================================================ link preview card (2026-10-20)
 # /og.png - the picture iMessage / Discord show when the BRAIN link is pasted. Public market numbers only: live BTC / XRP
 # price + 24h change, Kalshi's current UP / DOWN odds, the round's line + time left, and the combined sealed-call record.
@@ -11310,12 +11372,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 flash = f"{un} {'approved' if a == 'approve' else 'blocked'}." if u else ""
             elif a == "remove":
                 flash = f"{un} removed." if _auth.remove_user(un) else ""
+            elif a == "kalshi_save":
+                _ok, flash = _kalshi_key_save(f.get("key_id"), f.get("pem"))
+            elif a == "kalshi_remove":
+                _ok, flash = _kalshi_key_remove()
             elif a == "resetlink":
                 u = _auth.DB["users"].get(un.lower())
                 if u:
                     _admin_reset_links[un.lower()] = _auth.reset_link(u)
                     flash = f"Reset link for {un} is ready below - send it to them (works once, for 1 hour)."
-            return self._send(200, _site.admin_page(user, _auth.DB, _auth.email_ready(), flash, _admin_reset_links))
+            return self._send(200, _site.admin_page(user, _auth.DB, _auth.email_ready(), flash, _admin_reset_links, _kalshi_key_status()))
         n_ = 0
         ok = False
         if parsed.path == "/restore_history":
@@ -11376,7 +11442,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(503, "voice unavailable", "text/plain")
             return self._send(200, mp3, "audio/mpeg", [("Cache-Control", "private, max-age=86400")])
         if parsed.path == "/admin":
-            return self._send(200, _site.admin_page(user, _auth.DB, _auth.email_ready(), "", _admin_reset_links))
+            return self._send(200, _site.admin_page(user, _auth.DB, _auth.email_ready(), "", _admin_reset_links, _kalshi_key_status()))
         if parsed.path in ("/debug_poll", "/debug_threads") and self.client_address[0] not in ("127.0.0.1", "::1"):
             self.send_response(404); self.end_headers()      # diagnostics: this PC only, never other devices on the network
             return
@@ -11981,6 +12047,7 @@ def main():
     _auth.load()
     _pub.configure(get_state=_public_state, get_ticks=get_tick_history)
     _site.OG.update(base=_auth.public_url(), desc=og_desc)
+    _klb.CREDENTIALS_PROVIDER = _kcreds.get        # Kalshi key from the Admin page (encrypted on the volume)
     if not _auth.has_owner():
         print("[auth] no owner account yet - open /setup and use OWNER_SETUP_CODE to create it")
     _load_locked_state()

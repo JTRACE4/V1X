@@ -111,7 +111,28 @@ def adaptive_defensive_threshold(confidence, base_threshold, min_threshold):
     return max(min_threshold, threshold)
 
 
+# 2026-10-21: the dashboard's admin page can supply the key (stored encrypted on the server) - set by the dashboard at startup.
+# CREDENTIALS_PROVIDER() -> (key_id, pem_bytes) or None. Order: admin-page key, then KALSHI_API_KEY_ID + KALSHI_PRIVATE_KEY
+# (the PEM text itself), then KALSHI_API_KEY_ID + KALSHI_PRIVATE_KEY_PATH (a file), as before.
+CREDENTIALS_PROVIDER = None
+
+
+def _provided_credentials():
+    if CREDENTIALS_PROVIDER is None:
+        return None
+    try:
+        return CREDENTIALS_PROVIDER()
+    except Exception:
+        return None
+
+
 def _load_private_key():
+    pc = _provided_credentials()
+    if pc:
+        return serialization.load_pem_private_key(pc[1], password=None)
+    pem = os.environ.get("KALSHI_PRIVATE_KEY")
+    if pem:
+        return serialization.load_pem_private_key(pem.replace("\\n", "\n").encode(), password=None)
     key_path = os.environ.get("KALSHI_PRIVATE_KEY_PATH")
     if not key_path or not os.path.exists(key_path):
         raise RuntimeError(
@@ -134,9 +155,10 @@ def _sign(private_key, timestamp_ms, method, path):
 
 class KalshiClient:
     def __init__(self):
-        self.key_id = os.environ.get("KALSHI_API_KEY_ID")
+        pc = _provided_credentials()
+        self.key_id = pc[0] if pc else os.environ.get("KALSHI_API_KEY_ID")
         if not self.key_id:
-            raise RuntimeError("KALSHI_API_KEY_ID is not set. See the setup guide.")
+            raise RuntimeError("No Kalshi API key yet - add it on the Admin page (Kalshi API key).")
         self.private_key = _load_private_key()
 
     def _headers(self, method, path):

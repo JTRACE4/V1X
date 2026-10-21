@@ -370,7 +370,7 @@ ADMIN_CSS = r"""
 """
 
 
-def admin_page(user, db, email_on, flash="", reset_links=None):
+def admin_page(user, db, email_on, flash="", reset_links=None, kalshi=None):
     rows_p, rows_a = [], []
     for u in sorted(db["users"].values(), key=lambda x: -x["created"]):
         when = time.strftime("%b %d %H:%M", time.localtime(u["created"]))
@@ -404,11 +404,43 @@ def admin_page(user, db, email_on, flash="", reset_links=None):
                   for t, m in reversed(db.get("log", [])[-25:]))
     body = (app_tabs(user, "admin", sum(1 for u in db["users"].values() if u["status"] == "pending"))
             + (f'<div class="ok">{E(flash)}</div>' if flash else "") + em
+            + kalshi_key_card(kalshi or {})
             + f'<section class="card"><h3>WAITING FOR APPROVAL</h3><table>{"".join(rows_p) or "<tr><td class=mute>Nobody waiting.</td></tr>"}</table></section>'
             + (f'<section class="card"><h3>PASSWORD RESET REQUESTS</h3><table>{resets}</table></section>' if resets else "")
             + f'<section class="card"><h3>ACCOUNTS</h3><table>{"".join(rows_a)}</table></section>'
             + f'<section class="card"><h3>RECENT ACTIVITY</h3>{log or "<span class=mute>nothing yet</span>"}</section>')
     return page("Admin - BRAIN", f'<div class="adm">{body}</div>', ADMIN_CSS + ".small{font-size:12px}")
+
+
+def kalshi_key_card(k):
+    """Admin: where the owner puts their Kalshi API key for auto-buy. The key itself is never shown back."""
+    if k.get("set") or k.get("env"):
+        src = f'key ending <b>{E(k.get("key_tail") or "")}</b>' if k.get("set") else "key from the Railway settings"
+        if k.get("error"):
+            status = f'<div class="err">Saved, but Kalshi didn\'t accept it just now ({src}): {E(k["error"])}</div>'
+        else:
+            bal = k.get("balance")
+            status = (f'<div class="ok">Connected to Kalshi - {src}'
+                      + (f' &middot; balance <b>${bal:,.2f}</b>' if bal is not None else "") + '</div>')
+    else:
+        status = '<div class="err">No Kalshi key yet - auto-buy can\'t place orders until you add one.</div>'
+    if not k.get("can_store", True):
+        status += '<div class="err">The server needs a secret to encrypt the key: add KALSHI_CREDS_SECRET in Railway.</div>'
+    remove = ('<form method="post" action="/admin" onsubmit="return confirm(\'Remove the Kalshi key? Auto-buy will switch off.\')">'
+              '<button class="b no" name="a" value="kalshi_remove">Remove key</button></form>') if k.get("set") else ""
+    return ('<section class="card"><h3>KALSHI API KEY (AUTO-BUY)</h3>' + status
+            + '<p class="mute small">On Kalshi: Account &amp; security &rarr; API keys &rarr; Create key. Copy the Key ID and download the '
+              'private key file, open it in a text editor and paste everything below, including the BEGIN and END lines. '
+              'BRAIN checks it with Kalshi, then stores it encrypted on the server. It is never shown again.</p>'
+            + '<form method="post" action="/admin" autocomplete="off">'
+              '<label class="mute small" for="kk-id">API key ID</label>'
+              '<input id="kk-id" name="key_id" required autocomplete="off" spellcheck="false" placeholder="e.g. a1b2c3d4-...">'
+              '<label class="mute small" for="kk-pem" style="display:block;margin-top:8px">Private key</label>'
+              '<textarea id="kk-pem" name="pem" required rows="6" spellcheck="false" autocomplete="off" '
+              'placeholder="-----BEGIN RSA PRIVATE KEY-----" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"></textarea>'
+              '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+              '<button class="b ok" name="a" value="kalshi_save">' + ("Replace key" if k.get("set") else "Save &amp; test key") + '</button>'
+              '</div></form>' + remove + '</section>')
 
 
 # ------------------------------------------------------------------------------------------------ how to use
