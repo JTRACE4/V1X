@@ -5688,6 +5688,16 @@ body { background:#15110f !important; }
 .g-logo { font-style:normal !important; font-weight:800 !important; letter-spacing:-0.5px !important; font-size:48px !important;
   font-variation-settings:"SOFT" 100, "opsz" 144 !important; text-shadow:0 0 30px rgba(233,165,187,0.35), 0 2px 0 rgba(0,0,0,0.35) !important; }
 @media (max-width:760px) { .g-logo { font-size:38px !important; } }
+/* ---- 2026-10-20 (7): the 80% setup pill is white, and wins / losses are green / red everywhere (streak, chips, scoreboard, badge) ---- */
+.sb-z80 { background:#fbf4ec !important; color:#1a1214 !important; }
+.wr-streak.wr-w, .skw, .sk-win .sk-num, .sk-win .sk-zone { color:#3dd69c !important; }
+.wr-streak.wr-l, .skl, .sk-loss .sk-num, .sk-loss .sk-zone { color:#f05454 !important; }
+.sk-win { border-color:#3dd69c !important; box-shadow:0 0 16px rgba(61,214,156,0.16) !important; }
+.sk-loss { border-color:#f05454 !important; box-shadow:0 0 16px rgba(240,84,84,0.16) !important; }
+.sk-chips i.w, .sc-chips i.w { background:rgba(61,214,156,0.22) !important; color:#3dd69c !important; }
+.sk-chips i.l, .sc-chips i.l { background:rgba(240,84,84,0.22) !important; color:#f05454 !important; }
+.sc-streak.win { color:#3dd69c !important; background:rgba(61,214,156,0.12) !important; border-color:#3dd69c !important; }
+.sc-streak.loss { color:#f05454 !important; background:rgba(240,84,84,0.12) !important; border-color:#f05454 !important; }
 </style>
 <script>
 let audioCtx = null;
