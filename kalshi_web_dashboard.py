@@ -5695,6 +5695,15 @@ body { background:#15110f !important; }
 .sk-win { border-color:#3dd69c !important; box-shadow:0 0 16px rgba(61,214,156,0.16) !important; }
 .sk-loss { border-color:#f05454 !important; box-shadow:0 0 16px rgba(240,84,84,0.16) !important; }
 .sk-chips i.w, .sc-chips i.w { background:rgba(61,214,156,0.22) !important; color:#3dd69c !important; }
+.snd-toggle { margin-left:auto; padding:9px 16px; border-radius:999px; border:1.5px solid #f05454; background:rgba(240,84,84,0.14); color:#ffd9df;
+  font:800 14px 'Nunito', 'Inter', sans-serif; cursor:pointer; white-space:nowrap; min-height:40px; -webkit-tap-highlight-color:transparent; }
+.snd-toggle.on { border-color:#3dd69c; background:rgba(61,214,156,0.16); color:#c9f7e6; }
+.snd-toggle + .wr-badge { margin-left:8px; }
+@media (max-width:760px) { #sound-reminder { bottom:calc(72px + env(safe-area-inset-bottom, 0px)) !important; max-width:calc(100vw - 32px); } }
+@media (max-width:760px) {
+  .snd-toggle { position:fixed; right:max(12px, env(safe-area-inset-right, 0px)); bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index:9500; box-shadow:0 6px 20px rgba(0,0,0,0.5); font-size:15px; padding:11px 18px; }
+}
 .sk-chips i.l, .sc-chips i.l { background:rgba(240,84,84,0.22) !important; color:#f05454 !important; }
 .sc-streak.win { color:#3dd69c !important; background:rgba(61,214,156,0.12) !important; border-color:#3dd69c !important; }
 .sc-streak.loss { color:#f05454 !important; background:rgba(240,84,84,0.12) !important; border-color:#f05454 !important; }
@@ -6057,12 +6066,31 @@ function ensureAudioCtx() {
   return audioCtx;
 }
 
+// 2026-10-21: one tap turns ALL sound + voice on or off (the big button in the sound bar and the pill at the top stay in sync)
+function updateSoundButtons() {
+  const b = document.getElementById('sound-enable-btn');
+  if (b) { b.textContent = soundEnabled ? 'Sound ON - tap to turn everything off' : 'Sound OFF - tap to turn on'; b.classList.toggle('sound-on', soundEnabled); }
+  const t = document.getElementById('snd-toggle');
+  if (t) { t.textContent = soundEnabled ? '\u{1F50A} Sound ON' : '\u{1F507} Sound OFF'; t.classList.toggle('on', soundEnabled); t.setAttribute('aria-pressed', String(soundEnabled)); }
+}
+function disableSound() {
+  soundEnabled = false;
+  try { localStorage.setItem('soundWanted', '0'); } catch (e) {}
+  voiceQ.length = 0;
+  try { if (voiceEl) { voiceEl.pause(); voiceEl.removeAttribute('src'); } } catch (e) {}
+  voiceBusy = false;
+  try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
+  try { if (audioCtx && audioCtx.state === 'running') audioCtx.suspend(); } catch (e) {}
+  const r = document.getElementById('sound-reminder'); if (r) r.remove();
+  updateSoundButtons();
+}
+function toggleSound() { if (soundEnabled) disableSound(); else enableSound(); }
 function enableSound(quiet) {
   ensureAudioCtx();
   soundEnabled = true;
   try { localStorage.setItem('soundWanted', '1'); } catch (e) {}
-  const btn = document.getElementById('sound-enable-btn');
-  if (btn) { btn.textContent = 'Sound ON - alerts will play'; btn.classList.add('sound-on'); }
+  const r0 = document.getElementById('sound-reminder'); if (r0) r0.remove();
+  updateSoundButtons();
   if (quiet === true) {
     // auto re-enable after a page reload: warm up speech silently, no beep
     try { const w = new SpeechSynthesisUtterance(' '); w.volume = 0; window.speechSynthesis.speak(w); } catch (e) {}
@@ -6216,21 +6244,32 @@ function playBackflipWhoosh() {
     o2.connect(g2); g2.connect(ctx.destination); o2.start(now + 0.82); o2.stop(now + 1.35);
   } catch (e) {}
 }
+// 2026-10-21: "A flip is happening on X" only when
+//   (a) the radar has held at 70%+ for 3 seconds in a row, or
+//   (b) Kalshi's price for the OTHER side climbed from low (30% or less this round) up to the middle (45%+) or past it.
+// "Heads up: a flip might be happening" still plays when the radar climbs 45+ points from its low this round.
+const FLIP_HOLD_MS = 3000, K_LOW = 0.30, K_MID = 0.45;
+const flipHighSince = {}, kOppLow = {};
 function checkBuildingAlerts() {
+  const now = Date.now();
   document.querySelectorAll('.flip-chance-value[data-flip-src="radar"]').forEach(el => {
     const key = el.getAttribute('data-flip-chance-key');
     const pct = parseFloat(el.getAttribute('data-flip-chance-pct'));
+    const kOpp = parseFloat(el.getAttribute('data-k-opp'));
     if (!key || isNaN(pct)) return;
     const name = key.split('::')[0];
     flipLow[key] = Math.min(flipLow[key] === undefined ? pct : flipLow[key], pct);
+    if (pct >= FLIP_CRIT) { if (!flipHighSince[key]) flipHighSince[key] = now; } else { delete flipHighSince[key]; }
+    if (!isNaN(kOpp) && kOpp >= 0) kOppLow[key] = Math.min(kOppLow[key] === undefined ? kOpp : kOppLow[key], kOpp);
+    const held = flipHighSince[key] && now - flipHighSince[key] >= FLIP_HOLD_MS;
+    const kalshiSwing = !isNaN(kOpp) && kOpp >= K_MID && kOppLow[key] !== undefined && kOppLow[key] <= K_LOW;
     let why = null;
-    if (pct >= FLIP_CRIT && !flipFired.has(key + '::crit')) { why = 'crit'; }
-    else if (pct - flipLow[key] >= FLIP_JUMP && !flipFired.has(key + '::jump')) { why = 'jump'; }
+    if ((held || kalshiSwing) && !flipFired.has(key + '::crit')) why = 'crit';
+    else if (pct - flipLow[key] >= FLIP_JUMP && !flipFired.has(key + '::jump') && !flipFired.has(key + '::crit')) why = 'jump';
     if (!why) return;
     flipFired.add(key + '::' + why);
     if (why === 'crit') flipFired.add(key + '::jump');
     if (!soundEnabled || assetSoundEnabled[name] === false) return;
-    // 2026-10-20: voice only, no sound effect
     const coin = name === 'BTC' ? 'Bitcoin' : name;
     speakUrgent(why === 'crit' ? 'A flip is happening on ' + coin + '.' : 'Heads up: a flip might be happening on ' + coin + '.', 0);
   });
@@ -7390,7 +7429,7 @@ function toggleWr() {
 }
 setInterval(refresh, 1000);
 window.onload = function() {
-  updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); try { const vp = document.getElementById('voice-pick'); if (vp) vp.value = neuralVoice; } catch (e) {}
+  updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); updateSoundButtons(); try { const vp = document.getElementById('voice-pick'); if (vp) vp.value = neuralVoice; } catch (e) {}
   let wantedSound = false;
   try { wantedSound = localStorage.getItem('soundWanted') === '1'; } catch (e) {}
   if (wantedSound && !soundEnabled) {
@@ -7398,7 +7437,9 @@ window.onload = function() {
     bar.id = 'sound-reminder';
     bar.textContent = 'Sound is off after the page reloaded - click anywhere to turn it back on';
     document.body.appendChild(bar);
-    const reenable = () => { enableSound(true); bar.remove();
+    const reenable = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('#snd-toggle, #sound-enable-btn')) { bar.remove();
+        document.removeEventListener('pointerdown', reenable); document.removeEventListener('keydown', reenable); return; }
+      enableSound(true); bar.remove();
       document.removeEventListener('pointerdown', reenable); document.removeEventListener('keydown', reenable); };
     document.addEventListener('pointerdown', reenable); document.addEventListener('keydown', reenable);
   }
@@ -7411,7 +7452,7 @@ window.onload = function() {
 };
 </script>
 </head><body>
-<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
+<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false">&#128263; Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
 <div id="vol-warn" class="vol-warn" style="display:none;">&#9888; Round history is NOT on a Railway volume - every redeploy wipes it.
 This page keeps a backup on this device and puts it back after a wipe, but add a volume to fix it for good:
@@ -7422,7 +7463,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
   <button class="size-mode-btn" data-view="both" onclick="setAssetView('both')">Both</button></div>
 <div id="content">Loading...</div>
 <div class="sound-bar">
-  <button id="sound-enable-btn" onclick="enableSound()">Click to enable flip-alert sounds</button>
+  <button id="sound-enable-btn" onclick="toggleSound()">Sound OFF - tap to turn on</button>
   <details class="sound-details">
     <summary>Sound &amp; alert settings</summary>
     <div class="sound-details-body">
@@ -9287,7 +9328,8 @@ def build_flip_radar(name, d):
     tip = (f'momentum {p["momentum"]:+.0f} &middot; cushion {p["cushion"]:+.0f} &middot; crosses {p["crosses"]:+.0f} &middot; '
            f'book walls {p["book"]:+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
     marker = (f'<span class="flip-chance-value" data-flip-src="radar" data-flip-chance-key="{name}::{d.get("ticker", "")}{("::" + key) if key else ""}" '
-              f'data-flip-chance-pct="{pct:.2f}" style="display:none;"></span>')
+              f'data-flip-chance-pct="{pct:.2f}" data-k-opp="{(((1 - kp) if call == "YES" else kp) if kp is not None else -1):.3f}" '
+              f'style="display:none;"></span>')
     return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
             f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
