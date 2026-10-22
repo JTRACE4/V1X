@@ -4432,6 +4432,9 @@ def poll_loop():
                             hist[-1][f"{_sk}_payout"] = _c.get("rev_payout")
                             hist[-1][f"{_sk}_radar"] = _c.get("radar_agree")      # True / False / None - for later checks
                             hist[-1][f"{_sk}_crosses"] = _c.get("crosses")        # live line crosses at the lock (2026-10-22)
+                            hist[-1][f"{_sk}_regime"] = bool(_c.get("regime"))    # called by the price-vs-target history
+                            hist[-1][f"{_sk}_dist"] = (round((_c["spot"] - _c["line"]) / _c["line"], 6)
+                                                       if (_c.get("spot") and _c.get("line")) else None)
                         _lt = _sc_prev.get("late") or {}
                         if _lt.get("call"):
                             hist[-1]["decided_call"] = _lt["call"]
@@ -4657,7 +4660,18 @@ def poll_loop():
                     _use_p = None
                     _why_extra = ""
                     _cs, _agree, _oppose = signal_consensus(stage_sig)
-                    if _ps >= STAGE_CALL_MIN:
+                    # 2026-10-22 (user: "regime the call process to get me the most wins possible - check relative price
+                    # target history"): where price sits vs the line right now, looked up against every settled round
+                    # from the same spot. When the table is live (it beat the current rules on unseen rounds) it decides
+                    # the side right at the mark - no 60s toss-up wait, a call every round.
+                    _reg = None
+                    try:
+                        _rtab = (_bt.decisions().get("regime") or {}).get(_sk)
+                        if _rtab and kalshi_price is not None and live_price and target:
+                            _reg = _bt.regime_call(_rtab, (live_price - target) / target, kalshi_price, rsi_multi.get("rsi1"))
+                    except Exception as _rge:
+                        print(f"[regime] {_rge!r}")
+                    if _ps >= STAGE_CALL_MIN or _reg:
                         _use_p = stage_p_yes
                     elif _cs and _agree >= 3 and _oppose == 0:
                         _use_p = stage_p_yes                 # 50/50 on price, but candles / line / flow / Kalshi line up
@@ -4678,6 +4692,12 @@ def poll_loop():
                         if _why_extra and _cs and _agree >= 2 and _oppose == 0 and max(_use_p, 1 - _use_p) < STAGE_CALL_MIN:
                             _call, _tier = ("YES" if _cs > 0 else "NO"), "WEAK"
                         _why = " + ".join(x for x in (_why, _why_extra) if x)
+                    if _reg:
+                        _was = _call
+                        _call, _tier = _reg["call"], _bt.regime_tier(_reg["p"])
+                        _why = (f"price-vs-target history: {_reg['won']} of {_reg['n']} rounds from this spot ended "
+                                f"{'UP' if _call == 'YES' else 'DOWN'} ({_reg['p']:.0%})"
+                                + (f" - overruled the {'UP' if _was == 'YES' else 'DOWN'} lean" if (_was and _was != _call) else ""))
                     _rev = None
                     try:
                         _rev = reversal_check(asset["name"], live_price, target, seconds_left, elapsed_seconds, line_stats,
@@ -4727,6 +4747,7 @@ def poll_loop():
                         print(f"[80% rule] {_ze!r}")
                     stage_calls[_sk] = {
                         "zone80": _z80, "zone80_roi": _z80roi, "sitout": bool(_sitout), "lean": _lean,
+                        "regime": ({k: (round(v, 4) if isinstance(v, float) else v) for k, v in _reg.items()} if _reg else None),
                         "reversal": bool(_rev), "rev_payout": _rev["payout"] if _rev else None,
                         "rev_score": _rev["score"] if _rev else None,
                         "call": _call, "tier": _tier, "skipped": _call is None, "why": _why, "radar_agree": _radar_agree,
@@ -5998,6 +6019,12 @@ body.has-flip-watch { padding-top:0; }
     z-index:9500; box-shadow:0 6px 20px rgba(0,0,0,0.5); font-size:15px; padding:11px 18px; }
 }
 .sk-chips i.l, .sc-chips i.l { background:rgba(240,84,84,0.22) !important; color:#f05454 !important; }
+/* 2026-10-22 (user): circle color = how the round ENDED (green up / red down), letter = W or L on BRAIN's call */
+.sk-chips i.cu, .sc-chips i.cu { background:rgba(61,214,156,0.24) !important; color:#3dd69c !important; box-shadow:inset 0 0 0 1px rgba(61,214,156,0.55); border-radius:50% !important; }
+.sk-chips i.cd, .sc-chips i.cd { background:rgba(240,84,84,0.24) !important; color:#f05454 !important; box-shadow:inset 0 0 0 1px rgba(240,84,84,0.55); border-radius:50% !important; }
+.sc-chips.wr-chip { margin-top:0; flex:0 0 auto; }
+.sc-legend { font-size:10px; margin-top:4px; }
+.sc-legend .u { color:#3dd69c; font-weight:800; } .sc-legend .d { color:#f05454; font-weight:800; }
 .sc-streak.win { color:#3dd69c !important; background:rgba(61,214,156,0.12) !important; border-color:#3dd69c !important; }
 .sc-streak.loss { color:#f05454 !important; background:rgba(240,84,84,0.12) !important; border-color:#f05454 !important; }
 </style>
@@ -9460,14 +9487,25 @@ def build_rsi_box(name, d):
             f'<span class="rsi-marker" data-rsi-name="{name}" data-rsi="{r:.1f}" style="display:none;"></span></div>')
 
 
+def _result_chip(ok, actual):
+    """2026-10-22 (user): the circle's COLOR is how the round ended (green = settled UP, red = settled DOWN), the LETTER is
+    whether BRAIN's call was right. Called DOWN + ended DOWN = red W; called UP + ended UP = green W; called DOWN but ended
+    UP = green L; called UP but ended DOWN = red L."""
+    col = "cu" if actual == "YES" else ("cd" if actual == "NO" else ("w" if ok else "l"))
+    end = {"YES": "ended UP", "NO": "ended DOWN"}.get(actual, "")
+    return f'<i class="{col}" title="{"win" if ok else "loss"}{(" - " + end) if end else ""}">{"W" if ok else "L"}</i>'
+
+
 @_never_break
 def build_streak_box(name, d):
     """Win / loss streak tile (2026-10-20): the sealed call's current run big, the early call's run under it, and the last 8
     sealed results. Gold = win, lavender = loss - kept off green/red so it is never read as UP/DOWN."""
     hist = _history.get(name, [])
     runs = {}
+    acts = {}
     for key, field in (("sealed", "sealed_correct"), ("early", "early_correct")):
         res = [bool(h[field]) for h in hist if h.get(field) is not None]
+        acts[key] = [h.get("actual_side") for h in hist if h.get(field) is not None]
         runs[key] = (res, _streak_stats(res) if res else (None, 0, 0, 0))
     sres, (st, sn, sbw, sbl) = runs["sealed"]
     eres, (et_, en, ebw, _ebl) = runs["early"]
@@ -9483,7 +9521,8 @@ def build_streak_box(name, d):
     early = (f'early <b class="{"skw" if et_ else "skl"}">{en}{"W" if et_ else "L"}</b>' if eres and sres else "")
     best = (f'best <b class="skw">{sbw}W</b> &middot; worst <b class="skl">{sbl}L</b>' if sres else "") + (
         f' &middot; early best <b class="skw">{ebw}W</b>' if eres and sres else "")
-    chips = "".join(f'<i class="{"w" if r_ else "l"}">{"W" if r_ else "L"}</i>' for r_ in (sres or eres)[-8:])
+    _ca = acts["sealed"] if sres else acts["early"]
+    chips = "".join(_result_chip(r_, a_) for r_, a_ in list(zip(sres or eres, _ca))[-8:])
     sub = " &middot; ".join(x for x in (early, best) if x)
     return (f'<div class="rs-tile sk-box {cls}"><div class="rs-title">STREAK</div><div class="sk-num">{big}</div>'
             f'<div class="sk-zone">{zone}</div><div class="sk-sub">{sub}</div><div class="sk-chips">{chips}</div></div>')
@@ -10106,7 +10145,7 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
         if r.get("strike"):
             px += f' vs {fmt_price(r["strike"], dec)}'
         lst.append(f'<div class="wr-row"><span>{tm}</span><span>{"<i class=ico data-i=reversal></i> " if r.get("rev") else ""}{"<i class=ico data-i=star></i> " if r.get("z80") else ""}{call_txt} &rarr; {act}{(" &middot; " + r["tier"]) if r.get("tier") else ""}'
-                   f'<span class="hint"> {px}</span></span><b class="{"skw" if r["ok"] else "skl"}">{"W" if r["ok"] else "L"}</b></div>')
+                   f'<span class="hint"> {px}</span></span><span class="sc-chips wr-chip">{_result_chip(r["ok"], r["actual"])}</span></div>')
     more = (f'<button class="wr-btn" onclick="loadWr({{limit:{limit + 300}}})">Show more ({len(sel) - limit:,} older)</button>'
             if limit and len(sel) > limit else "")
     def btn(k, v, lab, cur_):
@@ -10149,7 +10188,7 @@ def build_scoreboard(name, d):
             continue
         ct, cn, bw, bl = _streak_stats(res)
         streak = (f'<span class="sc-streak {"win" if ct else "loss"}">{cn} {("WIN" if cn == 1 else "WINS") if ct else ("LOSS" if cn == 1 else "LOSSES")} IN A ROW</span>')
-        chips = "".join(f'<i class="{"w" if r else "l"}">{"W" if r else "L"}</i>' for r in res[-15:])
+        chips = "".join(_result_chip(bool(h[field]), h.get("actual_side")) for h in rows[-15:])
         pnl = ""
         if key in ("early", "sealed"):
             r_ = stage_record(hist, key)
@@ -10172,6 +10211,8 @@ def build_scoreboard(name, d):
     return (f'<div class="scoreboard"><div class="rs-title">SCOREBOARD &middot; since launch ({since}) &middot; '
             f'<b>{len(hist):,}</b> round{"s" if len(hist) != 1 else ""} tracked{f' <span class="hint">(the bot made no call in {no_call:,} of them)</span>' if (no_call and SHOW_BOT_RECORD) else ''}</div>'
             f'<div class="sc-grid">{"".join(cols)}</div>'
+            f'<div class="sc-legend hint">circle color = how the round ended (<span class="u">green = UP</span>, '
+            f'<span class="d">red = DOWN</span>) &middot; letter = BRAIN\'s call was a W or an L</div>'
             + (f'<details class="sc-more" data-pat="SCORE|{name}"><summary class="hint">Hour-by-hour and today breakdown</summary>{pull}</details>' if pull else "")
             + '</div>')
 
@@ -13056,7 +13097,7 @@ def main():
         threading.Thread(target=_book_track_loop, daemon=True, name="book-tracker").start()
         _bt.configure(trend_read=trend_read, stage_decide=stage_decide, signal_consensus=signal_consensus)
         _bt.load_saved()
-        _bt.start_background(delay=90, every_hours=24)
+        _bt.start_background(delay=90, every_hours=6)     # 2026-10-22: refresh the price-vs-target history 4x a day
     except Exception as _e:
         print(f"[flow] could not start: {_e!r}")
     global _mtf
