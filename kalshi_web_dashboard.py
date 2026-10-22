@@ -5695,7 +5695,7 @@ h1 { color:#dcbb91; } h1::before { content:"\263E  "; color:#ffb347; }
 .card { background:rgba(17,26,46,0.92); border-color:#4a3c43; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.35); }
 .top-w, .tug { background:#272024; border-color:#4a3c43; border-radius:12px; }
 /* ---- 2026-10-20 (3): calm + clean - one typeface, tabular numbers, no flashing ---- */
-body, button, input, .card { font-family:'Inter', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; font-variant-numeric:tabular-nums; }
+body, button, input, .card { font-family:var(--br-sans); font-variant-numeric:tabular-nums; }
 body { font-size:14px; line-height:1.4; letter-spacing:0.1px; }
 h1 { font-size:13px; font-weight:600; letter-spacing:0.3px; }
 .card { padding:18px 20px; }
@@ -5852,7 +5852,7 @@ h1 { display:none; }
 .b-logo { filter:drop-shadow(0 0 10px rgba(233,165,187,0.35)); }
 .b-spark { animation:bSpark 3s ease-in-out infinite; }
 @keyframes bSpark { 0%,100% { opacity:0.4; } 50% { opacity:1; } }
-.g-logo { font-family:'Bungee', 'Inter', sans-serif; font-size:42px; line-height:1; letter-spacing:3px; color:#ffffff;
+.g-logo { font-family:var(--br-serif); font-size:42px; line-height:1; letter-spacing:3px; color:#ffffff;
   text-shadow:0 2px 0 rgba(0,0,0,0.5), 0 0 18px rgba(255,255,255,0.12); }
 .g-tag { display:flex; align-items:center; gap:12px; font-family:'Bebas Neue', 'Inter', sans-serif; font-size:20px; letter-spacing:2px; color:#dcbb91; }
 .g-live { color:#ff3b4f; font-size:16px; text-shadow:0 0 10px rgba(255,59,79,0.7); }
@@ -5864,10 +5864,10 @@ h1 { display:none; }
   letter-spacing:2px !important; color:#dcbb91 !important; font-weight:400 !important; }
 .press-head b { color:#e8c27c !important; font-size:20px !important; }
 .sb-title { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:17px !important; letter-spacing:2px; font-weight:400 !important; }
-.sb-dir, .sc-pct, .rsi-num, .fr-big, .tuc-time { font-family:'Bungee', 'Inter', sans-serif; font-weight:400 !important; letter-spacing:1px; }
+.sb-dir, .sc-pct, .rsi-num, .fr-big, .tuc-time { font-family:var(--br-serif); font-weight:400 !important; letter-spacing:1px; }
 .calls-row .sb-dir { font-size:24px; }
 .sc-pct { font-size:26px; } .rsi-num { font-size:30px; } .flip-radar .fr-big { font-size:24px; }
-.asset-label { font-family:'Bungee', 'Inter', sans-serif; font-weight:400 !important; font-size:30px; }
+.asset-label { font-family:var(--br-serif); font-weight:400 !important; font-size:30px; }
 .asset-BTC { color:#e8c27c !important; } .asset-XRP { color:#dcbb91 !important; }
 .live-price-inline .big.up { color:#1ff28a !important; } .live-price-inline .big.down { color:#ff3b4f !important; }
 .stage-early { border-color:#e9a5bb !important; box-shadow:0 0 16px rgba(233,165,187,0.18) !important; }
@@ -5895,20 +5895,20 @@ h1 { display:none; }
 .mkt { background:rgba(48,39,43,0.9); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px 8px; margin-bottom:8px; min-width:200px; }
 .mkt-btns { display:flex; gap:4px; }
 .mkt-btns button { flex:1; font-size:11px; font-weight:700; padding:3px 0; border-radius:7px; border:1px solid transparent; cursor:pointer;
-  color:#0f1115; font-family:'Inter', sans-serif; }
+  color:#0f1115; font-family:var(--br-sans); }
 .mkt-btns button.bull { background:#1ff28a; } .mkt-btns button.bear { background:#ff3b4f; } .mkt-btns button.neut { background:#5d6573; color:#fbf4ec; }
 .mkt-btns button.sel { outline:2px solid #ffffff; outline-offset:1px; }
 .mkt-pane { display:none; font-size:12px; margin-top:5px; } .mkt-pane.show { display:block; }
 .mkt-pane b { font-size:13px; }
 .stage-pend { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:22px; letter-spacing:2px; color:#bcaaa1; margin:4px 0; }
 .stage-cd { margin:2px 0 6px; } .stage-cd .hint { font-size:12px; letter-spacing:1px; text-transform:uppercase; }
-.stage-cd-t { font-family:'Bungee', 'Inter', sans-serif; font-size:30px; color:#ffffff; letter-spacing:1px; }
+.stage-cd-t { font-family:var(--br-serif); font-size:30px; color:#ffffff; letter-spacing:1px; }
 .stage-cd-t.now { font-size:18px; color:#f2c46b; }
 /* line-cross box (calls row, next to RSI) */
 .calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(180px,1.05fr) minmax(100px,0.5fr) minmax(100px,0.5fr) !important; }
 @media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr !important; } }
 .lx-box { text-align:center; }
-.lx-num { font-family:'Bungee', 'Inter', sans-serif; font-size:30px; line-height:1.05; }
+.lx-num { font-family:var(--br-serif); font-size:30px; line-height:1.05; }
 .lx-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
 .lx-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
 .lx-clean { border-color:#1ff28a !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:#1ff28a; }
@@ -6183,6 +6183,49 @@ body[data-view="both"] .stage-cd-t { font-size:24px; }
 .press-buy, .press-sell, .line-diff b, .th-row b, .fr-big, .lx-num, .rsi-num, .sc-pct {
   font-family:var(--br-serif) !important; font-variant-numeric:lining-nums tabular-nums; font-variation-settings:"opsz" 72, "SOFT" 50; letter-spacing:0 !important; }
 .stage-cd-t, .fa-usd { font-weight:800 !important; }
+/* ==== 2026-10-22 (user): typography system - three faces, one job each, one scale ====
+   Fraunces  = numbers + the big words (prices, calls, %s, coin names)        -> var(--br-serif)
+   Bebas Neue = every title / label / eyebrow (uppercase, tracked, tan)        -> var(--br-label)
+   Nunito    = everything you read (lines, hints, alerts)                      -> var(--br-sans)
+   scale: 11 meta / 13 body / 16 label / 20 sub-value / 26 tile value / 34 hero */
+:root { --br-label:'Bebas Neue', 'Nunito', sans-serif; --fs-meta:11px; --fs-body:13px; --fs-label:16px; --fs-sub:20px; --fs-val:26px; --fs-hero:34px; }
+.rs-title, .top-w-title, .sc-title, .sb-title, .tuc-lbl, .tug-title, .lx-mkt-lbl, .more-detail > summary b, .calls-row .sb-title,
+body[data-view="both"] .calls-row .sb-title, body[data-view="both"] .rs-title {
+  font-family:var(--br-label) !important; font-weight:400 !important; font-style:normal !important; text-transform:uppercase !important;
+  font-variant-caps:normal !important; font-variation-settings:normal !important; font-size:var(--fs-label) !important;
+  letter-spacing:2px !important; line-height:1.1 !important; color:var(--br-tan) !important; }
+.rs-title b, .sb-title b, .sc-title b { color:var(--br-cream) !important; font-weight:400 !important; }
+.live-price-inline .lbl, .stage-cd .hint, .round-left .hint {
+  font-family:var(--br-label) !important; font-size:13px !important; letter-spacing:2px !important; text-transform:uppercase; color:var(--br-mute) !important; }
+.sb-line, .fr-txt, .sc-empty, .fa-item, .press-qty, .press-chips, .th-row, .mkt-pane, .lx-sub, .rsi-sub { font-family:var(--br-sans) !important; }
+.sb-line, .fr-txt, .sc-empty, .th-row { font-size:var(--fs-body) !important; line-height:1.4 !important; }
+.hint { font-size:var(--fs-meta); letter-spacing:.2px; }
+.sb-dir, .stage-pend { font-size:var(--fs-val) !important; line-height:1.05 !important; }
+.rsi-num, .lx-num, .fr-big { font-size:30px !important; line-height:1 !important; }
+.live-price-inline .big { font-size:var(--fs-hero) !important; line-height:1.05 !important; }
+.sb-tier, .rsi-zone, .lx-zone { font-family:var(--br-sans) !important; font-weight:900 !important; font-size:12px !important; letter-spacing:1.5px !important; text-transform:uppercase; }
+body .scoreboard > .rs-title, body[data-view] .scoreboard > .rs-title, body .scoreboard > .rs-title b,
+body .top-alerts > .top-w-title, body[data-view] .top-alerts > .top-w-title, body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title {
+  color:#2a1b21 !important; font-size:17px !important; }
+@media (max-width:560px) { body .scoreboard > .rs-title, body[data-view] .scoreboard > .rs-title, body[data-view] .top-alerts > .top-w-title,
+  body[data-view] .rounds-panel > .top-w-title { font-size:14px !important; } }
+/* 2026-10-22 (user): everything through the whale alerts fits the first screen at 100% zoom */
+.rsi-lx .rsi-check, .rsi-lx .lx-sub { display:none !important; }
+.rsi-lx { gap:5px !important; padding:8px 8px !important; }
+.lx-mkt { padding-top:5px !important; }
+.calls-row { margin-bottom:8px !important; }
+.calls-row .stage-box, body[data-view="both"] .calls-row .stage-box { padding:8px 8px 7px !important; justify-content:center; }
+.calls-row .sb-line { margin-top:1px !important; }
+.calls-row .sb-z80 { padding:3px 8px !important; font-size:11px !important; }
+.rsi-num, .lx-num, .fr-big { font-size:26px !important; }
+.head-row { margin-bottom:4px !important; }
+.live-price-inline .big { font-size:30px !important; }
+.press-top, .top-alerts, .scoreboard, .rounds-panel, .lw-win, .tgt-hist { margin-top:10px !important; }
+.press-top { padding-top:40px !important; padding-bottom:8px !important; }
+.top-alerts { padding-top:40px !important; }
+.top-alerts .fa-list { max-height:min(300px, 34vh) !important; overflow-y:auto !important; scrollbar-width:thin; scrollbar-color:rgba(220,187,145,0.5) transparent; }
+.top-alerts .fa-item { margin-bottom:0 !important; padding:5px 9px !important; }
+.top-alerts .fa-usd { font-size:19px; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -6205,18 +6248,22 @@ body[data-view="both"] .stage-cd-t { font-size:24px; }
 .lw-corner { position:absolute; top:8px; left:10px; z-index:5; max-width:70%; font-size:12px; line-height:1.35; pointer-events:none; }
 .lw-corner .lw-macd { margin-top:5px; font-size:11px; color:#e9ded8; }
 .lw-chips { display:flex; gap:6px; flex-wrap:wrap; }
-.lw-chip { display:inline-flex; align-items:baseline; gap:5px; padding:3px 8px; border-radius:8px; background:rgba(20,15,18,0.85);
-  border:1px solid rgba(242,196,107,0.30); font-size:11px; white-space:nowrap; }
-.lw-chip i { font-style:normal; color:#f2c46b; font-weight:800; letter-spacing:.5px; }
-.lw-chip b { color:#fbf0d9; font-size:13px; }
-/* 2026-10-22 (user): green bullish / red bearish / grey neutral / blue oversold / red-pink gradient overbought */
-.lw-chip.c-up b, .lw-chip.c-up span { color:#1ff28a; } .lw-chip.c-up { border-color:rgba(31,242,138,0.45); }
-.lw-chip.c-dn b, .lw-chip.c-dn span { color:#ff3b4f; } .lw-chip.c-dn { border-color:rgba(255,59,79,0.45); }
-.lw-chip.c-nt b, .lw-chip.c-nt span { color:#b9b3b0; } .lw-chip.c-nt { border-color:rgba(185,179,176,0.35); }
-.lw-chip.c-os b, .lw-chip.c-os span { color:#00e5ff; text-shadow:0 0 8px rgba(0,229,255,0.45); } .lw-chip.c-os { border-color:rgba(0,229,255,0.5); }
-.lw-chip.c-ob b, .lw-chip.c-ob span, .rz-ob .rsi-num, .rz-ob .rsi-zone {
+/* 2026-10-22 (user): RSI / MACD read like a small speed-limit sign - colored label on top, big white number, zone word under it.
+   label + border: green bullish / red bearish / grey neutral / blue oversold / red-pink gradient overbought */
+.lw-chips { gap:6px !important; align-items:flex-start; }
+.lw-chip { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:0; min-width:54px;
+  padding:3px 7px 4px; border-radius:7px; background:rgba(16,12,14,0.88); border:2px solid #b9b3b0;
+  box-shadow:inset 0 0 0 2px rgba(16,12,14,0.88), inset 0 0 0 3px rgba(255,255,255,0.10); white-space:nowrap; line-height:1.05; }
+.lw-chip i { font-style:normal; font-family:'Bebas Neue', 'Inter', sans-serif; font-size:12px; font-weight:400; letter-spacing:1.6px; color:#b9b3b0; }
+.lw-chip b { color:#ffffff !important; font-size:19px !important; line-height:1.05; margin:1px 0 0; }
+.lw-chip > span { font-size:9px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#b9b3b0; }
+.lw-chip.c-up { border-color:#1ff28a; box-shadow:0 0 8px rgba(31,242,138,0.30); } .lw-chip.c-up i, .lw-chip.c-up > span { color:#1ff28a; }
+.lw-chip.c-dn { border-color:#ff3b4f; box-shadow:0 0 8px rgba(255,59,79,0.30); } .lw-chip.c-dn i, .lw-chip.c-dn > span { color:#ff3b4f; }
+.lw-chip.c-nt { border-color:#8f8885; } .lw-chip.c-nt i, .lw-chip.c-nt > span { color:#b9b3b0; }
+.lw-chip.c-os { border-color:#00e5ff; box-shadow:0 0 9px rgba(0,229,255,0.35); } .lw-chip.c-os i, .lw-chip.c-os > span { color:#00e5ff; }
+.lw-chip.c-ob { border-color:#ff4f7e; border-image:linear-gradient(90deg, #ff2a3d, #ff5fd0) 1; border-radius:0; box-shadow:0 0 9px rgba(255,77,140,0.35); }
+.lw-chip.c-ob i, .lw-chip.c-ob > span, .rz-ob .rsi-num, .rz-ob .rsi-zone {
   background:linear-gradient(90deg, #ff2a3d 0%, #ff4f7e 50%, #ff5fd0 100%); -webkit-background-clip:text; background-clip:text; color:transparent !important; }
-.lw-chip.c-ob { border-color:rgba(255,77,140,0.55); box-shadow:0 0 10px rgba(255,77,140,0.25); }
 .rz-ob { border-color:#ff4d8c !important; }
 .rz-bull .rsi-num, .rz-bull .rsi-zone { color:#1ff28a !important; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#ff3b4f !important; }
 .rz-norm .rsi-num, .rz-norm .rsi-zone { color:#b9b3b0 !important; }
@@ -9604,7 +9651,7 @@ def _alert_line(a, dec):
 
 
 def build_alert_box(name):
-    rows = _ENG.alerts_for(name, max_age=1200, limit=14)
+    rows = _ENG.alerts_for(name, max_age=3600, limit=40)   # 2026-10-22 (user): scroll back through at least 30 buys / sells
     dec = 4 if name == "XRP" else 2
     items = []
     for a in rows:
@@ -9625,7 +9672,7 @@ def build_alert_box(name):
             + (f' <span class="fa-where">{where}</span>' if where else "")
             + f'<span class="fa-age hint">{_ago(a["ts"])}</span><div class="fa-detail">{a["detail"]}</div></div>')
     if not items:
-        items.append('<div class="hint fa-empty">Quiet - nothing big in the last 20 min.</div>')
+        items.append('<div class="hint fa-empty">Quiet - nothing big in the last hour.</div>')
     h = _flow.HUB.feed_health()
     lt = _ENG.liq_totals(name, 300)
     liq_txt = ""
