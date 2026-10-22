@@ -6387,6 +6387,58 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
   -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
   box-shadow:inset 0 0 0 1px rgba(251,244,236,0.22) !important; }
 .lw-chip b, .lw-chip b.w { text-shadow:0 1px 2px rgba(33,27,30,0.55); }
+/* ==== 2026-10-22 (user: "neons weren't the answer - I like the W and L circles, use that style, color-matched to the buy/sell bar")
+   Whale & liquidity rows are theme tiles now. Direction = a W/L-style circle (tinted fill + colored ring + arrow), dollar value in the
+   buy-pressure green / red, cream headline, muted details. A brand-new alert gets a white arrow (like a right-call letter).
+   A SURGE (net of all trades, not an order) gets a dashed ring + a TOTAL tag. ==== */
+.card .fa-list { gap:6px !important; }
+.card .fa-item, .card .top-alerts .fa-item {
+  display:grid !important; grid-template-columns:26px 1fr auto; grid-template-areas:"dot head usd" "dot where age"; column-gap:10px; row-gap:1px;
+  align-items:center; padding:8px 12px !important; margin:0 !important; border-radius:14px !important;
+  background:var(--br-tile, rgba(56,45,50,0.88)) !important; border:1px solid rgba(240,214,200,0.10) !important; box-shadow:none !important; }
+.card .fa-item .fa-arrow { grid-area:dot; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:800; background:rgba(188,170,161,0.18); color:#bcaaa1; box-shadow:inset 0 0 0 1px rgba(188,170,161,0.45); text-shadow:none !important; }
+.card .fa-item.fa-up .fa-arrow { background:rgba(61,214,156,0.24) !important; color:#3dd69c !important; box-shadow:inset 0 0 0 1px rgba(61,214,156,0.55) !important; }
+.card .fa-item.fa-down .fa-arrow { background:rgba(240,84,84,0.24) !important; color:#f05454 !important; box-shadow:inset 0 0 0 1px rgba(240,84,84,0.55) !important; }
+.card .fa-item.fa-fresh .fa-arrow { color:#ffffff !important; }
+.card .fa-item .fa-head { grid-area:head; color:#fbf4ec !important; font-family:var(--br-bold) !important; font-weight:700 !important; font-size:12.5px !important;
+  letter-spacing:.3px; text-shadow:none !important; min-width:0; }
+.card .fa-item .fa-usd, .card .top-alerts .fa-item .fa-usd { grid-area:usd; justify-self:end; font-family:var(--br-bold) !important; font-weight:800 !important;
+  font-size:17px !important; text-shadow:none !important; background:none !important; padding:0 !important; }
+.card .fa-item.fa-up .fa-usd { color:#3dd69c !important; } .card .fa-item.fa-down .fa-usd { color:#f05454 !important; }
+.card .fa-item .fa-where { grid-area:where; color:#bcaaa1 !important; font-size:12px !important; opacity:1 !important; min-width:0; }
+.card .fa-item .fa-age { grid-area:age; justify-self:end; color:#a8968e !important; font-size:11px !important; margin:0 !important; }
+.card .fa-item .fa-detail { display:none !important; }
+/* surge = a total, not an order */
+.card .fa-item[data-kind="burst"].fa-up, .card .fa-item[data-kind="burst"].fa-down { background:var(--br-tile, rgba(56,45,50,0.88)) !important;
+  border:1px dashed rgba(240,214,200,0.22) !important; box-shadow:none !important; }
+.card .fa-item[data-kind="burst"] .fa-arrow { background:transparent !important; box-shadow:none !important; border:1.5px dashed currentColor; }
+.card .fa-item[data-kind="burst"] .fa-head, .card .fa-item[data-kind="burst"] .fa-where, .card .fa-item[data-kind="burst"] .fa-age { color:inherit; }
+.card .fa-item[data-kind="burst"] .fa-head { color:#fbf4ec !important; }
+.card .fa-item[data-kind="burst"] .fa-where, .card .fa-item[data-kind="burst"] .fa-age { color:#bcaaa1 !important; }
+.card .fa-item[data-kind="burst"].fa-up .fa-usd, .card .fa-item[data-kind="burst"].fa-up .fa-arrow { color:#3dd69c !important; }
+.card .fa-item[data-kind="burst"].fa-down .fa-usd, .card .fa-item[data-kind="burst"].fa-down .fa-arrow { color:#f05454 !important; }
+.card .fa-item[data-kind="burst"] .fa-head::after { content:"TOTAL"; margin-left:7px; font-size:9.5px; font-weight:800; letter-spacing:1.2px; padding:1px 6px;
+  border-radius:999px; color:#dcbb91; border:1px solid rgba(220,187,145,0.45); vertical-align:1px; }
+.card .fa-item.fa-void .fa-arrow { color:#fbf4ec !important; }
+@media (max-width:560px) { .card .fa-item, .card .top-alerts .fa-item { grid-template-columns:24px 1fr auto; padding:7px 9px !important; } }
+/* ==== one spacing scale for the whole card: 8 inside a block, 12 between related blocks, 20 between sections ==== */
+.card .head-row { margin-bottom:8px !important; }
+.card .press-top, body[data-view] .card .press-top { margin:0 0 12px !important; padding:0 !important; }
+.card .press-top .press-chips { margin-top:8px; }
+.card .calls-row, body[data-view] .card .calls-row { margin:0 0 20px !important; gap:12px !important; }
+.card .top-alerts, body[data-view] .card .top-alerts, .card .scoreboard, body[data-view] .card .scoreboard,
+.card .rounds-panel, body[data-view] .card .rounds-panel, .card .lw-win, body[data-view] .card .lw-win { margin:0 0 20px !important; padding:0 !important; }
+.card .top-strip { margin:0 !important; }
+.card .top-alerts > .top-w-title, .card .scoreboard > .rs-title, .card .rounds-panel > .top-w-title, .card .lw-win > .pat-win-head > b { padding:0 0 10px !important; }
+.card .sc-grid { gap:12px !important; }
+.card .sc-legend { margin-top:10px; }
+.card .rc-grid { gap:12px !important; }
+/* 2026-10-22 (user): BUY PRESSURE title in the same BRAIN pink gradient as the other section titles */
+.card .press-top > .press-head > b, body .card .press-top > .press-head > b, body[data-view] .card .press-top > .press-head > b {
+  background:linear-gradient(90deg, #e9a5bb 0%, #f3c6b4 50%, #dcbb91 100%) !important; -webkit-background-clip:text !important; background-clip:text !important;
+  color:transparent !important; -webkit-text-fill-color:transparent; font-family:var(--br-label) !important; font-weight:900 !important;
+  font-size:15px !important; letter-spacing:2px !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
