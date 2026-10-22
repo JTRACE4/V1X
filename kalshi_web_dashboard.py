@@ -12223,7 +12223,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/stripe/webhook":
             ln = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(min(ln, 1_000_000)) if 0 < ln <= 1_000_000 else b""
-            if not _bill.verify_signature(raw, self.headers.get("Stripe-Signature", ""), os.environ.get("STRIPE_WEBHOOK_SECRET", "")):
+            if not _bill.verify_signature(raw, self.headers.get("Stripe-Signature", ""), _bill.webhook_secret()):
                 print("[billing] webhook REJECTED - bad or missing signature")
                 return self._send(400, "bad signature", "text/plain")
             try:
@@ -13037,6 +13037,12 @@ def main():
     threading.Thread(target=_coinbase_ws_run_forever, daemon=True).start()
     threading.Thread(target=_kraken_ws_run_forever, daemon=True).start()
     threading.Thread(target=_coinbase_l2_run_forever, daemon=True).start()
+    def _stripe_setup():
+        try:
+            print(f"[billing] stripe: {_bill.ensure_stripe()}")
+        except Exception as _se:
+            print(f"[billing] stripe setup failed: {_se!r}")
+    threading.Thread(target=_stripe_setup, daemon=True).start()
     threading.Thread(target=poll_loop, daemon=True).start()
     try:
         _rsi_check.start()

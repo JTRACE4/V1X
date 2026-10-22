@@ -31,14 +31,89 @@ SIG_TOLERANCE_S = 300
 ET = ZoneInfo("America/New_York")
 
 
+def _mode():
+    k = os.environ.get("STRIPE_SECRET_KEY", "")
+    return "live" if k.startswith(("sk_live_", "rk_live_")) else ("test" if k else "")
+
+
+def _auto():
+    return (_auth.DB.get("stripe") or {}).get(_mode()) or {}
+
+
 def link_for(key):
-    return os.environ.get({"7d": "STRIPE_LINK_7D", "30d": "STRIPE_LINK_30D", "105d": "STRIPE_LINK_105D"}[key], "")
+    env = os.environ.get({"7d": "STRIPE_LINK_7D", "30d": "STRIPE_LINK_30D", "105d": "STRIPE_LINK_105D"}[key], "")
+    return env or (_auto().get("links") or {}).get(key, "")
+
+
+def webhook_secret():
+    return os.environ.get("STRIPE_WEBHOOK_SECRET") or _auto().get("whsec", "")
+
+
+# ------------------------------------------------------------------------------------- one-time Stripe auto-setup
+# With STRIPE_SECRET_KEY set (a test key sk_test_... first, the live key later), the site creates its own three products,
+# prices, payment links and the webhook endpoint once, and remembers them (per test/live mode) in the user database.
+# Nothing is ever charged by this - it only creates the catalog.
+PRODUCT_DESC = ("Access to the BRAIN live market-data dashboard for {label}, plus the BRAIN Playbook (PDF guide). "
+                "Educational market analysis and information service - not financial advice. One-time payment, "
+                "does not renew. All sales final.")
+
+
+def _stripe(method, path, data=None):
+    import urllib.parse as _u, urllib.request as _r
+    body = _u.urlencode(data or {}, doseq=True).encode() if data is not None else None
+    req = _r.Request("https://api.stripe.com/v1/" + path, data=body, method=method,
+                     headers={"Authorization": "Bearer " + os.environ["STRIPE_SECRET_KEY"],
+                              "Content-Type": "application/x-www-form-urlencoded"})
+    with _r.urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read().decode())
+
+
+def ensure_stripe():
+    """Create whatever is missing for the current key's mode. Safe to call at every start. Returns a status line."""
+    mode = _mode()
+    if not mode:
+        return "no STRIPE_SECRET_KEY"
+    with _auth._lock:
+        st = _auth.DB.setdefault("stripe", {}).setdefault(mode, {})
+        links = st.setdefault("links", {})
+    base = (_auth.public_url() or "https://brainswatch.com").rstrip("/")
+    made = []
+    for key, (days, cents, label) in PASSES.items():
+        if links.get(key):
+            continue
+        prod = _stripe("POST", "products", {"name": f"BRAIN {label} pass", "description": PRODUCT_DESC.format(label=label),
+                                            "metadata[pass]": key, "tax_code": "txcd_10701401"})
+        price = _stripe("POST", "prices", {"product": prod["id"], "unit_amount": cents, "currency": "usd",
+                                           "metadata[pass]": key})
+        link = _stripe("POST", "payment_links", {
+            "line_items[0][price]": price["id"], "line_items[0][quantity]": 1,
+            "metadata[pass]": key, "payment_intent_data[metadata][pass]": key,
+            "after_completion[type]": "redirect", "after_completion[redirect][url]": base + "/app?paid=1",
+            "custom_text[submit][message]": "One-time payment for " + label + " of access. Does not renew. "
+                                            "All sales final. Educational information service, not financial advice.",
+        })
+        links[key] = link["url"]
+        made.append(key)
+        with _auth._lock:
+            _auth.save()
+    if not st.get("whsec") and not os.environ.get("STRIPE_WEBHOOK_SECRET"):
+        wh = _stripe("POST", "webhook_endpoints", {"url": base + "/stripe/webhook",
+                                                   "enabled_events[]": ["checkout.session.completed",
+                                                                        "checkout.session.async_payment_succeeded"],
+                                                   "description": "BRAIN passes"})
+        st["whsec"], st["webhook_id"] = wh["secret"], wh["id"]
+        made.append("webhook")
+        with _auth._lock:
+            _auth.save()
+    return f"{mode} mode ready" + (f" (created {', '.join(made)})" if made else "")
 
 
 def checkout_url(key, user):
     base = link_for(key)
     if not base or not user:
         return ""
+    if "/test_" in base and user.get("role") not in ("owner", "admin"):
+        return ""                 # test-mode checkout is for the owner only - test cards must never unlock real accounts
     import urllib.parse as _u
     return base + ("&" if "?" in base else "?") + _u.urlencode({"client_reference_id": user["username"],
                                                                  "prefilled_email": user.get("email", "")})
@@ -99,6 +174,8 @@ def handle_event(event):
     """Apply one verified Stripe event. Returns a short status string (for the log)."""
     if event.get("type") not in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
         return "ignored " + str(event.get("type"))
+    if _mode() == "live" and event.get("livemode") is False:
+        return "ignored test-mode event (site is live)"
     s = (event.get("data") or {}).get("object") or {}
     if s.get("payment_status") != "paid":
         return "not paid yet"
