@@ -3003,7 +3003,8 @@ def whale_impact(asset, side, usd, venue, spot, line, seconds_left, kalshi_yes, 
             elif 0.40 <= p_push <= 0.60:
                 bits.append("toss-up, this could tip it")
             else:
-                bits.append(f"Kalshi {round(p_push * 100)} percent this way")
+                bits.append(f"Market agrees, {round(p_push * 100)} percent" if p_push >= 0.5
+                            else f"Market disagrees, {round((1 - p_push) * 100)} percent the other way")
         if tier == "A":
             bits.append("index exchange")
         say = ". ".join(b[:1].upper() + b[1:] for b in bits) + "."
@@ -6624,8 +6625,8 @@ function updateFlipWatch() {
     const rel = v.withCall === null ? '' : (v.withCall ? 'with call' : 'against call');
     const st = v.strength !== null ? Math.round(v.strength * 100) + '%' : '';
     let badge = '';
-    if (v.withCall === true) badge = '<span class="fw-badge fw-hold"><i class=ico data-i=hold></i> HOLD</span>';
-    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev"><i class=ico data-i=reversal></i> REVERSAL</span>';
+    if (v.withCall === true) badge = '<span class="fw-badge fw-hold" title="the market is holding with the call"><i class=ico data-i=hold></i> HOLDING</span>';
+    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev" title="the market has turned 60%+ against the call"><i class=ico data-i=reversal></i> REVERSAL</span>';
     return '<div class="fw-item ' + cls + '" title="' + n + ' flip watch: heading ' + (v.goingUp ? 'up' : 'down') + (rel ? ', ' + rel + ' (' + callWord + ')' : '')
       + (st ? ', ' + _strengthWord(v.strength) + ' ' + st + ' on the market' : '') + '"><b>' + n + '</b><span class="fw-dir">' + (v.goingUp ? '&#9650; UP' : '&#9660; DOWN') + '</span>'
       + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span class="fw-st">' + st + '</span>' : '') + badge + '</div>';
@@ -6650,7 +6651,7 @@ function checkRadarAlerts() {
 }
 
 // ---- 2026-10-22: two spoken "money moments", once per coin per round each:
-//  1) CASH OUT: the side BRAIN called is 90%+ on the market with 2+ minutes left -> "take profit or cash out to be safe"
+//  1) CASH OUT: the side BRAIN called is 90%+ on the market with 2+ minutes left -> "Some traders cash out here." (a description, never an instruction)
 //  2) LATE COIN FLIP: 3 minutes or less left and the market is 40-60% -> say so, plus "it's flipping" when price crossed the
 //     line in the last 45 seconds or a flip was confirmed
 const CASHOUT_AT = 0.90, CASHOUT_MIN_LEFT = 120, TOSSUP_MAX_LEFT = 180, TOSSUP_MIN_LEFT = 20, CROSS_RECENT_MS = 45000;
@@ -6685,7 +6686,7 @@ function updateMoneyMoments() {
       if (holding >= CASHOUT_AT && !moneySaid.has(k1)) {
         moneySaid.add(k1);
         if (canTalk) speak(coin + ' ' + (callName === 'sealed' ? 'sealed' : 'early') + ' call is at ' + Math.round(holding * 100)
-          + ' percent on the market with ' + _leftWords(left) + '. Take profit, or cash out to be safe.', true, 15000);
+          + ' percent on the market with ' + _leftWords(left) + '. Some traders cash out here.', true, 15000);
       }
     }
     // 2) late coin flip (+ flipping)
@@ -7962,7 +7963,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure. Good confidence.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure. Super confidence.'),650)">Test sealed call</button>
       <button onclick="speakRaw('Bitcoin flip update: heading down, against the sealed call. Solid, 78 percent on Kalshi. 3 and a half minutes left.')">Test flip update</button>
-      <button onclick="speakRaw('Bitcoin sealed call is at 92 percent on the market with 6 minutes left. Take profit, or cash out to be safe.')">Test cash out</button>
+      <button onclick="speakRaw('Bitcoin sealed call is at 92 percent on the market with 6 minutes left. Some traders cash out here.')">Test cash-out level</button>
       <button onclick="speakRaw('XRP is a real coin flip late in the round. Market 52 percent up, 2 minutes left. And it\'s flipping, price just crossed the line.')">Test late coin flip</button>
       <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('2.4 million dollar whale buy on Bitcoin.'),1300)">Test whale BUY (cha-ching)</button>
       <button onclick="playDenied(); setTimeout(()=>speakRaw('850 thousand dollar whale sell on XRP, against the move.'),1300)">Test whale SELL (double beep)</button>
@@ -9158,8 +9159,8 @@ def build_stage_box(name, d, key):
             # 2026-10-20 (user request): Kalshi's % is WHITE when Kalshi agrees with the call, BLACK when it disagrees -
             # the same in every call box, BTC and XRP, early and sealed. The whole 'Kalshi now' row changes colour, no background.
             agree = holding >= 0.5
-            hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}">Kalshi now: <span><b>{holding:.0%}</b> - '
-                         f'{"holding" if agree else "going AGAINST it"}</span></div>')
+            hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}"><span>Market {"agrees" if agree else "disagrees"} '
+                         f'&middot; <b>{holding:.0%}</b></span></div>')
         z80 = (f'<div class="sb-z80"><i class=ico data-i=star></i> 80% SETUP &middot; won {c["zone80"]:.0%} in backtest'
                + (f' &middot; {c["zone80_roi"] * 100:+.0f}% per $ at Kalshi prices' if c.get("zone80_roi") is not None else "")
                + '</div>' if c.get("zone80") else "")
@@ -9187,8 +9188,8 @@ def build_stage_box(name, d, key):
         hold_html = ""
         if holding is not None:
             agree = holding >= 0.5
-            hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}">Kalshi now: <span><b>{holding:.0%}</b> - '
-                         f'{"holding" if agree else "going AGAINST it"}</span></div>')
+            hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}"><span>Market {"agrees" if agree else "disagrees"} '
+                         f'&middot; <b>{holding:.0%}</b></span></div>')
         p_side = (lt.get("p_yes") or 0.5) if up else 1 - (lt.get("p_yes") or 0.5)
         body = (f'<div class="sb-late"><i class=ico data-i=clock></i> LATE CALL &middot; PRICE HAS DECIDED</div>'
                 f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>'
@@ -12395,6 +12396,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json({"error": "pass required", "pricing": "/pricing"}, 402)
         if parsed.path == "/guide":
             return self._send(200, _site.guide_html(user))
+        if parsed.path == "/playbook.pdf":           # 2026-10-22: the BRAIN Playbook guide, included with every pass
+            _pb = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "BRAIN-Playbook.pdf")
+            with open(_pb, "rb") as _f:
+                return self._send(200, _f.read(), "application/pdf",
+                                  [("Content-Disposition", 'inline; filename="BRAIN-Playbook.pdf"'), ("Cache-Control", "private, max-age=3600")])
         if parsed.path == "/tts":
             qs_t = urllib.parse.parse_qs(parsed.query)
             mp3 = _tts_mp3((qs_t.get("t") or [""])[0], (qs_t.get("v") or ["ava"])[0])

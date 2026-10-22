@@ -442,14 +442,16 @@ PRICING_CSS = r"""
 .pr .fine{color:#bcaaa1;font-size:12.5px;margin-top:18px;line-height:1.6}
 """
 
-PLAN_FEATURES = ["Live early + sealed calls with BRAIN confidence", "Spoken alerts, flip watch, cash-out + coin-flip warnings",
-                 "Whale impact scores + Trader Radar", "Graded record, $100 backtest, price-target history"]
+PLAN_FEATURES = ["Live dashboard: early + sealed calls with BRAIN confidence", "Spoken alerts, flip watch, cash-out + coin-flip notes",
+                 "Whale impact scores + Trader Radar", "Graded record, $100 backtest, price-target history",
+                 "The BRAIN Playbook (PDF guide to every screen)"]
 
 
 def pricing_page(user, plans, until_text=None, active=False):
     """plans: [(key, label, price, per_day_text, checkout_url_or_'')]"""
     if user and active:
-        status = f'<div class="status">Your pass is active until <b>{E(until_text or "")}</b>. Buying another adds its days on top.</div>'
+        status = (f'<div class="status">Your pass is active until <b>{E(until_text or "")}</b>. Buying another adds its days on top. '
+                  f'&middot; <a href="/playbook.pdf" style="color:#c9f7e6;font-weight:800">Download your BRAIN Playbook</a></div>')
     elif user:
         status = '<div class="status none">No active pass yet - pick one below to unlock the live dashboard.</div>'
     else:

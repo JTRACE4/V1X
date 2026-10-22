@@ -134,7 +134,8 @@ def handle_event(event):
         _auth.save()
     _auth.send_email(u["email"], "Your BRAIN pass is active",
                      f"Hi {u['username']},\n\nThanks for joining BRAIN. Your {label} pass is active until "
-                     f"{fmt_until(u['access_until'])}.\n\nOpen the live dashboard: {_auth.public_url()}/app\n\n"
+                     f"{fmt_until(u['access_until'])}.\n\nOpen the live dashboard: {_auth.public_url()}/app\n"
+                     f"Your BRAIN Playbook (PDF guide to every screen): {_auth.public_url()}/playbook.pdf\n\n"
                      "Passes don't renew on their own - we'll email you 2 days before it ends.\n\n"
                      "BRAIN is educational market analysis, not financial advice. All sales are final.\n\n- BRAIN")
     notify_owner(f"BRAIN: {u['username']} bought {label}",
