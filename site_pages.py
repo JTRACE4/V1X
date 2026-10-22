@@ -237,7 +237,7 @@ def landing(user=None):
         cta = '<a class="btn pink" href="/app">Open BRAIN</a><a class="btn teal" href="/logout">Log out</a>'
         hello = f'<p>Welcome back, {E(user["username"])}.</p>'
     else:
-        cta = '<a class="btn pink" href="/login">Log in</a><a class="btn teal" href="/signup">Sign up</a>'
+        cta = '<a class="btn pink" href="/pricing">Get access</a><a class="btn teal" href="/login">Log in</a>'
         hello = '<p>Market intelligence, wired in.</p>'
     flies = "".join(f'<i class="ff" style="left:{l}%;top:{t}%;animation-delay:{dl}s"></i>'
                     for l, t, dl in ((14, 44, 0), (27, 40, 1.3), (39, 47, 2.6), (58, 42, 0.8), (71, 46, 3.1), (84, 41, 1.9), (49, 38, 4.2)))
@@ -304,12 +304,12 @@ def auth_page(kind, error="", info="", values=None, extra=""):
                 '<input type="checkbox" name="agree" value="1" required style="width:auto;margin-top:3px"> '
                 '<span>I agree to the <a href="/terms" target="_blank">terms</a> - informational and educational use only.</span></label>'
                 '<button class="btn teal" type="submit">Request access</button>'
-                '<p class="small mute">The owner approves every new account. You get an email once you\'re in.</p></form>')
+                '<p class="small mute">Free account. The live dashboard needs a pass - you\'ll pick one next.</p></form>')
     elif kind == "forgot":
         form = ('<form method="post" action="/forgot">'
                 f'<label for="e">Your account email</label><input id="e" type="email" name="email" value="{E(v.get("email", ""))}" autocomplete="email" required>'
                 '<button class="btn cream" type="submit">Send reset link</button>'
-                '<p class="small mute">Forgot your username? It\'s in your approval email - or log in with your email instead.</p></form>')
+                '<p class="small mute">Forgot your username? Log in with your email instead.</p></form>')
     elif kind == "reset":
         form = ('<form method="post" action="/reset">'
                 f'<input type="hidden" name="t" value="{E(v.get("t", ""))}">'
@@ -354,6 +354,8 @@ TABS_CSS = r"""
 
 def app_tabs(user, active="live", pending=0):
     items = [("live", "/app", "Live"), ("guide", "/guide", "How to use")]
+    if user and user.get("role") != "owner":
+        items.append(("pricing", "/pricing", "My pass"))
     if user and user.get("role") == "owner":
         items.append(("admin", "/admin", "Admin" + (f'<span class="nb">{pending}</span>' if pending else "")))
     links = "".join(f'<a href="{h}" class="{"on" if k == active else ""}">{lab}</a>' for k, h, lab in items)
@@ -388,8 +390,14 @@ def admin_page(user, db, email_on, flash="", reset_links=None, kalshi=None):
                  if u["status"] == "approved" else
                  f'<form method="post" action="/admin"><input type="hidden" name="u" value="{uname}"><button class="b ok" name="a" value="approve">Allow</button></form> ')
                 + f'<form method="post" action="/admin" onsubmit="return confirm(\'Remove {uname}?\')"><input type="hidden" name="u" value="{uname}"><button class="b no" name="a" value="remove">Remove</button></form>')
+            au = float(u.get("access_until") or 0)
+            pas = ("owner - always" if u.get("role") == "owner" else
+                   (f'pass until {time.strftime("%b %d %H:%M", time.localtime(au))}' if au > time.time() else "no pass"))
+            give = "" if u.get("role") == "owner" else (
+                f'<form method="post" action="/admin"><input type="hidden" name="u" value="{uname}"><input type="hidden" name="a" value="grant">'
+                f'<input name="days" type="number" min="1" max="400" value="7" style="width:64px"> <button class="b ok">Give days</button></form> ')
             rows_a.append(f'<tr><td><b>{uname}</b> <span class="tag">{E(u.get("role", ""))}</span><br><span class="mute">{E(u["email"])}</span></td>'
-                          f'<td>{E(u["status"])}<br><span class="mute">{nd} device{"s" if nd != 1 else ""}</span></td><td>{act}</td></tr>')
+                          f'<td>{E(u["status"])} &middot; <b>{pas}</b><br><span class="mute">{nd} device{"s" if nd != 1 else ""}</span></td><td>{give}{act}</td></tr>')
     resets = ""
     for r in db.get("reset_requests", []):
         link = (reset_links or {}).get(r["u"])
@@ -410,6 +418,63 @@ def admin_page(user, db, email_on, flash="", reset_links=None, kalshi=None):
             + f'<section class="card"><h3>ACCOUNTS</h3><table>{"".join(rows_a)}</table></section>'
             + f'<section class="card"><h3>RECENT ACTIVITY</h3>{log or "<span class=mute>nothing yet</span>"}</section>')
     return page("Admin - BRAIN", f'<div class="adm">{body}</div>', ADMIN_CSS + ".small{font-size:12px}")
+
+
+PRICING_CSS = r"""
+.pr{max-width:980px;margin:0 auto;padding:18px 16px 44px}
+.pr h1{font-family:Fraunces,Georgia,serif;font-weight:700;color:#fbf4ec;margin:8px 0 4px;font-size:34px}
+.pr .lead{color:#d6cac4;margin:0 0 18px}
+.pr .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.pr .plan{position:relative;background:rgba(30,46,50,.42);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.18);border-radius:22px;padding:20px 18px;box-shadow:0 0 18px rgba(255,255,255,.10)}
+.pr .plan.best{border-color:rgba(242,196,107,.65);box-shadow:0 0 22px rgba(242,196,107,.22)}
+.pr .tagb{position:absolute;top:-11px;right:16px;background:#f2c46b;color:#2a2226;font-weight:900;font-size:11px;letter-spacing:1px;
+  padding:3px 10px;border-radius:999px}
+.pr .nm{font-weight:900;letter-spacing:1.5px;color:#cdb6ad;font-size:13px}
+.pr .px{font-family:Fraunces,Georgia,serif;font-size:40px;color:#fbf4ec;margin:6px 0 0}
+.pr .per{color:#bcaaa1;font-size:13px;margin-bottom:12px}
+.pr ul{list-style:none;padding:0;margin:0 0 16px;color:#e9ded8;font-size:14px;line-height:1.7}
+.pr ul li::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#a9cfc1;margin-right:9px;vertical-align:2px}
+.pr .go{display:block;text-align:center;padding:12px;border-radius:999px;font-weight:900;text-decoration:none;background:#e9a5bb;color:#2a2226}
+.pr .go.off{background:#3a2e3c;color:#bcaaa1;pointer-events:none}
+.pr .status{margin:0 0 16px;padding:12px 14px;border-radius:14px;background:rgba(61,214,156,.10);border:1px solid rgba(61,214,156,.35);color:#c9f7e6}
+.pr .status.none{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.15);color:#e9ded8}
+.pr .fine{color:#bcaaa1;font-size:12.5px;margin-top:18px;line-height:1.6}
+"""
+
+PLAN_FEATURES = ["Live early + sealed calls with BRAIN confidence", "Spoken alerts, flip watch, cash-out + coin-flip warnings",
+                 "Whale impact scores + Trader Radar", "Graded record, $100 backtest, price-target history"]
+
+
+def pricing_page(user, plans, until_text=None, active=False):
+    """plans: [(key, label, price, per_day_text, checkout_url_or_'')]"""
+    if user and active:
+        status = f'<div class="status">Your pass is active until <b>{E(until_text or "")}</b>. Buying another adds its days on top.</div>'
+    elif user:
+        status = '<div class="status none">No active pass yet - pick one below to unlock the live dashboard.</div>'
+    else:
+        status = '<div class="status none">Create a free account first, then pick a pass.</div>'
+    cards = ""
+    for key, label, price, per, url in plans:
+        best = key == "120d"
+        if not user:
+            btn = '<a class="go" href="/signup">Create account</a>'
+        elif url:
+            btn = f'<a class="go" href="{E(url)}">Buy {E(label)}</a>'
+        else:
+            btn = '<span class="go off">Checkout opening soon</span>'
+        cards += (f'<div class="plan{" best" if best else ""}">' + ('<span class="tagb">BEST VALUE</span>' if best else "")
+                  + f'<div class="nm">{E(label.upper())}</div><div class="px">{E(price)}</div><div class="per">{E(per)} &middot; one-time, never renews</div>'
+                  + "<ul>" + "".join(f"<li>{E(x)}</li>" for x in PLAN_FEATURES) + "</ul>" + btn + "</div>")
+    body = ((app_tabs(user, "pricing") if user else
+             '<div class="top" style="padding:10px 16px"><a class="brand" href="/">' + brain_logo(34, "p") + '<b>BRAIN</b></a></div>')
+            + '<div class="pr"><h1>Get BRAIN</h1><p class="lead">Live market intelligence for Kalshi\'s 15-minute BTC and XRP rounds.</p>'
+            + status + f'<div class="grid">{cards}</div>'
+            + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Passes are one-time payments and never '
+              'renew on their own - we email you 2 days before yours ends. <b>All sales are final, no refunds.</b> BRAIN is educational '
+              'market analysis, not financial advice; calls can be wrong and trading can lose money. '
+              '<a href="/terms" style="color:#e9a5bb">Terms</a> &middot; questions: support@brainswatch.com</p></div>')
+    return page("Pricing - BRAIN", body, PRICING_CSS)
 
 
 def kalshi_key_card(k):
@@ -504,8 +569,11 @@ TERMS = [
      "predict future results, data can be late or wrong, and the service can go down without warning."),
     ("Your decisions, your risk", "Trading and investing can lose money, including everything you put in. You're responsible for "
      "your own decisions. Talk to a licensed professional before making financial decisions."),
-    ("Access", "Accounts are approved by the owner and can be paused or removed at any time. Keep your login private - don't "
-     "share your account or copy and resell what you see here."),
+    ("Passes and payments", "The live dashboard needs a pass: 7 days ($64.99), 30 days ($179.99) or 4 months ($479.99), paid "
+     "once through Stripe. Passes never renew on their own - buying another adds its days on top of any time you have left. "
+     "ALL SALES ARE FINAL: no refunds, including for unused time."),
+    ("Access", "Accounts can be paused or removed at any time, without a refund, for breaking these terms. Keep your login "
+     "private - don't share your account or copy and resell what you see here."),
     ("Your data", "We store your username, email, a scrambled (hashed) password and which devices are signed in, only to run "
      "your account. Ask the owner any time to delete your account."),
     ("Changes", "These terms can change. Using the site after a change means you accept the new terms."),

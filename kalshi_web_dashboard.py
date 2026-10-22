@@ -4158,6 +4158,9 @@ _poll_t = {}      # asset name -> seconds its last poll step took (diagnostics, 
 _poll_loop_t = {"last": 0.0, "avg": 0.0, "n": 0}
 
 
+_bill_last = [0.0]
+
+
 def poll_loop():
     while True:
         _t_loop = time.time()
@@ -4166,6 +4169,14 @@ def poll_loop():
             _refresh_bt100()
         except Exception as _be:
             print(f"[BACKTEST $100] failed: {_be!r}")
+        if time.time() - _bill_last[0] > 600:
+            _bill_last[0] = time.time()
+            try:
+                _n_rem = _bill.send_reminders()
+                if _n_rem:
+                    print(f"[billing] sent {_n_rem} pass-ending reminder(s)")
+            except Exception as _bre:
+                print(f"[billing] reminders failed: {_bre!r}")
         snapshot = {}
         for asset in DASHBOARD_ASSETS:
             _t_asset = time.time()
@@ -7674,6 +7685,7 @@ async function refresh() {
   try {
     res = await fetch('/data', ctl ? {signal: ctl.signal, cache: 'no-store'} : {cache: 'no-store'});
     if (res.status === 401) { location.href = '/login?next=/app'; return; }
+    if (res.status === 402) { location.href = '/pricing'; return; }
     data = await res.json();
   } finally { if (abortT) clearTimeout(abortT); }
   if (data && typeof data.now === 'number') serverSkewMs = data.now * 1000 - Date.now();
@@ -7970,6 +7982,7 @@ def fmt_price(x, decimals=2):
 
 import multi_exchange_flow as _flow
 import trader_radar as _radar
+import billing as _bill
 import rsi_check as _rsi_check
 
 
@@ -11909,7 +11922,7 @@ def og_desc():
 # ================================================================ accounts + public site (2026-10-20)
 # "/" is the public welcome page (free live chart, news, money habits). The dashboard lives at "/app" and needs an approved
 # account; a device that logged in once stays recognized. Trading controls are owner-only.
-PUBLIC_GET = {"/og.png", "/", "/login", "/signup", "/forgot", "/reset", "/setup", "/logout", "/terms", "/auth/approve", "/auth/deny",
+PUBLIC_GET = {"/pricing", "/og.png", "/", "/login", "/signup", "/forgot", "/reset", "/setup", "/logout", "/terms", "/auth/approve", "/auth/deny",
               "/health", "/favicon.ico"}
 OWNER_ONLY = {"/admin", "/arm_live", "/set_live_size", "/set_flip_target", "/set_flip_max_price", "/set_main_max_price",
               "/set_buy_delay", "/set_main_sell_price", "/set_flip_sell_mode", "/set_flip_hold_if_certain",
@@ -12130,6 +12143,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, f_.read(), ctype, [("Cache-Control", "public, max-age=604800")])
         if path == "/terms":
             return self._send(200, _site.terms_page())
+        if path == "/pricing":
+            plans = [(k, lab, f"${c / 100:,.2f}", f"${c / 100 / d:,.2f}/day", _bill.checkout_url(k, user))
+                     for k, (d, c, lab) in _bill.PASSES.items()]
+            act = _bill.has_access(user) and user.get("role") != "owner"
+            return self._send(200, _site.pricing_page(user, plans, _bill.fmt_until(_bill.access_until(user)) if act else None, act))
         if path == "/login":
             if user:
                 return self._redirect(_safe_next(q("next")))
@@ -12201,6 +12219,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = parsed.path
         if path == "/radar_ingest":
             return self._radar_ingest()
+        if path == "/stripe/webhook":
+            ln = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(min(ln, 1_000_000)) if 0 < ln <= 1_000_000 else b""
+            if not _bill.verify_signature(raw, self.headers.get("Stripe-Signature", ""), os.environ.get("STRIPE_WEBHOOK_SECRET", "")):
+                print("[billing] webhook REJECTED - bad or missing signature")
+                return self._send(400, "bad signature", "text/plain")
+            try:
+                res = _bill.handle_event(json.loads(raw.decode("utf-8")))
+            except Exception as _be:
+                print(f"[billing] webhook error: {_be!r}")
+                return self._send(500, "error", "text/plain")
+            print(f"[billing] {res}")
+            return self._send(200, "ok", "text/plain")
         if path == "/radar_admin":
             if not self._same_origin():
                 return self._send(403, "Blocked: request came from another site.", "text/plain")
@@ -12237,11 +12268,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 err = _auth.validate_new(f.get("username", "").strip(), f.get("email", "").strip(), f.get("password", ""), f.get("password2", ""))
                 if err:
                     return self._send(200, _site.auth_page("signup", error=err, values=vals))
-                u = _auth.create_user(f["username"].strip(), f["email"].strip(), f["password"], note=f.get("note", ""))
-                sent = _auth.notify_owner_signup(u, ip)
-                print(f"[auth] signup {u['username']} - owner {'emailed' if sent else 'not emailed (email not set up)'}")
-                return self._send(200, _site.message_page("Request sent",
-                                                          "Thanks! The owner will review it. You'll get an email when you're approved.", "/", "Back home"))
+                # 2026-10-22: accounts are instant now - access comes from buying a pass
+                u = _auth.create_user(f["username"].strip(), f["email"].strip(), f["password"], status="approved", note=f.get("note", ""))
+                _bill.notify_owner(f"BRAIN: new account {u['username']}", f"{u['username']} ({u['email']}) created an account. "
+                                   f"They need a pass to see the dashboard.\n\n{_auth.public_url()}/admin")
+                print(f"[auth] signup {u['username']}")
+                tok = _auth.new_device(u, self.headers.get("User-Agent", ""), ip)
+                return self._redirect("/pricing", _auth.cookie_header(tok, self._https()))
             if path == "/forgot":
                 _auth.request_reset(f.get("email", ""), ip)
                 return self._send(200, _site.message_page("Check your email",
@@ -12285,6 +12318,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 flash = f"{un} {'approved' if a == 'approve' else 'blocked'}." if u else ""
             elif a == "remove":
                 flash = f"{un} removed." if _auth.remove_user(un) else ""
+            elif a == "grant":
+                try:
+                    _days = max(1, min(400, int(f.get("days") or 0)))
+                except ValueError:
+                    _days = 0
+                _gu = _bill.grant_days(un, _days, why="admin gift") if _days else None
+                flash = f"Gave {un} {_days} days - access until {_bill.fmt_until(_gu['access_until'])}." if _gu else "Couldn't give days."
             elif a == "kalshi_save":
                 _ok, flash = _kalshi_key_save(f.get("key_id"), f.get("pem"))
             elif a == "kalshi_remove":
@@ -12348,6 +12388,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json({"error": "login required"}, 401)            # a background data request
         if parsed.path in OWNER_ONLY and user.get("role") != "owner":
             return self._send(403, "Owner only.", "text/plain")
+        # 2026-10-22: the live dashboard needs an active pass (the owner always has access)
+        if not _bill.has_access(user) and parsed.path not in ("/guide",):
+            if "text/html" in (self.headers.get("Accept") or ""):
+                return self._redirect("/pricing")
+            return self._json({"error": "pass required", "pricing": "/pricing"}, 402)
         if parsed.path == "/guide":
             return self._send(200, _site.guide_html(user))
         if parsed.path == "/tts":
@@ -12963,6 +13008,15 @@ def main():
     if total:
         print(f"Loaded {total} past graded windows from disk ({HISTORY_FILE}).")
     _load_whale_scorecard()
+    try:      # 2026-10-22: people approved before passes existed keep access for 7 days, once
+        _g = [u_["username"] for u_ in _auth.DB["users"].values()
+              if u_.get("role") != "owner" and u_.get("status") == "approved" and "access_until" not in u_]
+        for _n in _g:
+            _bill.grant_days(_n, 7, why="grace - approved before passes")
+        if _g:
+            print(f"[billing] 7-day grace for {len(_g)} existing account(s): {', '.join(_g)}")
+    except Exception as _ge:
+        print(f"[billing] grace step failed: {_ge!r}")
     try:
         _radar.load()
     except Exception as _rle:
