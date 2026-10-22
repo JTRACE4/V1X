@@ -6145,6 +6145,44 @@ body[data-view="both"] .calls-row .sb-line { font-size:12px !important; }
 body[data-view="both"] .calls-row .sb-sig, body[data-view="both"] .calls-row .sb-rec { font-size:11px !important; }
 body[data-view="both"] .calls-row .sb-title, body[data-view="both"] .rs-title { font-size:11px !important; }
 body[data-view="both"] .stage-cd-t { font-size:24px; }
+/* 2026-10-22 (user): section panels with a half-trapezoid title tab - one BRAIN look for buy pressure, alerts,
+   scoreboard, live chart, price-vs-line and target history */
+.press-top, .top-alerts, .scoreboard, .rounds-panel, .lw-win, .tgt-hist {
+  position:relative !important; padding:44px 14px 12px !important; margin-top:14px !important; box-sizing:border-box !important; width:auto !important; max-width:100% !important;
+  border:1px solid rgba(220,187,145,0.26) !important; border-radius:4px 18px 18px 18px !important;
+  background:linear-gradient(180deg, rgba(66,51,58,0.94) 0%, rgba(40,31,35,0.94) 100%) !important;
+  box-shadow:0 10px 26px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,240,225,0.07), 0 0 0 1px rgba(233,165,187,0.04) !important; }
+.press-top::before, .top-alerts::before, .scoreboard::before, .rounds-panel::before, .lw-win::before, .tgt-hist::before {
+  content:""; position:absolute; top:-1px; left:0; right:18px; height:2px; border-radius:2px; pointer-events:none;
+  background:linear-gradient(90deg, #e9a5bb 0%, #dcbb91 35%, rgba(220,187,145,0) 85%); }
+.press-top > .press-head > b, .top-alerts > .top-w-title, .scoreboard > .rs-title, .rounds-panel > .top-w-title,
+.lw-win > .pat-win-head > b, .tgt-hist > .th-h {
+  position:absolute !important; top:0; left:0; margin:0 !important; padding:7px 38px 6px 14px !important;
+  max-width:calc(100% - 36px); box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  background:linear-gradient(90deg, #e9a5bb 0%, #e3b39f 55%, #dcbb91 100%) !important; color:#2a1b21 !important;
+  font-family:'Bebas Neue', 'Inter', sans-serif !important; font-size:17px !important; font-weight:400 !important; letter-spacing:2.2px !important;
+  line-height:1.15 !important; text-transform:uppercase; text-shadow:none !important;
+  clip-path:polygon(0 0, 100% 0, calc(100% - 24px) 100%, 0 100%); border-top-left-radius:4px;
+  filter:drop-shadow(0 0 8px rgba(233,165,187,0.25)); }
+.top-alerts > .top-w-title .hint, .scoreboard > .rs-title .hint, .rounds-panel > .top-w-title .hint, .tgt-hist > .th-h .hint {
+  color:rgba(42,27,33,0.72) !important; font-size:12px !important; letter-spacing:1px !important; }
+.scoreboard > .rs-title b { color:#2a1b21 !important; }
+.top-alerts > .top-w-title .hint { display:none; }
+.press-top > .press-head { margin-bottom:6px; }
+.top-strip.alerts-only { display:block !important; }
+@media (max-width:560px) {
+  .press-top > .press-head > b, .top-alerts > .top-w-title, .scoreboard > .rs-title, .rounds-panel > .top-w-title,
+  .lw-win > .pat-win-head > b, .tgt-hist > .th-h { font-size:14px !important; letter-spacing:1.5px !important; padding:6px 30px 5px 12px !important; }
+  .press-top, .top-alerts, .scoreboard, .rounds-panel, .lw-win, .tgt-hist { padding:10px !important; }
+  .press-top > .press-head > b, .top-alerts > .top-w-title, .scoreboard > .rs-title, .rounds-panel > .top-w-title,
+  .lw-win > .pat-win-head > b, .tgt-hist > .th-h { position:relative !important; display:inline-block !important; white-space:normal !important;
+    margin:-10px 0 8px -10px !important; max-width:calc(100% + 10px); }
+}
+/* 2026-10-22 (user): every number uses the same font as the live price / market target */
+.stage-cd-t, .fa-usd, .lw-chip b, .clock, .clock *, .sc-wl, .sc-cur, .sc-streak b, .sb-rec, .press-qty b, .press-net,
+.press-buy, .press-sell, .line-diff b, .th-row b, .fr-big, .lx-num, .rsi-num, .sc-pct {
+  font-family:var(--br-serif) !important; font-variant-numeric:lining-nums tabular-nums; font-variation-settings:"opsz" 72, "SOFT" 50; letter-spacing:0 !important; }
+.stage-cd-t, .fa-usd { font-weight:800 !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -10869,7 +10907,7 @@ def build_rounds_panel(name, d):
         cells.append('<div class="rc hint" style="padding:18px;">finished rounds show here</div>')
     tot = [r.get("crosses", 0) for r in past]
     avg = f' &middot; average {sum(tot) / len(tot):.1f} crosses per round over the last {len(tot)}' if tot else ""
-    return (f'<div class="rounds-panel"><div class="top-w-title">PRICE vs THE LINE - THIS ROUND + LAST 6 ROUNDS '
+    return (f'<div class="rounds-panel"><div class="top-w-title">PRICE vs THE LINE &middot; LAST 6 ROUNDS '
             f'<span class="hint">white line = the line &middot; dots = line crosses{avg}</span></div>'
             f'<div class="rc-grid">{"".join(cells)}</div></div>')
 
