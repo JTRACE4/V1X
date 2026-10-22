@@ -7141,6 +7141,7 @@ async function applyChartTimeframe(name, tf) {
 }
 
 function reapplySavedChartTimeframes() {
+  if (!window.IS_OWNER) return;   // viewers all see the same default chart
   Object.keys(chartTimeframe).forEach(name => {
     if (chartTimeframe[name] && chartTimeframe[name] !== '15') {
       applyChartTimeframe(name, chartTimeframe[name]);
@@ -7487,6 +7488,7 @@ function histPut(asset, rows) {
   });
 }
 async function histSync() {
+  if (!window.IS_OWNER) return;   // 2026-10-22 viewer mode: only the owner's browser keeps the history backup
   if (histSyncing) return; histSyncing = true;
   try {
     if (!(await histOpen())) return;
@@ -7987,7 +7989,7 @@ def build_pattern_window(asset_name):
         f'<button class="{"size-mode-btn size-mode-active" if t == tf else "size-mode-btn"}" '
         f"onclick=\"setPatternTf('{asset_name}','{t}')\">{_MTF_NAMES[t]}</button>" for t in _PAT_WINDOW_TFS)
     head = (f'<div class="pat-win-head"><b>What is being formed - {asset_name} live pattern window</b> '
-            f'<span class="hint">(information only - never used for buying)</span><div class="pat-win-tfs">{btns}'
+            f'<span class="hint">(information only - never used for buying)</span><div class="pat-win-tfs"><!--OWNER-->{btns}<!--/OWNER-->'
             f'<button class="size-mode-btn ov-toggle" onclick="toggleOverlays()">Indicators: <b class="ov-state">ON</b></button></div></div>')
     if not cs or len(cs) < 25:
         return f'<div class="row pat-win">{head}<span class="flat">loading candle history...</span></div>'
@@ -10501,11 +10503,11 @@ def render_html():
         chart_svg_content = d.get("chart_svg") or ""
         chart_html = (
             f'<div class="chart-wrap">'
-            f'<div class="chart-controls">'
+            f'<!--OWNER--><div class="chart-controls">'
             f'<button class="chart-tf-btn chart-tf-active" data-asset="{name}" data-tf="15" onclick="fetchChartTimeframe(this)">15m</button>'
             f'<button class="chart-tf-btn" data-asset="{name}" data-tf="30" onclick="fetchChartTimeframe(this)">30m</button>'
             f'<button class="chart-tf-btn" data-asset="{name}" data-tf="60" onclick="fetchChartTimeframe(this)">1h</button>'
-            f'</div>'
+            f'</div><!--/OWNER-->'
             f'<div class="chart-svg-holder" data-asset="{name}">{chart_svg_content}</div>'
             f'</div>'
         )
@@ -11277,7 +11279,10 @@ PUBLIC_GET = {"/og.png", "/", "/login", "/signup", "/forgot", "/reset", "/setup"
 OWNER_ONLY = {"/admin", "/arm_live", "/set_live_size", "/set_flip_target", "/set_flip_max_price", "/set_main_max_price",
               "/set_buy_delay", "/set_main_sell_price", "/set_flip_sell_mode", "/set_flip_hold_if_certain",
               "/set_protect_threshold", "/backtest_run", "/locked", "/live_status", "/backtest", "/backtest.txt",
-              "/backtest.json", "/debug_poll", "/debug_threads"}
+              "/backtest.json", "/debug_poll", "/debug_threads",
+              # 2026-10-22 viewer mode: everyone sees the same live dashboard; only the owner can change the shared
+              # chart timeframe, pull/restore the round-history backup, or switch the candle-chart zoom
+              "/set_pattern_tf", "/history_meta", "/history_export", "/chart"}
 _OWNER_RE = re.compile(r"<!--OWNER-->.*?<!--/OWNER-->", re.S)
 _admin_reset_links = {}
 
@@ -11359,6 +11364,24 @@ def _cached_chart_live(asset):
         body = json.dumps(payload or {}).encode()
         _chart_cache[asset] = (time.monotonic(), body)
         return body
+
+
+_short_cache = {}
+_short_cache_lock = threading.Lock()
+
+
+def _cached_for(key, ttl, fn):
+    """Same request within ttl seconds -> reuse the bytes instead of recomputing (shared by every viewer)."""
+    now = time.monotonic()
+    hit = _short_cache.get(key)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+    body = fn()
+    with _short_cache_lock:
+        if len(_short_cache) > 500:
+            _short_cache.clear()
+        _short_cache[key] = (now, body)
+    return body
 
 
 def _send_body(handler, body, ctype, no_store=True):
@@ -11587,6 +11610,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, _site.admin_page(user, _auth.DB, _auth.email_ready(), flash, _admin_reset_links, _kalshi_key_status()))
         n_ = 0
         ok = False
+        if parsed.path == "/restore_history" and not (user and user.get("role") == "owner"):
+            return self._send(403, "Owner only.", "text/plain")
         if parsed.path == "/restore_history":
             try:
                 ln = int(self.headers.get("Content-Length") or 0)
@@ -11671,20 +11696,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _send_body(self, body, "application/json")
             return
         if parsed.path == "/pattern_history":
-            qs = urllib.parse.parse_qs(parsed.query)
-            try:
-                a_ = (qs.get("asset") or [""])[0]
-                s_, e_ = float((qs.get("start") or ["0"])[0]), float((qs.get("end") or ["0"])[0])
-                lv_ = (qs.get("level") or ["q"])[0]
-                ok = a_ in LIVE_ASSETS and lv_ in ("hour", "q") and 0 < e_ - s_ <= 3600
-                html_ = pattern_history_html(a_, s_, e_, lv_) if ok else ""
-            except Exception as _pe:
-                html_, ok = "", False
-                print(f"[history] endpoint failed: {_pe!r}")
-            body = json.dumps({"ok": ok, "html": html_}).encode()
-            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers()
-            self.wfile.write(body)
-            return
+            def _ph_body():
+                qs = urllib.parse.parse_qs(parsed.query)
+                try:
+                    a_ = (qs.get("asset") or [""])[0]
+                    s_, e_ = float((qs.get("start") or ["0"])[0]), float((qs.get("end") or ["0"])[0])
+                    lv_ = (qs.get("level") or ["q"])[0]
+                    ok = a_ in LIVE_ASSETS and lv_ in ("hour", "q") and 0 < e_ - s_ <= 3600
+                    html_ = pattern_history_html(a_, s_, e_, lv_) if ok else ""
+                except Exception as _pe:
+                    html_, ok = "", False
+                    print(f"[history] endpoint failed: {_pe!r}")
+                return json.dumps({"ok": ok, "html": html_}).encode()
+            return _send_body(self, _cached_for(("ph", parsed.query), 30, _ph_body), "application/json")
         if parsed.path == "/set_pattern_tf":
             qs = urllib.parse.parse_qs(parsed.query)
             a_, t_ = (qs.get("asset") or [""])[0], (qs.get("tf") or [""])[0]
@@ -11737,17 +11761,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
         elif parsed.path == "/round_history":
-            qs = urllib.parse.parse_qs(parsed.query)
-            try:
-                lim = max(0, min(HISTORY_CAP, int((qs.get("limit") or ["300"])[0])))
-                html_ = _strip_owner_only(round_history_html((qs.get("asset") or [""])[0], (qs.get("call") or ["sealed"])[0],
-                                                             (qs.get("range") or ["all"])[0], lim), user)
-            except Exception as _he:
-                html_ = f'<div class="hint">history error: {_html_attr(repr(_he))}</div>'
-            body = json.dumps({"html": html_}).encode()
-            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store"); self.end_headers()
-            self.wfile.write(body)
+            _is_own = bool(user and user.get("role") == "owner")
+
+            def _rh_body():
+                qs = urllib.parse.parse_qs(parsed.query)
+                try:
+                    lim = max(0, min(HISTORY_CAP, int((qs.get("limit") or ["300"])[0])))
+                    html_ = _strip_owner_only(round_history_html((qs.get("asset") or [""])[0], (qs.get("call") or ["sealed"])[0],
+                                                                 (qs.get("range") or ["all"])[0], lim), user)
+                except Exception as _he:
+                    html_ = f'<div class="hint">history error: {_html_attr(repr(_he))}</div>'
+                return json.dumps({"html": html_}).encode()
+            _send_body(self, _cached_for(("rh", parsed.query, _is_own), 15, _rh_body), "application/json")
         elif parsed.path == "/build":
             body = BUILD_ID.encode()
             self.send_response(200)
@@ -12179,7 +12204,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(body)
         else:
             _pend = sum(1 for u_ in _auth.DB["users"].values() if u_.get("status") == "pending") if user.get("role") == "owner" else 0
+            _own = "true" if user.get("role") == "owner" else "false"
             body = (PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json())
+                    .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';', 1)
                     .replace('</header>', '</header>' + _site.app_tabs(user, "live", _pend), 1)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
