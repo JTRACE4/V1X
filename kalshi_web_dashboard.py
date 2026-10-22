@@ -5962,20 +5962,24 @@ body { background:#15110f !important; }
 .bt100-t tr.bt100-pick td { background:rgba(61,214,156,0.10); }
 .bt100-t tr.bt100-any td { font-size:12px; opacity:0.8; }
 .bt100 .hint { margin-top:6px; }
-#flip-watch { position:fixed; top:0; left:0; right:0; z-index:100003; display:flex; flex-direction:column; gap:0;
-  padding-top:env(safe-area-inset-top, 0px); box-shadow:0 6px 18px rgba(0,0,0,0.45); }
-/* 2026-10-22: pink-cream banner to match the theme (green read as "UP"); words turn ORANGE when price is moving against the
-   call; a badge says HOLD YOUR POSITION or REVERSAL CONFIRMED. No timer here - the round clock is already on the page. */
-.fw-item { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; padding:9px max(16px, env(safe-area-inset-right, 0px)) 9px max(16px, env(safe-area-inset-left, 0px));
-  font:700 14px 'Nunito', 'Inter', sans-serif; color:#3a2a2f; background:linear-gradient(90deg, #f6e1df, #f3dccf 70%, #efd3d8);
-  border-bottom:2px solid #e9a5bb; }
-.fw-item b { font-weight:900; letter-spacing:1px; }
-.fw-dir, .fw-rel { font-weight:900; }
-.fw-against { border-bottom-color:#e8742a; } .fw-against .fw-dir, .fw-against .fw-rel, .fw-against .fw-st { color:#d9601a; }
-.fw-badge { margin-left:auto; padding:3px 10px; border-radius:999px; font-weight:900; letter-spacing:1px; font-size:12.5px; white-space:nowrap; }
-.fw-hold { background:#3a2a2f; color:#fbf4ec; } .fw-rev { background:#e8742a; color:#fff7ef; }
-body.has-flip-watch { padding-top:46px; }
-@media (max-width:760px) { .fw-item { font-size:13px; } body.has-flip-watch { padding-top:64px; } }
+#flip-watch { position:fixed; top:0; left:0; right:0; z-index:100003; display:flex; flex-direction:column; align-items:center; gap:6px;
+  padding:calc(env(safe-area-inset-top, 0px) + 8px) 10px 0; pointer-events:none; }
+/* 2026-10-22 (c): slim translucent pills that float over the page with a soft glow - colours from the background art
+   (slate-teal glass, charcoal-brown, dusty taupe). Against the call = sand-amber glow; REVERSAL = muted copper; HOLD = sage. */
+.fw-item { pointer-events:auto; display:inline-flex; align-items:center; gap:8px; max-width:min(560px, 100%);
+  padding:5px 8px 5px 12px; border-radius:999px; font:800 12.5px 'Nunito', 'Inter', sans-serif; color:#efe6df; white-space:nowrap;
+  background:rgba(30,46,50,0.42); -webkit-backdrop-filter:blur(12px) saturate(1.2); backdrop-filter:blur(12px) saturate(1.2);
+  border:1px solid rgba(182,157,149,0.35); box-shadow:0 0 14px rgba(169,207,193,0.18), 0 4px 14px rgba(0,0,0,0.25); }
+.fw-item b { font-weight:900; letter-spacing:1px; color:#cdb6ad; }
+.fw-with .fw-dir, .fw-with .fw-rel { color:#a9cfc1; }
+.fw-st { color:#d6cac4; font-weight:700; }
+.fw-against { border-color:rgba(231,184,130,0.5); box-shadow:0 0 16px rgba(231,184,130,0.28), 0 4px 14px rgba(0,0,0,0.25); }
+.fw-against .fw-dir, .fw-against .fw-rel, .fw-against .fw-st { color:#e7b882; }
+.fw-badge { margin-left:2px; padding:2px 9px; border-radius:999px; font-weight:900; letter-spacing:.6px; font-size:11px; }
+.fw-hold { background:rgba(47,74,79,0.75); color:#efe6df; border:1px solid rgba(111,154,142,0.7); } .fw-hold .ico { color:#a9cfc1; }
+.fw-rev { background:rgba(154,90,68,0.8); color:#f6ece5; border:1px solid rgba(201,138,106,0.8); }
+body.has-flip-watch { padding-top:0; }
+@media (max-width:760px) { .fw-item { font-size:11.5px; gap:6px; } .fw-badge { font-size:10.5px; } }
 @media (max-width:760px) { #sound-reminder { bottom:calc(72px + env(safe-area-inset-bottom, 0px)) !important; max-width:calc(100vw - 32px); } }
 @media (max-width:760px) {
   .snd-toggle { position:fixed; right:max(12px, env(safe-area-inset-right, 0px)); bottom:calc(12px + env(safe-area-inset-bottom, 0px));
@@ -6606,13 +6610,13 @@ function updateFlipWatch() {
   bar.innerHTML = names.map(n => {
     const v = live[n], cls = v.withCall === null ? 'fw-neutral' : (v.withCall ? 'fw-with' : 'fw-against');
     const callWord = v.callName === 'sealed' ? 'sealed call' : (v.callName === 'early' ? 'early call' : 'call');
-    const rel = v.withCall === null ? '' : (v.withCall ? 'WITH the ' + callWord : 'AGAINST the ' + callWord);
-    const st = v.strength !== null ? _strengthWord(v.strength) + ' &middot; ' + Math.round(v.strength * 100) + '% on Kalshi' : '';
-    // badge: market back on the call's side -> HOLD; market 60%+ the other way -> the reversal is confirmed
+    const rel = v.withCall === null ? '' : (v.withCall ? 'with call' : 'against call');
+    const st = v.strength !== null ? Math.round(v.strength * 100) + '%' : '';
     let badge = '';
-    if (v.withCall === true) badge = '<span class="fw-badge fw-hold"><i class=ico data-i=hold></i> HOLD YOUR POSITION</span>';
-    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev"><i class=ico data-i=reversal></i> REVERSAL CONFIRMED</span>';
-    return '<div class="fw-item ' + cls + '"><b>' + n + ' FLIP WATCH</b><span class="fw-dir">' + (v.goingUp ? '&#9650; heading UP' : '&#9660; heading DOWN') + '</span>'
+    if (v.withCall === true) badge = '<span class="fw-badge fw-hold"><i class=ico data-i=hold></i> HOLD</span>';
+    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev"><i class=ico data-i=reversal></i> REVERSAL</span>';
+    return '<div class="fw-item ' + cls + '" title="' + n + ' flip watch: heading ' + (v.goingUp ? 'up' : 'down') + (rel ? ', ' + rel + ' (' + callWord + ')' : '')
+      + (st ? ', ' + _strengthWord(v.strength) + ' ' + st + ' on the market' : '') + '"><b>' + n + '</b><span class="fw-dir">' + (v.goingUp ? '&#9650; UP' : '&#9660; DOWN') + '</span>'
       + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span class="fw-st">' + st + '</span>' : '') + badge + '</div>';
   }).join('');
 }
