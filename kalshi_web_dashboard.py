@@ -3732,6 +3732,7 @@ def compute_synthetic_asset_snapshot(pseudo_asset, btc_active):
     return {
         "ticker": btc_active["ticker"] + f" ({name}, synced to BTC's window)",
         "seconds_left": round(seconds_left),
+        "close_epoch": close_time.timestamp(),
         "spot_price": round(live_price, 4) if live_price is not None else None,
         "live_venues": live_venues,
         "target_price": round(target, 4) if target is not None else None,
@@ -4849,6 +4850,7 @@ def poll_loop():
                 snapshot[asset["name"]] = {
                     "ticker": active["ticker"],
                     "seconds_left": round(seconds_left),
+                    "close_epoch": close_time.timestamp(),
                     "spot_price": round(live_price, price_decimals) if live_price is not None else None,
                     "live_venues": live_venues,
                     "target_price": target,
@@ -7350,9 +7352,16 @@ async function refresh() {
     return;
   }
   const mySeq = ++refreshSeq;
-  const res = await fetch('/data');
-  if (res.status === 401) { location.href = '/login?next=/app'; return; }
-  const data = await res.json();
+  // 2026-10-22: give up on a hung request after 8s so one stuck call can't freeze the page
+  const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const abortT = ctl ? setTimeout(() => ctl.abort(), 8000) : null;
+  let res, data;
+  try {
+    res = await fetch('/data', ctl ? {signal: ctl.signal, cache: 'no-store'} : {cache: 'no-store'});
+    if (res.status === 401) { location.href = '/login?next=/app'; return; }
+    data = await res.json();
+  } finally { if (abortT) clearTimeout(abortT); }
+  if (data && typeof data.now === 'number') serverSkewMs = data.now * 1000 - Date.now();
   if (mySeq !== refreshSeq) return; // a newer refresh already started - this one is stale, drop it
   // auto-reload when the server was restarted with new code, so an open tab
   // never keeps running old scripts against new HTML (stale-tab bug)
@@ -7381,6 +7390,7 @@ async function refresh() {
     }
   }
   contentEl.innerHTML = data.html;
+  try { tickClocks(); } catch (e) {}
   try { updateWrBadge(data.wr); } catch (e) {}
   if (savedId) {
     const restored = document.getElementById(savedId);
@@ -7537,7 +7547,29 @@ function toggleWr() {
   clearInterval(wrTimer);
   if (wrOpen) { wrState.asset = wrAsset(); wrState.limit = 300; loadWr(); wrTimer = setInterval(() => loadWr(), 30000); }
 }
-setInterval(refresh, 1000);
+// 2026-10-22: was setInterval(refresh, 1000) - when the server took >1s, requests piled up and every reply was
+// dropped as stale, so the page froze. Now the next update only starts once the last one is done (~1/sec).
+let serverSkewMs = 0;
+async function refreshLoop() {
+  const t0 = Date.now();
+  try { await refresh(); } catch (e) { /* network blip - try again next tick */ }
+  setTimeout(refreshLoop, Math.max(250, 1000 - (Date.now() - t0)));
+}
+// countdowns tick in the browser between server updates, so seconds never skip
+function tickClocks() {
+  const now = (Date.now() + serverSkewMs) / 1000;
+  document.querySelectorAll('[data-to]').forEach(el => {
+    const left = Math.max(0, Math.round(parseFloat(el.getAttribute('data-to')) - now));
+    if (isNaN(left)) return;
+    const m = Math.floor(left / 60), sec = left % 60;
+    const txt = el.getAttribute('data-to-fmt') === 'words'
+      ? (m ? m + ' min ' + sec + ' sec' : sec + ' sec')
+      : m + ':' + String(sec).padStart(2, '0');
+    if (el.textContent !== txt) el.textContent = txt;
+  });
+}
+setInterval(tickClocks, 250);
+setTimeout(refreshLoop, 1000);
 window.onload = function() {
   updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); updateSoundButtons(); try { const vp = document.getElementById('voice-pick'); if (vp) vp.value = neuralVoice; } catch (e) {}
   let wantedSound = false;
@@ -9477,12 +9509,17 @@ def build_time_until_call(name, d):
         key, mark, lab, mk = nxt
         wait = mark - el
         if wait > 0:
-            t, what = f"{wait // 60}:{wait % 60:02d}", f"<b>{lab.upper()}</b> coming in {_mmss_words(wait)}"
+            _to = int(time.time()) + wait
+            t = f'<span data-to="{_to}">{wait // 60}:{wait % 60:02d}</span>'
+            what = f'<b>{lab.upper()}</b> coming in <span data-to="{_to}" data-to-fmt="words">{_mmss_words(wait)}</span>'
         else:
             t, what = "NOW", f"<b>{lab.upper()}</b> - waiting for a clear lean (up to 60 sec)"
         cls = "tuc-early" if key == "early" else "tuc-sealed"
     else:
-        t, what, cls = f"{left // 60}:{left % 60:02d}", f"both calls are in &middot; next round in {_mmss_words(left)}", "tuc-done"
+        _to = f' data-to="{d["close_epoch"]:.0f}"' if d.get("close_epoch") else ""
+        t = f"<span{_to}>{left // 60}:{left % 60:02d}</span>"
+        what = f'both calls are in &middot; next round in <span{_to} data-to-fmt="words">{_mmss_words(left)}</span>'
+        cls = "tuc-done"
     return (f'<div class="callbox tuc {cls}"><div class="tuc-lbl">TIME UNTIL CALL</div><div class="tuc-time">{t}</div>'
             f'<div class="tuc-what">{what}</div></div>')
 
@@ -10029,9 +10066,28 @@ def build_volume_bar(asset_name):
             f'<div class="vol-legend"><span class="lg-buy">&#9632;</span> buy $<br><span class="lg-sell">&#9632;</span> sell $<br><span class="lg-norm">&#9473;</span> normal</div>' + _VOL_HELP.format(a=asset_name) + '</div>')
 
 
+def _live_clock(snapshot):
+    """2026-10-22: poll_loop only refreshes seconds_left every 2s + however long its Kalshi calls take, so the
+    countdown jumped 2-4 seconds at a time. Re-derive it from the round's real close time at render instead."""
+    now = time.time()
+    out = {}
+    for name, d in snapshot.items():
+        ce = d.get("close_epoch") if isinstance(d, dict) else None
+        if ce and "seconds_left" in d:
+            d = dict(d)
+            live_left = max(0, int(round(ce - now)))
+            delta = int(d.get("seconds_left") or 0) - live_left
+            d["seconds_left"] = live_left
+            if delta and d.get("elapsed_seconds") is not None:
+                d["elapsed_seconds"] = d["elapsed_seconds"] + delta
+        out[name] = d
+    return out
+
+
 def render_html():
     with _lock:
         snapshot = dict(_state)
+    snapshot = _live_clock(snapshot)
     parts = []
     for name, d in snapshot.items():
         if "error" in d:
@@ -10615,11 +10671,12 @@ def render_html():
         _frac = min(1.0, _left / 900.0)
         _cl = "clock-hot" if _left <= 30 else ("clock-warn" if _left <= 120 else "")
         _stroke = "#f05454" if _left <= 30 else ("#d29922" if _left <= 120 else "#e9a5bb")
+        _clock_to = f' data-to="{d["close_epoch"]:.0f}"' if d.get("close_epoch") else ""
         clock_html = (f'<div class="clock {_cl}" title="{d.get("ticker", "")}">'
                       f'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#4a3c43" stroke-width="3"/>'
                       f'<circle cx="12" cy="12" r="10" fill="none" stroke="{_stroke}" stroke-width="3" stroke-linecap="round" '
                       f'stroke-dasharray="{_frac * 62.83:.1f} 62.83" transform="rotate(-90 12 12)"/></svg>'
-                      f'<span>{mins}:{secs:02d}</span></div>')
+                      f'<span{_clock_to}>{mins}:{secs:02d}</span></div>')
         ranges_html = "".join(
             f'<div>{h}min: {fmt_price(lo, decimals)} - {fmt_price(hi, decimals)}</div>' for h, (lo, hi) in sorted(d["ranges"].items())
         )
@@ -11249,6 +11306,78 @@ def _strip_owner_only(html_, user):
     return "".join(out)
 
 
+# ---- 2026-10-22: shared render cache. Every open tab polls /data once a second and /chart_live ~3x a second, and
+# each request used to rebuild the WHOLE dashboard from scratch. render_html() is identical for every viewer (owner-only
+# blocks are stripped afterwards), so with a handful of tabs open the server spent all its time re-rendering the same
+# page, /data crept past 1s, and every browser threw its replies away as stale -> frozen page, skipping clock.
+# Now one thread renders, everyone else reuses that result for up to RENDER_CACHE_S.
+import gzip as _gzip
+RENDER_CACHE_S = 0.8
+CHART_CACHE_S = 0.3
+_render_cache = {"t": 0.0, "html": None, "wr": None, "pub": None}
+_render_cache_lock = threading.Lock()
+_chart_cache = {}
+_chart_cache_locks = {a: threading.Lock() for a in LIVE_ASSETS}
+
+
+def _cached_page():
+    """(full_html, public_html, wr) - rendered at most once per RENDER_CACHE_S across ALL requests (single-flight)."""
+    c = _render_cache
+    if c["html"] is not None and time.monotonic() - c["t"] < RENDER_CACHE_S:
+        return c["html"], c["pub"], c["wr"]
+    with _render_cache_lock:
+        if c["html"] is not None and time.monotonic() - c["t"] < RENDER_CACHE_S:
+            return c["html"], c["pub"], c["wr"]
+        wr = {}
+        for _a in LIVE_ASSETS:
+            try:
+                wr[_a] = winrate_badge_html(_a)
+            except Exception:
+                wr[_a] = ""
+        html_ = render_html()
+        pub = _strip_owner_only(html_, None)
+        c.update(t=time.monotonic(), html=html_, pub=pub, wr=wr)
+        return html_, pub, wr
+
+
+def _cached_chart_live(asset):
+    hit = _chart_cache.get(asset)
+    if hit and time.monotonic() - hit[0] < CHART_CACHE_S:
+        return hit[1]
+    lk = _chart_cache_locks.get(asset)
+    if lk is None:
+        return None
+    with lk:
+        hit = _chart_cache.get(asset)
+        if hit and time.monotonic() - hit[0] < CHART_CACHE_S:
+            return hit[1]
+        try:
+            payload = chart_live_payload(asset)
+        except Exception as _ce:
+            payload = None
+            print(f"[chart_live] failed: {_ce!r}")
+        body = json.dumps(payload or {}).encode()
+        _chart_cache[asset] = (time.monotonic(), body)
+        return body
+
+
+def _send_body(handler, body, ctype, no_store=True):
+    """Send bytes, gzipped when the browser accepts it (the /data page is large - a big deal on phone data)."""
+    gz = len(body) > 1024 and "gzip" in (handler.headers.get("Accept-Encoding") or "")
+    if gz:
+        body = _gzip.compress(body, compresslevel=5)
+    handler.send_response(200)
+    handler.send_header("Content-Type", ctype)
+    if gz:
+        handler.send_header("Content-Encoding", "gzip")
+        handler.send_header("Vary", "Accept-Encoding")
+    handler.send_header("Content-Length", str(len(body)))
+    if no_store:
+        handler.send_header("Cache-Control", "no-store")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def _safe_next(n):
     return n if (isinstance(n, str) and n.startswith("/") and not n.startswith("//") and len(n) < 200) else "/app"
 
@@ -11538,15 +11667,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if parsed.path == "/chart_live":
             qs = urllib.parse.parse_qs(parsed.query)
             a_ = (qs.get("asset") or [""])[0]
-            try:
-                payload = chart_live_payload(a_) if a_ in LIVE_ASSETS else None
-            except Exception as _ce:
-                payload = None
-                print(f"[chart_live] failed: {_ce!r}")
-            body = json.dumps(payload or {}).encode()
-            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store"); self.end_headers()
-            self.wfile.write(body)
+            body = (_cached_chart_live(a_) if a_ in LIVE_ASSETS else None) or b"{}"
+            _send_body(self, body, "application/json")
             return
         if parsed.path == "/pattern_history":
             qs = urllib.parse.parse_qs(parsed.query)
@@ -11635,19 +11757,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif parsed.path == "/data":
-            _wr = {}
-            for _a in LIVE_ASSETS:
-                try:
-                    _wr[_a] = winrate_badge_html(_a)
-                except Exception as _we:
-                    _wr[_a] = ""
-            body = json.dumps({"html": _strip_owner_only(render_html(), user), "build": BUILD_ID, "wr": _wr,
+            _full, _pub, _wr = _cached_page()
+            _html = _full if (user and user.get("role") == "owner") else _pub
+            body = json.dumps({"html": _html, "build": BUILD_ID, "wr": _wr, "now": time.time(),
                                "vol_warn": bool(ON_RAILWAY and not HISTORY_ON_VOLUME)}).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            _send_body(self, body, "application/json")
         elif parsed.path == "/locked":
             # added 2026-09-14 - a plain JSON read of just the locked-call
             # state (per asset: ticker, locked_call, locked_kalshi_price,
