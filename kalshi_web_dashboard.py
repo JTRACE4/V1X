@@ -6182,7 +6182,7 @@ function updateVoiceToggleButton() {
 // no longer cut each other off.
 // Only these alerts make sound now: flip warnings, the early + sealed calls, whale trades (cha-ching / denied).
 const LEGACY_SOUNDS = false;
-const NEURAL_VOICES = { ava: 'Ava', jenny: 'Jenny', aria: 'Aria', emma: 'Emma', michelle: 'Michelle', tony: 'Tony' };
+const NEURAL_VOICES = { ava: 'Ava', jenny: 'Jenny', aria: 'Aria', emma: 'Emma', michelle: 'Michelle', tony: 'Tony', sarge: 'Sarge' };
 let neuralVoice = 'ava';
 try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VOICES || nv === 'device')) neuralVoice = nv; } catch (e) {}
 function setNeuralVoice(v) {
@@ -7805,7 +7805,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
         <select id="voice-pick" onchange="setNeuralVoice(this.value)" style="background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit;">
           <option value="ava">Ava (natural)</option><option value="jenny">Jenny (natural)</option><option value="aria">Aria (natural)</option>
           <option value="emma">Emma (natural)</option><option value="michelle">Michelle (natural)</option>
-          <option value="tony">Tony (guy, New York style)</option><option value="device">This device's voice</option>
+          <option value="tony">Tony (guy, New York style)</option><option value="sarge">Sarge (drill sergeant)</option><option value="device">This device's voice</option>
         </select></label>
       <br>
       <button onclick="speakRaw('Heads up: a flip might be happening on Bitcoin.')">Test flip warning</button>
@@ -11308,11 +11308,17 @@ _TTS_VOICES = {"ava": "en-US-AvaNeural", "jenny": "en-US-JennyNeural", "aria": "
                "emma": "en-US-EmmaNeural", "michelle": "en-US-MichelleNeural",
                # 2026-10-22: male "New York style" option. Microsoft's neural voices have no real NYC accent, so this is a
                # male voice read faster and a touch deeper, with a little New York phrasing (_NY_STYLE below).
-               "tony": "en-US-GuyNeural"}
-_TTS_STYLE = {"tony": {"rate": "+14%", "pitch": "-3Hz"}}
+               "tony": "en-US-GuyNeural",
+               # 2026-10-22: drill-sergeant option - deep, clipped, a little faster, military call-outs (_SARGE_STYLE)
+               "sarge": "en-US-ChristopherNeural"}
+_TTS_STYLE = {"tony": {"rate": "+14%", "pitch": "-3Hz"}, "sarge": {"rate": "+8%", "pitch": "-8Hz"}}
 _NY_STYLE = ((r"^Heads up:", "Yo, heads up:"), (r"^A flip is happening", "Ay, a flip is happening"),
              (r" flip update: ", " flip update, listen: "), (r" Super confidence\.$", " Super confidence. Fuggedaboutit."),
              (r"^(Bitcoin|XRP) sealed call: ", r"Alright, \1 sealed call: "))
+_SARGE_STYLE = ((r"^Heads up: a", "Attention! A"), (r"^A flip is happening", "Incoming! A flip is happening"),
+                (r"^(Bitcoin|XRP) (early|sealed) call: ", r"\1 \2 call, listen up! Going "),
+                (r" Super confidence\.$", " Super confidence. Hooah!"), (r" Weak confidence\.$", " Weak confidence. Stay sharp."),
+                (r"whale buy on (Bitcoin|XRP)\.", r"whale buy on \1. Heavy artillery."), (r" flip update: ", " flip update, sitrep: "))
 _TTS_DIR = os.path.join(_DATA_ROOT, "tts_cache")
 _TTS_OK = re.compile(r"^[A-Za-z0-9 .,:;'!?%$&()\-]{1,220}$")
 _tts_locks = {}
@@ -11326,9 +11332,8 @@ def _tts_mp3(text, voice_key):
         return None
     voice = _TTS_VOICES.get(voice_key, _TTS_VOICES["ava"])
     style = _TTS_STYLE.get(voice_key, {})
-    if voice_key == "tony":
-        for _pat, _rep in _NY_STYLE:
-            text = re.sub(_pat, _rep, text)
+    for _pat, _rep in {"tony": _NY_STYLE, "sarge": _SARGE_STYLE}.get(voice_key, ()):
+        text = re.sub(_pat, _rep, text)
     rate, pitch = style.get("rate", "+4%"), style.get("pitch", "+0Hz")
     key = hashlib.sha1(f"{voice}|{rate}|{pitch}|{text}".encode()).hexdigest()
     fp = os.path.join(_TTS_DIR, key + ".mp3")
