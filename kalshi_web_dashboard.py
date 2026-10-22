@@ -6016,7 +6016,7 @@ body { background:#15110f !important; }
 .snd-toggle + .wr-badge { margin-left:8px; }
 .sb-conf b, .sb-klock b { font-size:1.08em; }
 .tgt-hist { margin:10px 0 4px; padding:10px 12px; border-radius:12px; background:rgba(251,244,236,0.05); border:1px solid #4a3c43; font-size:13px; }
-.th-h { font-weight:800; margin-bottom:6px; } .th-row { padding:3px 0; } .th-ok { color:#f2c46b; } .th-bad { color:#c9a6e8; }
+.th-h { font-weight:800; margin-bottom:6px; } .th-row { padding:3px 0; } .th-ok { color:#ffffff; } .th-bad { color:#111111; background:#efe6dc; border-radius:50%; padding:0 2px; }
 .radar-box { margin:8px 0; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid #4a3c43; }
 .rd-h { font-weight:800; letter-spacing:1px; margin-bottom:6px; }
 .rd-bar { display:flex; height:10px; border-radius:6px; overflow:hidden; background:#352b30; margin:4px 0; }
@@ -6093,9 +6093,17 @@ body.has-flip-watch { padding-top:0; }
 .lw-zoom { margin-left:auto; font-size:11px; }
 .lw-chart { position:relative; height:380px; border-radius:12px; overflow:hidden; background:rgba(20,15,18,0.35); }
 @media (max-width:760px) { .lw-chart { height:320px; } }
-.lw-corner { position:absolute; top:8px; left:10px; z-index:5; max-width:68%; padding:6px 9px; border-radius:10px; font-size:12px; line-height:1.35;
-  background:rgba(26,20,22,0.78); border:1px solid rgba(255,255,255,0.10); pointer-events:none; }
-.lw-corner .lw-macd { margin-top:2px; }
+.lw-corner { position:absolute; top:8px; left:10px; z-index:5; max-width:70%; font-size:12px; line-height:1.35; pointer-events:none; }
+.lw-corner .lw-macd { margin-top:5px; font-size:11px; color:#e9ded8; }
+.lw-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.lw-chip { display:inline-flex; align-items:baseline; gap:5px; padding:3px 8px; border-radius:8px; background:rgba(20,15,18,0.85);
+  border:1px solid rgba(242,196,107,0.30); font-size:11px; white-space:nowrap; }
+.lw-chip i { font-style:normal; color:#f2c46b; font-weight:800; letter-spacing:.5px; }
+.lw-chip b { color:#fbf0d9; font-size:13px; }
+.lw-rec-g { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:3px 0 6px; }
+.lw-rec-h { font-size:11px; font-weight:800; color:#f2c46b; min-width:86px; }
+.lw-rec { padding:3px 8px; border-radius:999px; background:rgba(42,34,38,0.7); border:1px solid rgba(255,255,255,0.08); font-size:12px; }
+.lw-rec i { font-style:normal; font-size:10px; color:#bcaaa1; }
 .lw-key { margin:4px 2px 2px; font-size:11px; }
 .lw-pats { margin-top:6px; }
 .lw-pat-head { margin:8px 2px 4px; font-size:11px; letter-spacing:.3px; }
@@ -8155,15 +8163,20 @@ function lwRsi(cl, n) {
 function lwMacd(cl) {
   if (cl.length < 35) return null;
   const e12 = lwEma(cl, 12), e26 = lwEma(cl, 26), m = cl.map((_, i) => e12[i] - e26[i]), sg = lwEma(m, 9);
-  return m.map((v, i) => v - sg[i]);                       // histogram
+  const h = m.map((v, i) => v - sg[i]); h.line = m[m.length - 1]; return h;      // histogram (+ the MACD line's last value)
 }
 function lwRead(a, o) {
   const cl = o.bars.map(b => b.close);
   const r = lwRsi(cl.slice(-200), 14), h = lwMacd(cl.slice(-200));
-  let rs = '', mc = '';
+  let rs = '', mc = '', chips = '';
   if (r !== null) {
     const z = r >= 70 ? ['overbought', 'down'] : r <= 30 ? ['oversold', 'up'] : r >= 55 ? ['bullish', 'up'] : r <= 45 ? ['bearish', 'down'] : ['neutral', 'flat'];
-    rs = '<b>RSI ' + r.toFixed(0) + '</b> <span class="' + z[1] + '">' + z[0] + '</span>';
+    chips += '<span class="lw-chip"><i>RSI</i><b>' + r.toFixed(0) + '</b><span class="' + z[1] + '">' + z[0] + '</span></span>';
+  }
+  if (h && h.length > 3) {
+    const hv = h[h.length - 1], dp = o.a === 'XRP' ? 5 : 2;
+    chips += '<span class="lw-chip"><i>MACD</i><b>' + (h.line >= 0 ? '+' : '') + h.line.toFixed(dp) + '</b><span class="' + (hv >= 0 ? 'up' : 'down') + '">'
+      + (hv >= 0 ? '&#9650; ' : '&#9660; ') + Math.abs(hv).toFixed(dp) + '</span></span>';
   }
   if (h && h.length > 3) {
     const h0 = h[h.length - 1], h1 = h[h.length - 2], h2 = h[h.length - 3], up = h0 > 0;
@@ -8172,14 +8185,14 @@ function lwRead(a, o) {
     const bars = fading && step > 0 ? Math.max(1, Math.round(Math.abs(h0) / step)) : null;
     const tf = o.tf, unit = tf === '1d' ? 'day' : 'candle';
     if (fading && bars !== null && bars <= 3)
-      mc = '<b>MACD</b> <span class="' + (up ? 'up' : 'down') + '">' + (up ? 'bullish' : 'bearish') + '</span>, but fading - could flip '
-        + (up ? 'down' : 'up') + ' in ~' + bars + ' ' + unit + (bars > 1 ? 's' : '') + '. That can ' + (up ? 'pull price lower' : 'lift price') + ' into the close.';
+      mc = 'MACD ' + (up ? 'bullish' : 'bearish') + ' but fading - could flip ' + (up ? 'down' : 'up') + ' in ~' + bars + ' ' + unit + (bars > 1 ? 's' : '')
+        + ', which can ' + (up ? 'pull price lower' : 'lift price') + ' into the close.';
     else if (fading)
-      mc = '<b>MACD</b> <span class="' + (up ? 'up' : 'down') + '">' + (up ? 'bullish' : 'bearish') + '</span>, momentum easing - no flip yet.';
+      mc = 'MACD ' + (up ? 'bullish' : 'bearish') + ', momentum easing - no flip yet.';
     else
-      mc = '<b>MACD</b> <span class="' + (up ? 'up' : 'down') + '">' + (up ? 'bullish' : 'bearish') + ' and building</span> - supports price ' + (up ? 'holding up' : 'staying down') + '.';
+      mc = 'MACD ' + (up ? 'bullish' : 'bearish') + ' and building - supports price ' + (up ? 'holding up' : 'staying down') + '.';
   }
-  o.corner.innerHTML = (rs ? '<div>' + rs + '</div>' : '') + (mc ? '<div class="lw-macd">' + mc + '</div>' : '');
+  o.corner.innerHTML = '<div class="lw-chips">' + chips + '</div>' + (mc ? '<div class="lw-macd">' + mc + '</div>' : '');
 }
 function lwIndicators(o) {
   const cl = o.bars.map(b => b.close), t = o.bars.map(b => b.time);
@@ -8190,20 +8203,20 @@ function lwCreate(a) {
   box.innerHTML = '<div class="lw-tabs">' + LW_TFS.map(t => '<button data-tf="' + t + '">' + t + '</button>').join('')
     + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
-    + '<div class="lw-key hint"><span style="color:#e5b85c">EMA 12</span> &middot; <span style="color:#a9cfc1">EMA 25</span> &middot; <span style="color:#c9a6e8">EMA 50</span> &middot; dashed = round line</div>'
+    + '<div class="lw-key hint"><span style="color:#fbf0d9">EMA 12</span> &middot; <span style="color:#f2c46b">EMA 25</span> &middot; <span style="color:#c8963e">EMA 50</span> &middot; dashed = round line</div>'
     + '<div class="lw-pats"></div>';
   const el = box.querySelector('.lw-chart');
   const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: 'Nunito'},
-    grid: {vertLines: {color: 'rgba(240,214,200,.06)'}, horzLines: {color: 'rgba(240,214,200,.06)'}},
-    rightPriceScale: {borderColor: 'rgba(240,214,200,.13)'},
-    timeScale: {borderColor: 'rgba(240,214,200,.13)', timeVisible: true, secondsVisible: false,
+    grid: {vertLines: {color: 'rgba(242,196,107,.05)'}, horzLines: {color: 'rgba(242,196,107,.05)'}},
+    rightPriceScale: {borderColor: 'rgba(242,196,107,.18)'},
+    timeScale: {borderColor: 'rgba(242,196,107,.18)', timeVisible: true, secondsVisible: false,
       tickMarkFormatter: t => (LW[a] && LW[a].tf === '1d') ? lwFmtD.format(new Date(t * 1000)) : lwFmtT.format(new Date(t * 1000))},
     localization: {timeFormatter: t => lwFmtT.format(new Date(t * 1000)), priceFormatter: v => lwMoney(a, v)}, crosshair: {mode: 0}});
   const o = {a, box, chart, corner: box.querySelector('.lw-corner'), pats: box.querySelector('.lw-pats'), bars: [], line: null, lineV: null,
     tf: (() => { try { return localStorage.getItem('lwTf_' + a) || '1m'; } catch (e) { return '1m'; } })(), busy: false};
-  o.candle = chart.addCandlestickSeries({upColor: '#43cdb7', downColor: '#e8798f', borderVisible: false, wickUpColor: '#43cdb7', wickDownColor: '#e8798f'});
+  o.candle = chart.addCandlestickSeries({upColor: '#3dd69c', downColor: '#f05454', borderVisible: false, wickUpColor: 'rgba(61,214,156,0.85)', wickDownColor: 'rgba(240,84,84,0.85)'});
   const ln = c => chart.addLineSeries({color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
-  o.e1 = ln('#e5b85c'); o.e2 = ln('#a9cfc1'); o.e3 = ln('#c9a6e8');
+  o.e1 = ln('#fbf0d9'); o.e2 = ln('#f2c46b'); o.e3 = ln('#c8963e');      // cream white / yellow / deep gold
   box.querySelectorAll('.lw-tabs button').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
   lwLoad(o);
   return o;
@@ -8250,10 +8263,26 @@ async function lwPatterns(o) {
       + (x.means ? '<div class="hint">' + esc(x.means) + (x.watch ? ' ' + esc(x.watch) : '') + '</div>' : '') + '</details>';
   };
   (j.items || []).forEach(x => marks.push({time: Math.floor(x.ts / g) * g, position: x.bias === 'bullish' ? 'belowBar' : 'aboveBar',
-    color: x.bias === 'bullish' ? '#43cdb7' : '#e8798f', shape: x.bias === 'bullish' ? 'arrowUp' : 'arrowDown', text: x.name.split(' (')[0].slice(0, 22)}));
+    color: x.bias === 'bullish' ? '#3dd69c' : '#f05454', shape: x.bias === 'bullish' ? 'arrowUp' : 'arrowDown', text: x.name.split(' (')[0].slice(0, 22)}));
   try { o.candle.setMarkers(marks.filter(m => o.bars.length && m.time >= o.bars[0].time).sort((p, q) => p.time - q.time)); } catch (e) {}
   const items = (j.items || []).map(x => row(x, false)).join(''), worked = (j.worked || []).map(x => row(x, true)).join('');
-  o.pats.innerHTML = '<div class="hint lw-pat-head">Patterns: only 80%+ formed or finished, with a proven record on this coin and timeframe</div>'
+  // formed in the last hour, grouped 5 / 10 / 15 / 30 / 60 minutes, every short timeframe
+  const B = [[5, 'Last 5 min'], [10, '5-10 min ago'], [15, '10-15 min ago'], [30, '15-30 min ago'], [60, '30-60 min ago']];
+  let rec = '', lo = -1;
+  B.forEach(([hi, lab]) => {
+    const xs = (j.recent || []).filter(x => x.mins > lo && x.mins <= hi);
+    lo = hi;
+    if (!xs.length) return;
+    rec += '<div class="lw-rec-g"><span class="lw-rec-h">' + lab + '</span>' + xs.map(x => {
+      const up = x.bias === 'bullish';
+      const res = x.result === 'hit' ? ' <span class="up">worked</span>' : (x.result === 'miss' ? ' <span class="down">failed</span>' : '');
+      return '<span class="lw-rec"><span class="' + (up ? 'up' : 'down') + '">' + (up ? '&#9650;' : '&#9660;') + '</span> ' + esc(x.name.split(' - ')[0].split(' (')[0])
+        + ' <i>' + x.tf + '</i>' + (x.rate != null && x.n >= 20 ? ' <span class="hint">' + Math.round(x.rate * 100) + '%</span>' : '') + res + '</span>';
+    }).join('') + '</div>';
+  });
+  o.pats.innerHTML = '<div class="hint lw-pat-head">Formed in the last hour (double tops / bottoms, wedges, AMD, head and shoulders, hanging man and more)</div>'
+    + (rec || '<div class="hint">Nothing important formed in the last hour.</div>')
+    + '<div class="hint lw-pat-head">Forming now: 80%+ built, proven on this coin and timeframe</div>'
     + (items || '<div class="hint">Nothing reliable forming right now.</div>') + (worked ? '<div class="hint lw-pat-head">Recently worked</div>' + worked : '');
 }
 function lwAttach() {
@@ -8711,8 +8740,43 @@ def chart_patterns_payload(asset_name, tf):
                     break
         except Exception as _we:
             print(f"[chart patterns] history: {_we!r}")
+    # 2026-10-22 (user): everything important that FORMED in the last 5 / 10 / 15 / 30 / 60 minutes, on every short timeframe
+    try:
+        out["recent"] = _recent_formations(asset_name)
+    except Exception as _re:
+        print(f"[chart patterns] recent: {_re!r}")
+        out["recent"] = []
     _chart_pat_cache[(asset_name, tf)] = (time.time(), out)
     return out
+
+
+_KEY_PATTERNS = ("double", "wedge", "amd", "head and shoulders", "hanging man", "hammer", "shooting star", "engulfing",
+                 "morning", "evening", "triangle", "flag", "cup with handle", "three white", "three black", "tweezer",
+                 "rounding", "channel")
+
+
+def _recent_formations(asset_name):
+    """[{name, bias, tf, mins, rate, n, result}] newest first: key patterns completed in the last hour on 1m / 5m / 15m / 1h.
+    Proven-misleading ones (under 50% right over 20+ scored calls) are left out."""
+    if _mtf is None:
+        return []
+    now, out, seen = time.time(), [], set()
+    for tf in ("1m", "5m", "15m", "1h"):
+        for e in _mtf.history.recent_completed(asset_name, tf, now - 3600):
+            nm = e.get("name") or ""
+            if e.get("bias") not in ("bullish", "bearish") or not any(k in nm.lower() for k in _KEY_PATTERNS):
+                continue
+            key = (nm, tf)
+            if key in seen:
+                continue
+            st = _mtf.stats.summary(asset_name, tf, nm)
+            if st["decisive"] >= CHART_PAT_MIN_N and (st["rate"] or 0) < 0.5:
+                continue
+            seen.add(key)
+            out.append({"name": nm, "bias": e["bias"], "tf": tf, "mins": max(0, int((now - e["ts"]) // 60)),
+                        "rate": round(st["rate"], 3) if st["rate"] is not None else None, "n": st["decisive"], "result": e.get("result")})
+    out.sort(key=lambda x: x["mins"])
+    return out[:20]
 
 
 _PCT_TIP = ("how complete this pattern is. It climbs as the pattern builds and DROPS if price moves against it; "
@@ -12279,7 +12343,8 @@ def radar_html(name, ticker):
 TARGET_MATCH_PCT = 0.05       # "the same price target" = exact, or within 5%
 
 
-TARGET_RECENT_PCT = 0.01       # 2026-10-22 (user): first look at the most recent day for targets within 1%
+TARGET_RECENT_PCT = 0.01       # 2026-10-22 (user): exact target first, then the closest within 1%, from the last 30 days
+TARGET_LOOKBACK_S = 30 * 86400
 _tgt_cache = {}
 
 
@@ -12287,6 +12352,21 @@ def _target_touches(name, line):
     """When did price last trade AT this target (a candle whose low-high range contains it), or come closest, using the
     live 1-minute candles first, then hourly, then daily for older history. Returns [(ts, tf, exact, price, move_after)]."""
     sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
+    if name == "BTC":                                    # 30 days of real 1-minute candles from the backtest pull
+        try:
+            m1 = _bt.minute_candles()
+            if m1:
+                ks = sorted(m1)
+                for t in reversed(ks[:-1]):
+                    o, h, l, c, _v = m1[t]
+                    if l <= line <= h:
+                        later = m1.get(t + 900)
+                        return [(t, "1m", True, line, ((later[3] - line) / line) if later else None)]
+                t = min(ks, key=lambda k: min(abs(m1[k][1] - line), abs(m1[k][2] - line)))
+                near = m1[t][1] if abs(m1[t][1] - line) < abs(m1[t][2] - line) else m1[t][2]
+                return [(t, "1m", False, near, None)]
+        except Exception as _me:
+            print(f"[target history] minute data: {_me!r}")
     if _mtf is None or not sym:
         return []
     out, seen_tf = [], set()
@@ -12343,10 +12423,15 @@ def target_history_html(name, d):
     rs = list(rounds.values())
     for r in rs:
         r["diff"] = abs(r["strike"] - line) / line
-    recent = sorted((r for r in rs if now - r["ts"] <= 86400 and r["diff"] <= TARGET_RECENT_PCT), key=lambda r: (r["diff"], -r["ts"]))[:3]
+    # 2026-10-22 (b, user): the EXACT target if it happened in the last 30 days, otherwise the closest within 1% (the most
+    # recent breaks a tie), otherwise simply the nearest target on record
+    rs = [r for r in rs if now - r["ts"] <= TARGET_LOOKBACK_S]
+    tick = 10 ** -dec
+    recent = sorted((r for r in rs if r["diff"] <= TARGET_RECENT_PCT),
+                    key=lambda r: (abs(r["strike"] - line) >= tick, round(abs(r["strike"] - line), dec), -r["ts"]))[:3]
     if len(recent) < 3:
         used = {id(r) for r in recent}
-        recent += sorted((r for r in rs if id(r) not in used), key=lambda r: (round(r["diff"], 4), -r["ts"]))[:3 - len(recent)]
+        recent += sorted((r for r in rs if id(r) not in used), key=lambda r: (r["diff"], -r["ts"]))[:3 - len(recent)]
     rows = ""
     for r in recent:
         h = r["h"] or {}
@@ -12356,7 +12441,7 @@ def target_history_html(name, d):
         off = abs(r["strike"] - line)
         when = dt.datetime.fromtimestamp(r["ts"], et)
         rows += (f'<div class="th-row"><span class="hint">{when:%b %d %-I:%M %p}</span> target {fmt_price(r["strike"], dec)} '
-                 f'<span class="hint">({"exact" if off < 10 ** -dec else (f"{fmt_price(off, dec)} off" if r["diff"] < 0.0005 else f"{r["diff"] * 100:.2f}% off")})</span> &rarr; '
+                 f'<span class="hint">({"exact match" if off < 10 ** -dec else f"{fmt_price(off, dec)} / {r["diff"] * 100:.2f}% off"})</span> &rarr; '
                  f'<b class="{"up" if r["up"] else "down"}">ended {"UP" if r["up"] else "DOWN"}</b>{call_txt}</div>')
     touch = ""
     try:

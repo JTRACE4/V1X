@@ -31,7 +31,7 @@ import requests
 KALSHI = "https://external-api.kalshi.com/trade-api/v2"
 SERIES = "KXBTC15M"
 HEADERS = {"User-Agent": "crypto-15m-predictor/1.0"}
-LOOKBACK_DAYS = int(os.environ.get("BACKTEST_DAYS", "21"))
+LOOKBACK_DAYS = int(os.environ.get("BACKTEST_DAYS", "30"))      # 2026-10-22: 30 days (user: "data from the last 30 days")
 HOLDOUT_FRAC = 0.30
 SLIPPAGE = 0.01
 MIN_TRAIN_N = 40
@@ -905,6 +905,16 @@ def run(days=LOOKBACK_DAYS):
 
 
 _mk_cache = [0.0, []]
+
+
+_m1_cache = [0.0, {}]
+
+
+def minute_candles():
+    """{minute_ts: [o, h, l, c, vol]} BTC/USD 1-minute candles from the last backtest pull (~30 days), cached 10 min."""
+    if time.time() - _m1_cache[0] > 600:
+        _m1_cache[0], _m1_cache[1] = time.time(), {int(k): v for k, v in _load("coinbase_1m.json", {}).items()}
+    return _m1_cache[1]
 
 
 def settled_markets():
