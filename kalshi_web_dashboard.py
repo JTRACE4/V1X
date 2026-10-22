@@ -6103,6 +6103,7 @@ body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minma
 .lw-tabs button { background:rgba(255,255,255,0.05); color:#e9ded8; border:1px solid rgba(255,255,255,0.12); border-radius:999px; padding:4px 11px; font:inherit; font-size:12px; font-weight:800; cursor:pointer; }
 .lw-tabs button.on { background:rgba(233,165,187,0.20); border-color:#e9a5bb; color:#fbf4ec; }
 .lw-zoom { margin-left:auto; font-size:11px; }
+.lw-tabs button.lw-ha { margin-left:6px; }
 .lw-chart { position:relative; height:380px; border-radius:12px; overflow:hidden; background:rgba(20,15,18,0.35); }
 @media (max-width:760px) { .lw-chart { height:320px; } }
 .lw-corner { position:absolute; top:8px; left:10px; z-index:5; max-width:70%; font-size:12px; line-height:1.35; pointer-events:none; }
@@ -8210,6 +8211,17 @@ function lwRead(a, o) {
   }
   o.corner.innerHTML = '<div class="lw-chips">' + chips + '</div>' + (mc ? '<div class="lw-macd">' + mc + '</div>' : '');
 }
+// 2026-10-22 (user): Heikin Ashi candles (smoothed trend view). Indicators always use the REAL prices.
+function lwHA(bars) {
+  const out = []; let po = null, pc = null;
+  bars.forEach(b => {
+    const c = (b.open + b.high + b.low + b.close) / 4, op = po === null ? (b.open + b.close) / 2 : (po + pc) / 2;
+    out.push({time: b.time, open: op, high: Math.max(b.high, op, c), low: Math.min(b.low, op, c), close: c});
+    po = op; pc = c;
+  });
+  return out;
+}
+function lwShow(o) { return o.ha ? lwHA(o.bars) : o.bars; }
 function lwIndicators(o) {
   const cl = o.bars.map(b => b.close), t = o.bars.map(b => b.time);
   [[12, o.e1], [25, o.e2], [50, o.e3]].forEach(([n, s]) => { const e = lwEma(cl, n); s.setData(t.map((x, i) => ({time: x, value: e[i]})).slice(n)); });
@@ -8217,6 +8229,7 @@ function lwIndicators(o) {
 function lwCreate(a) {
   const box = document.createElement('div'); box.className = 'lw-box';
   box.innerHTML = '<div class="lw-tabs">' + LW_TFS.map(t => '<button data-tf="' + t + '">' + t + '</button>').join('')
+    + '<button class="lw-ha" title="Heikin Ashi candles - smoother trend view">Heikin Ashi</button>'
     + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
     + '<div class="lw-key hint"><span style="color:#fbf0d9">EMA 12</span> &middot; <span style="color:#f2c46b">EMA 25</span> &middot; <span style="color:#c8963e">EMA 50</span> &middot; dashed = round line</div>'
@@ -8229,20 +8242,24 @@ function lwCreate(a) {
       tickMarkFormatter: t => (LW[a] && LW[a].tf === '1d') ? lwFmtD.format(new Date(t * 1000)) : lwFmtT.format(new Date(t * 1000))},
     localization: {timeFormatter: t => lwFmtT.format(new Date(t * 1000)), priceFormatter: v => lwMoney(a, v)}, crosshair: {mode: 0}});
   const o = {a, box, chart, corner: box.querySelector('.lw-corner'), pats: box.querySelector('.lw-pats'), bars: [], line: null, lineV: null,
-    tf: (() => { try { return localStorage.getItem('lwTf_' + a) || '1m'; } catch (e) { return '1m'; } })(), busy: false};
+    tf: (() => { try { return localStorage.getItem('lwTf_' + a) || '1m'; } catch (e) { return '1m'; } })(), busy: false,
+    ha: (() => { try { return localStorage.getItem('lwHA') !== '0'; } catch (e) { return true; } })()};
   o.candle = chart.addCandlestickSeries({upColor: '#3dd69c', downColor: '#f05454', borderVisible: false, wickUpColor: 'rgba(61,214,156,0.85)', wickDownColor: 'rgba(240,84,84,0.85)'});
   const ln = c => chart.addLineSeries({color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
   o.e1 = ln('#fbf0d9'); o.e2 = ln('#f2c46b'); o.e3 = ln('#c8963e');      // cream white / yellow / deep gold
-  box.querySelectorAll('.lw-tabs button').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
+  box.querySelectorAll('.lw-tabs button[data-tf]').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
+  const hb = box.querySelector('.lw-ha');
+  hb.classList.toggle('on', o.ha);
+  hb.onclick = () => { o.ha = !o.ha; hb.classList.toggle('on', o.ha); try { localStorage.setItem('lwHA', o.ha ? '1' : '0'); } catch (e) {} o.candle.setData(lwShow(o)); };
   lwLoad(o);
   return o;
 }
 async function lwLoad(o) {
-  o.box.querySelectorAll('.lw-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tf === o.tf));
+  o.box.querySelectorAll('.lw-tabs button[data-tf]').forEach(b => b.classList.toggle('on', b.dataset.tf === o.tf));
   try {
     const j = await (await fetch('/public/candles?asset=' + o.a + '&tf=' + o.tf, {cache: 'no-store'})).json();
     o.bars = (j.candles || []).map(c => ({time: c[0], open: c[1], high: c[2], low: c[3], close: c[4]}));
-    o.candle.setData(o.bars); lwIndicators(o); lwRead(o.a, o);
+    o.candle.setData(lwShow(o)); lwIndicators(o); lwRead(o.a, o);
     const n = o.bars.length; if (n) o.chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - 90), to: n + 3});
   } catch (e) {}
   lwPatterns(o);
@@ -8257,7 +8274,7 @@ async function lwTick(o) {
       if (b > last.time) o.bars.push({time: b, open: t.price, high: t.price, low: t.price, close: t.price});
       else { last.high = Math.max(last.high, t.price); last.low = Math.min(last.low, t.price); last.close = t.price; }
       if (o.bars.length > 400) o.bars.shift();
-      o.candle.update(o.bars[o.bars.length - 1]);
+      const shown = lwShow(o); o.candle.update(shown[shown.length - 1]);
       lwIndicators(o); lwRead(o.a, o);
     }
     if (t.line && t.line !== o.lineV) {
