@@ -430,6 +430,8 @@ REG_DIST = (-0.0015, -0.0008, -0.0004, -0.0002, -0.00005, 0.00005, 0.0002, 0.000
 REG_KP = (0.20, 0.35, 0.50, 0.65, 0.80)                                                                # Kalshi UP price
 REG_SHRINK = 20            # pseudo-rounds of Kalshi's own price mixed into every cell
 REG_MIN_N = 25             # a cell needs this many rounds before it is used on its own
+REG_HALFLIFE_DAYS = 5      # 2026-10-22 (user: "learn from the losses"): a round 5 days old counts half as much as one from
+                           # today, so the table keeps learning from the latest wins AND losses as the market changes
 
 
 def _bin(x, edges):
@@ -443,39 +445,52 @@ def _rsi_state(r):
     return "hi" if (r is not None and r >= 70) else ("lo" if (r is not None and r <= 30) else "mid")
 
 
-def regime_keys(dist, kp, rsi):
-    db, kb = _bin(dist, REG_DIST), _bin(kp, REG_KP)
-    return (f"{db}|{kb}|{_rsi_state(rsi)}", f"{db}|{kb}", f"{db}")
+def _tr(t):
+    return "up" if (t or 0) > 0 else ("dn" if (t or 0) < 0 else "flat")
+
+
+def regime_keys(dist, kp, rsi, trend=0):
+    """Most specific first. 2026-10-22 (user: "especially during a trend"): the 1-minute TREND vote (EMA stack + SuperTrend
+    + DMI) is part of every spot, so a call that keeps losing against a running trend gets flipped by its own history."""
+    db, kb, tb = _bin(dist, REG_DIST), _bin(kp, REG_KP), _tr(trend)
+    return (f"{db}|{kb}|{tb}|{_rsi_state(rsi)}", f"{db}|{kb}|{tb}", f"{db}|{kb}", f"{db}")
 
 
 def build_regime(rows):
-    """rows: [(dist, kp, rsi, ended_up)] -> {level_key: [n, ups, kp_sum]}"""
+    """rows: [(dist, kp, rsi, trend, ended_up, t)] -> {key: [n, weighted_ups, weight]} (recent rounds weigh more)"""
     tab = {}
-    for dist, kp, rsi, up in rows:
-        for k in regime_keys(dist, kp, rsi):
-            c = tab.setdefault(k, [0, 0, 0.0])
+    if not rows:
+        return tab
+    t_now = max(r[5] or 0 for r in rows)
+    for dist, kp, rsi, trend, up, t in rows:
+        w = 0.5 ** (max(0.0, t_now - (t or t_now)) / (REG_HALFLIFE_DAYS * 86400))
+        for k in regime_keys(dist, kp, rsi, trend):
+            c = tab.setdefault(k, [0, 0.0, 0.0])
             c[0] += 1
-            c[1] += 1 if up else 0
-            c[2] += kp
+            c[1] += w if up else 0.0
+            c[2] += w
+    for c in tab.values():
+        c[1], c[2] = round(c[1], 3), round(c[2], 3)
     return tab
 
 
-def regime_call(tab, dist, kp, rsi):
-    """None, or {"call", "p" (chance the called side wins), "n" (rounds behind it), "ups", "level"}."""
+def regime_call(tab, dist, kp, rsi, trend=0):
+    """None, or {"call", "p" (chance the called side wins), "n" (rounds behind it), "won", "level", "p_up"}."""
     if not tab or kp is None or dist is None:
         return None
-    for lvl, k in zip(("fine", "mid", "coarse"), regime_keys(dist, kp, rsi)):
+    for lvl, k in zip(("fine", "trend", "mid", "coarse"), regime_keys(dist, kp, rsi, trend)):
         c = tab.get(k)
         if not c or c[0] < REG_MIN_N:
             continue
-        n, ups = c[0], c[1]
+        n, wu, w = c[0], c[1], (c[2] if len(c) > 2 else c[0])
         # shrink toward Kalshi's price right now: thin evidence leans on the market, deep evidence leans on history
-        p_up = (ups + REG_SHRINK * kp) / (n + REG_SHRINK)
+        p_up = (wu + REG_SHRINK * kp) / (w + REG_SHRINK)
         if abs(p_up - 0.5) < 1e-9:
             return None
         call = "YES" if p_up > 0.5 else "NO"
-        return {"call": call, "p": p_up if call == "YES" else 1 - p_up, "n": n,
-                "won": ups if call == "YES" else n - ups, "level": lvl, "p_up": p_up}
+        won = round(n * (wu / w if w else 0.5)) if call == "YES" else round(n * (1 - (wu / w if w else 0.5)))
+        return {"call": call, "p": p_up if call == "YES" else 1 - p_up, "n": n, "won": won, "level": lvl, "p_up": p_up,
+                "trend": _tr(trend)}
     return None
 
 
@@ -488,8 +503,26 @@ def _reg_rows(rs, mark):
     for r in rs:
         f = r["f"].get(mark)
         if f:
-            out.append((f["dist"], f["kp"], f.get("r1_tv"), r["m"]["result"] == "yes"))
+            out.append((f["dist"], f["kp"], f.get("r1_tv"), f.get("trend", 0), r["m"]["result"] == "yes", r["m"].get("close")))
     return out
+
+
+def loss_check(rs, mark):
+    """Where do the CURRENT rules lose? Win rate with / against / without a trend, and the share of all losses each holds."""
+    out = {}
+    for r in rs:
+        f = r["f"][mark]
+        call, _t, _p = stage_call(f)
+        if not call:
+            continue
+        cs = 1 if call == "YES" else -1
+        tv = f.get("trend", 0) or 0
+        k = "with_trend" if tv == cs else ("against_trend" if tv == -cs else "no_trend")
+        b = out.setdefault(k, [0, 0])
+        b[0] += 1
+        b[1] += (call == "YES") == (r["m"]["result"] == "yes")
+    losses = sum(v[0] - v[1] for v in out.values()) or 1
+    return {k: {"n": v[0], "win": v[1] / v[0], "loss_share": (v[0] - v[1]) / losses} for k, v in out.items()}
 
 
 def evaluate(rounds):
@@ -506,6 +539,7 @@ def evaluate(rounds):
         win = (call == "YES") == (rd["m"]["result"] == "yes")
         return {"win": win, "price": p, "pnl": pnl(win, p), "t": rd["m"]["close"]}
 
+    _tabs_tr = {}
     for key, mark in (("early", 240), ("sealed", 480)):
         rs = [r for r in rounds if r["f"].get(mark)]
         hs = [r for r in hold if r["f"].get(mark)]
@@ -571,12 +605,13 @@ def evaluate(rounds):
         st["rule80"] = picks
         # ---- price-vs-target regime: build on the OLDER 70%, grade on the NEWEST 30% next to the current rules
         tab_tr = build_regime(_reg_rows(tr, mark))
+        _tabs_tr[key] = tab_tr
         reg_h, cur_h, by_lvl = [], [], {}
         overrides = [0, 0]                     # [times the regime picked the other side, times that override won]
         for r in hs:
             f = r["f"][mark]
             ccall, _t, _p = stage_call(f)
-            rc = regime_call(tab_tr, f["dist"], f["kp"], f.get("r1_tv"))
+            rc = regime_call(tab_tr, f["dist"], f["kp"], f.get("r1_tv"), f.get("trend", 0))
             if ccall:
                 cur_h.append(trade(r, mark, ccall))
             call = rc["call"] if rc else ccall
@@ -593,7 +628,7 @@ def evaluate(rounds):
                        and sr["win"] >= sc_["win"] and sr["wins"] >= sc_.get("wins", 0))
         # dist-only win map for the logs: from each spot vs the line, how often did UP win
         dmap = {}
-        for dist, kp, rsi, up in _reg_rows(rs, mark):
+        for dist, kp, rsi, _tv, up, _t in _reg_rows(rs, mark):
             b = dmap.setdefault(_bin(dist, REG_DIST), [0, 0])
             b[0] += 1
             b[1] += up
@@ -602,8 +637,51 @@ def evaluate(rounds):
                         "overrides": {"n": overrides[0], "won": overrides[1]},
                         "dist_map": {str(k): {"n": v[0], "up": v[1]} for k, v in sorted(dmap.items())},
                         # the LIVE table uses every round (train + holdout), so it is as fresh as possible
-                        "table": build_regime(_reg_rows(rs, mark))}
+                        "table": build_regime(_reg_rows(rs, mark)),
+                        "loss_check": loss_check(rs, mark)}
         out["stages"][key] = st
+    # ---- 2026-10-22 (user: "when the early call is more profitable than the sealed call we need to review it better on
+    # time"): every round where the 8:00 sealed call would FLIP the 4:00 early call. Learn (on the older 70%) how sure the
+    # sealed call has to be before a flip pays off; below that, the sealed call HOLDS the early side. Checked on the newest 30%.
+    def _live_call(f, key):
+        st_ = out["stages"][key].get("regime") or {}
+        rc = regime_call(_tabs_tr.get(key), f["dist"], f["kp"], f.get("r1_tv"), f.get("trend", 0)) if st_.get("enabled") else None
+        if rc:
+            return rc["call"], rc["p"]
+        c, _t, p = stage_call(f)
+        return c, (max(p, 1 - p) if p is not None else None)
+    flips = []                                 # (is_holdout, sealed_p, sealed_won, early_won, early_price, sealed_price)
+    stage_pnl = {"early": [], "sealed": []}
+    hold_set = {id(r) for r in hold}
+    for r in rounds:
+        fe, fs_ = r["f"].get(240), r["f"].get(480)
+        if not fe or not fs_:
+            continue
+        ce, _pe = _live_call(fe, "early")
+        cs_, ps_ = _live_call(fs_, "sealed")
+        up = r["m"]["result"] == "yes"
+        for k, c, f in (("early", ce, fe), ("sealed", cs_, fs_)):
+            if c:
+                pr = price_of(c == "YES", f["kp"])
+                stage_pnl[k].append({"win": (c == "YES") == up, "price": pr, "pnl": pnl((c == "YES") == up, pr), "t": 0})
+        if ce and cs_ and ce != cs_ and ps_ is not None:
+            flips.append((id(r) in hold_set, ps_, (cs_ == "YES") == up, (ce == "YES") == up))
+    def _policy_wins(rows, th):
+        return sum((sw if p >= th else ew) for _h, p, sw, ew in rows)
+    ftr = [x for x in flips if not x[0]]
+    fho = [x for x in flips if x[0]]
+    best_th, best_w = 0.0, _policy_wins(ftr, 0.0)
+    for th in (0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 1.01):
+        w_ = _policy_wins(ftr, th)
+        if w_ > best_w:
+            best_th, best_w = th, w_
+    ho_base, ho_pol = _policy_wins(fho, 0.0), _policy_wins(fho, best_th)
+    guard_on = bool(best_th > 0 and len(fho) >= 15 and ho_pol >= ho_base)
+    out["flip_check"] = {"flips": len(flips), "flips_train": len(ftr), "flips_hold": len(fho),
+                         "early_right_on_flips": (sum(x[3] for x in flips) / len(flips)) if flips else None,
+                         "threshold": best_th, "hold_wins_always_flip": ho_base, "hold_wins_guarded": ho_pol,
+                         "enabled": guard_on, "early": _summ(stage_pnl["early"]), "sealed": _summ(stage_pnl["sealed"])}
+
     # decisions the live dashboard applies
     rev_ok = {}
     for key in ("early", "sealed"):
@@ -647,6 +725,7 @@ def evaluate(rounds):
         "rule80": {k: (out["stages"][k]["rule80"].get("best_profit") or out["stages"][k]["rule80"].get("most_rounds"))
                    for k in ("early", "sealed")},
         "rsi_pick": out["rsi_check"]["sealed"]["pick"],
+        "flip_guard": (out["flip_check"]["threshold"] if out["flip_check"]["enabled"] else None),
         "regime": {k: (out["stages"][k]["regime"]["table"] if out["stages"][k]["regime"]["enabled"] else None)
                    for k in ("early", "sealed")},
     }
@@ -805,6 +884,11 @@ def summary_text(r=None):
             ov = rg["overrides"]
             L.append(f"    regime overruled the current call {ov['n']}x and was right {ov['won']}x"
                      + "".join(f" | {lv}: {pct(x['win'])} of {x['n']}" for lv, x in rg["by_level"].items()))
+            lc = rg.get("loss_check") or {}
+            if lc:
+                L.append("    WHERE THE CURRENT RULES LOSE: " + " | ".join(
+                    f"{k.replace('_', ' ')}: win {pct(v['win'])} of {v['n']}, {v['loss_share'] * 100:.0f}% of all losses"
+                    for k, v in lc.items()))
             edges = ["<-0.15%"] + [f"{REG_DIST[i] * 100:+.3f}..{REG_DIST[i + 1] * 100:+.3f}%" for i in range(len(REG_DIST) - 1)] + [">+0.15%"]
             L.append("    UP won from each spot vs the line: " + " | ".join(
                 f"{edges[int(k)]}: {x['up'] / x['n'] * 100:.0f}% of {x['n']}" for k, x in rg["dist_map"].items() if x["n"]))
@@ -820,6 +904,15 @@ def summary_text(r=None):
             L.append(f"LINE CROSS CHECK {k.upper()} (1-min closes; market favorite's win rate by crosses so far): "
                      + " | ".join(f"{c}{'+' if c == '4' else ''}: {pct(x['fav_win'])} of {x['n']}" for c, x in cc.items()))
     d = r.get("decisions") or {}
+    fc = r.get("flip_check")
+    if fc:
+        e_, s_ = fc["early"], fc["sealed"]
+        L.append(f"\nEARLY vs SEALED (as called live): early win={pct(e_['win'])} roi={roi(e_['roi'])} | sealed win={pct(s_['win'])} "
+                 f"roi={roi(s_['roi'])}")
+        L.append(f"  sealed flipped the early call {fc['flips']}x; the EARLY side was right {pct(fc['early_right_on_flips'])} of those")
+        L.append(f"  flip guard: {('sealed must be ' + format(fc['threshold'] * 100, '.0f') + '%+ sure to flip') if fc['threshold'] <= 1 else 'sealed never flips the early call'} -> newest rounds: "
+                 f"{fc['hold_wins_guarded']} wins guarded vs {fc['hold_wins_always_flip']} always flipping "
+                 f"({fc['flips_hold']} flips) -> {'LIVE' if fc['enabled'] else 'not used'}")
     L.append(f"\nPRICE-vs-TARGET REGIME live: early = {'on' if (d.get('regime') or {}).get('early') else 'off'}, "
              f"sealed = {'on' if (d.get('regime') or {}).get('sealed') else 'off'}")
     L.append(f"LIVE DECISIONS: reversal calls enabled = {d.get('reversal_enabled')}; "

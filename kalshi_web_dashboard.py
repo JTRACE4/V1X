@@ -4433,6 +4433,7 @@ def poll_loop():
                             hist[-1][f"{_sk}_radar"] = _c.get("radar_agree")      # True / False / None - for later checks
                             hist[-1][f"{_sk}_crosses"] = _c.get("crosses")        # live line crosses at the lock (2026-10-22)
                             hist[-1][f"{_sk}_regime"] = bool(_c.get("regime"))    # called by the price-vs-target history
+                            hist[-1][f"{_sk}_trend"] = (_c.get("signals") or {}).get("trend")   # 1-min trend vote at the lock
                             hist[-1][f"{_sk}_dist"] = (round((_c["spot"] - _c["line"]) / _c["line"], 6)
                                                        if (_c.get("spot") and _c.get("line")) else None)
                         _lt = _sc_prev.get("late") or {}
@@ -4668,7 +4669,7 @@ def poll_loop():
                     try:
                         _rtab = (_bt.decisions().get("regime") or {}).get(_sk)
                         if _rtab and kalshi_price is not None and live_price and target:
-                            _reg = _bt.regime_call(_rtab, (live_price - target) / target, kalshi_price, rsi_multi.get("rsi1"))
+                            _reg = _bt.regime_call(_rtab, (live_price - target) / target, kalshi_price, rsi_multi.get("rsi1"), _trend_v)
                     except Exception as _rge:
                         print(f"[regime] {_rge!r}")
                     if _ps >= STAGE_CALL_MIN or _reg:
@@ -4697,6 +4698,7 @@ def poll_loop():
                         _call, _tier = _reg["call"], _bt.regime_tier(_reg["p"])
                         _why = (f"price-vs-target history: {_reg['won']} of {_reg['n']} rounds from this spot ended "
                                 f"{'UP' if _call == 'YES' else 'DOWN'} ({_reg['p']:.0%})"
+                                + (f" with the trend {'up' if _reg.get('trend') == 'up' else 'down'}" if _reg.get("trend") in ("up", "dn") else "")
                                 + (f" - overruled the {'UP' if _was == 'YES' else 'DOWN'} lean" if (_was and _was != _call) else ""))
                     _rev = None
                     try:
@@ -4708,6 +4710,21 @@ def poll_loop():
                         _call, _tier, _why = _rev["call"], _rev["tier"], _rev["why"]
                     elif _rev:
                         _rev = None
+                    # 2026-10-22 (user: "when the early call is more profitable than the sealed call we need to review it
+                    # better"): the SEALED call may only flip the EARLY call when it is as sure as history says a flip needs
+                    # to be (learned from every past round where the two disagreed). Otherwise it holds the early side.
+                    if _sk == "sealed" and _call:
+                        try:
+                            _fg = _bt.decisions().get("flip_guard")
+                            _ec = (stage_calls.get("early") or {})
+                            _psd = _reg["p"] if _reg else (max(_use_p, 1 - _use_p) if _use_p is not None else None)
+                            if _fg and _ec.get("call") and _ec["call"] != _call and _psd is not None and _psd < _fg and not _rev:
+                                _why = (f"held the early {'UP' if _ec['call'] == 'YES' else 'DOWN'} call - flipping it at "
+                                        f"{_psd:.0%} sure has lost more than it won" + (f" (needs {_fg:.0%})" if _fg <= 1 else ""))
+                                _call, _tier = _ec["call"], (_ec.get("tier") or "GOOD")
+                                print(f"[flip guard] {asset['name']} sealed held early {_call} ({_psd:.0%} < {_fg:.0%}) {ticker}")
+                        except Exception as _fge:
+                            print(f"[flip guard] {_fge!r}")
                     # 2026-10-20 (user): the 22-for-22 system decides. The only extra sit-out is a true coin flip - the
                     # call's own chance within 3 points of 50/50. No sit-outs for line crosses or low volume.
                     _sitout = None      # 2026-10-20 (user): no sit-outs at all - the 22-for-22 system calls every round
@@ -10041,7 +10058,7 @@ def _wr_rows(name, call):
         out.append({"t": t, "ok": bool(h[field]), "call": h.get(cfield), "actual": h.get("actual_side"),
                     "rev": bool(h.get(f"{call}_reversal")), "payout": h.get(f"{call}_payout"), "z80": h.get(f"{call}_zone80"),
                     "final": h.get("final_price"), "strike": h.get("strike"), "tier": h.get(f"{call}_tier") if call != "bot" else None,
-                    "ticker": h.get("ticker")})
+                    "ticker": h.get("ticker"), "trend": h.get(f"{call}_trend")})
     return out
 
 
@@ -10123,6 +10140,16 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
         zw = sum(r["ok"] for r in z8)
         grid += (f'<div class="wr-rev"><i class=ico data-i=star></i> 80% setups (live): <b class="skw">{zw}W</b> - <b class="skl">{len(z8) - zw}L</b> '
                  f'({zw / len(z8):.0%})</div>')
+    # 2026-10-22 (user: "learn from the losses ... especially during a trend"): the record with vs against the 1-min trend
+    _tg = {}
+    for r in sel:
+        if r.get("trend") in (1, -1) and r.get("call") in ("YES", "NO"):
+            k = "with" if (r["trend"] > 0) == (r["call"] == "YES") else "against"
+            _tg.setdefault(k, []).append(r["ok"])
+    if _tg:
+        grid += ('<div class="wr-rev"><i class=ico data-i=radar></i> Calls vs the trend: ' + " &middot; ".join(
+            f'{k} it <b class="skw">{sum(v)}W</b>-<b class="skl">{len(v) - sum(v)}L</b> ({sum(v) / len(v):.0%})'
+            for k, v in sorted(_tg.items(), reverse=True)) + ' <span class="hint">- the history table learns from these</span></div>')
     rv = [r for r in sel if r.get("rev")]
     if rv:
         rw = sum(r["ok"] for r in rv)
