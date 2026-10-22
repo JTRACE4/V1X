@@ -5935,6 +5935,25 @@ body { background:#15110f !important; }
 .rd-tot { font-size:13px; margin-bottom:4px; } .rd-row { font-size:13px; padding:2px 0; } .rd-fake { margin-top:4px; }
 .rd-tab summary { cursor:pointer; font-size:13px; margin-top:6px; } .radar-admin { margin:8px 0; font-size:13px; }
 .radar-admin code { word-break:break-all; } .radar-admin ul { margin:6px 0; padding-left:18px; }
+/* 2026-10-22: BRAIN icon set - vector files in /static (ico-*.svg), drawn as masks so they render the same on iPhone,
+   Android and Windows and take a theme colour by meaning. check / x / warn / sound follow the text colour around them. */
+.ico { display:inline-block; width:1.1em; height:1.1em; vertical-align:-0.18em; flex:none; background-color:currentColor;
+  -webkit-mask:var(--i) center/contain no-repeat; mask:var(--i) center/contain no-repeat; }
+.ico[data-i="lock"] { --i:url(/static/ico-lock.svg?v=1); color:#e9a5bb; }
+.ico[data-i="radar"] { --i:url(/static/ico-radar.svg?v=1); color:#e9a5bb; }
+.ico[data-i="reversal"] { --i:url(/static/ico-reversal.svg?v=1); color:#e8742a; }
+.ico[data-i="star"] { --i:url(/static/ico-star.svg?v=1); color:#f2c46b; }
+.ico[data-i="hold"] { --i:url(/static/ico-hold.svg?v=1); color:#f2c46b; }
+.ico[data-i="flame"] { --i:url(/static/ico-flame.svg?v=1); color:#f2a65a; }
+.ico[data-i="clock"] { --i:url(/static/ico-clock.svg?v=1); color:#eee2d7; }
+.ico[data-i="cash"] { --i:url(/static/ico-cash.svg?v=1); color:#f2c46b; }
+.ico[data-i="check"] { --i:url(/static/ico-check.svg?v=1); }
+.ico[data-i="x"] { --i:url(/static/ico-x.svg?v=1); }
+.ico[data-i="warn"] { --i:url(/static/ico-warn.svg?v=1); }
+.ico[data-i="sound-on"] { --i:url(/static/ico-sound-on.svg?v=1); }
+.ico[data-i="sound-off"] { --i:url(/static/ico-sound-off.svg?v=1); }
+.fw-badge .ico, .snd-toggle .ico { color:inherit; width:1.2em; height:1.2em; }
+.fw-badge { display:inline-flex; align-items:center; gap:6px; }
 .bt100 { margin:6px 0 10px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid #4a3c43; }
 .bt100-h { font-size:13px; margin-bottom:6px; color:#eee2d7; }
 .bt100-t { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
@@ -6333,7 +6352,7 @@ function updateSoundButtons() {
   const b = document.getElementById('sound-enable-btn');
   if (b) { b.textContent = soundEnabled ? 'Sound ON - tap to turn everything off' : 'Sound OFF - tap to turn on'; b.classList.toggle('sound-on', soundEnabled); }
   const t = document.getElementById('snd-toggle');
-  if (t) { t.textContent = soundEnabled ? '\u{1F50A} Sound ON' : '\u{1F507} Sound OFF'; t.classList.toggle('on', soundEnabled); t.setAttribute('aria-pressed', String(soundEnabled)); }
+  if (t) { t.innerHTML = soundEnabled ? '<i class=ico data-i=sound-on></i> Sound ON' : '<i class=ico data-i=sound-off></i> Sound OFF'; t.classList.toggle('on', soundEnabled); t.setAttribute('aria-pressed', String(soundEnabled)); }
 }
 function disableSound() {
   soundEnabled = false;
@@ -6591,8 +6610,8 @@ function updateFlipWatch() {
     const st = v.strength !== null ? _strengthWord(v.strength) + ' &middot; ' + Math.round(v.strength * 100) + '% on Kalshi' : '';
     // badge: market back on the call's side -> HOLD; market 60%+ the other way -> the reversal is confirmed
     let badge = '';
-    if (v.withCall === true) badge = '<span class="fw-badge fw-hold">&#9995; HOLD YOUR POSITION</span>';
-    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev">&#8634; REVERSAL CONFIRMED</span>';
+    if (v.withCall === true) badge = '<span class="fw-badge fw-hold"><i class=ico data-i=hold></i> HOLD YOUR POSITION</span>';
+    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev"><i class=ico data-i=reversal></i> REVERSAL CONFIRMED</span>';
     return '<div class="fw-item ' + cls + '"><b>' + n + ' FLIP WATCH</b><span class="fw-dir">' + (v.goingUp ? '&#9650; heading UP' : '&#9660; heading DOWN') + '</span>'
       + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span class="fw-st">' + st + '</span>' : '') + badge + '</div>';
   }).join('');
@@ -7038,7 +7057,7 @@ function checkRsiAlerts() {
       box.appendChild(pill);
     }
     pill.className = 'rsi-pill ' + (z === 'under' ? 'rsi-under' : 'rsi-over');
-    pill.innerHTML = '&#9888; WARNING: ' + name + ' ' + (z === 'under' ? 'OVERSOLD' : 'OVERBOUGHT') + ' - RSI ' + v.toFixed(0) +
+    pill.innerHTML = '<i class=ico data-i=warn></i> WARNING: ' + name + ' ' + (z === 'under' ? 'OVERSOLD' : 'OVERBOUGHT') + ' - RSI ' + v.toFixed(0) +
       '<small>1-minute RSI ' + (z === 'under' ? 'at or below 25' : 'at or above 75') + ' - information only (click to dismiss)</small>';
   });
 }
@@ -7891,9 +7910,9 @@ window.onload = function() {
 };
 </script>
 </head><body>
-<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false">&#128263; Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
+<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false"><i class=ico data-i=sound-off></i> Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
-<div id="vol-warn" class="vol-warn" style="display:none;">&#9888; Round history is NOT on a Railway volume - every redeploy wipes it.
+<div id="vol-warn" class="vol-warn" style="display:none;"><i class=ico data-i=warn></i> Round history is NOT on a Railway volume - every redeploy wipes it.
 This page keeps a backup on this device and puts it back after a wipe, but add a volume to fix it for good:
 Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/data</b>, then Variables &rarr; <b>DATA_DIR=/data</b>.</div>
 <div class="view-bar"><span class="hint">Show:</span>
@@ -8193,9 +8212,9 @@ def build_tug_panel(name, d):
     if flow_up is not None:
         flow_side_up = flow_up >= 0.5
         if flow_side_up == up_side:
-            agree = f'<div class="tug-agree ok">&#10003; flow and price agree ({"both UP" if up_side else "both DOWN"})</div>'
+            agree = f'<div class="tug-agree ok"><i class=ico data-i=check></i> flow and price agree ({"both UP" if up_side else "both DOWN"})</div>'
         else:
-            agree = (f'<div class="tug-agree warn">&#9888; flow and price disagree - price says {"UP" if up_side else "DOWN"}, flow says '
+            agree = (f'<div class="tug-agree warn"><i class=ico data-i=warn></i> flow and price disagree - price says {"UP" if up_side else "DOWN"}, flow says '
                      f'{"UP" if flow_side_up else "DOWN"} (the price side usually wins, about 3 in 4)</div>')
     lv = _flow.HUB.line_volume(name)
     around = ""
@@ -8339,7 +8358,7 @@ def build_pattern_window(asset_name):
             tally = f' - <span class="up">{n_hit} worked</span> &middot; <span class="down">{n_miss} failed</span>'
             kept_html = (f'<details class="kept-drop" data-pat="KEPTLIST|{asset_name}|{tf}"><summary class="hint">Recent completed calls on this timeframe '
                          f'({len(rows_)}){tally} - click to open</summary>'
-                         f'<div class="hint kept-head">kept for {keep_s // 60} min - &#10003; worked &middot; &#10007; failed &middot; &#8211; no real move</div>'
+                         f'<div class="hint kept-head">kept for {keep_s // 60} min - <i class=ico data-i=check></i> worked &middot; <i class=ico data-i=x></i> failed &middot; &#8211; no real move</div>'
                          + "".join(rows_) + '</details>')
     except Exception as _ke:
         print(f"[history] kept calls failed: {_ke!r}")
@@ -8407,9 +8426,9 @@ def _res_mark(ev):
     h = HORIZONS_MIN.get(ev["tf"], 5)
     r = ev.get("result")
     if r == "hit":
-        return f'<span class="pat-res up" title="WORKED: price moved {ev["move"]:+.1f} ATR in the pattern direction within {h} min">&#10003;</span>'
+        return f'<span class="pat-res up" title="WORKED: price moved {ev["move"]:+.1f} ATR in the pattern direction within {h} min"><i class=ico data-i=check></i></span>'
     if r == "miss":
-        return f'<span class="pat-res down" title="FAILED: price moved {ev["move"]:+.1f} ATR (against it) within {h} min">&#10007;</span>'
+        return f'<span class="pat-res down" title="FAILED: price moved {ev["move"]:+.1f} ATR (against it) within {h} min"><i class=ico data-i=x></i></span>'
     if r == "flat":
         return f'<span class="pat-res flat" title="no real move within {h} min ({ev["move"]:+.1f} ATR)">&#8211;</span>'
     return f'<span class="pat-res pending" title="result is scored {h} min after it completed">checking...</span>'
@@ -8485,9 +8504,9 @@ def _hist_event_html(e):
         if e["bias"] not in ("bullish", "bearish"):
             out = '<span class="hint">context only - no up/down call to score</span>'
         elif e["result"] == "hit":
-            out = f'<span class="up">&#10003; worked</span> <span class="hint">({e["move"]:+.1f} ATR in its direction after {HORIZONS_MIN.get(e["tf"], 5)} min)</span>'
+            out = f'<span class="up"><i class=ico data-i=check></i> worked</span> <span class="hint">({e["move"]:+.1f} ATR in its direction after {HORIZONS_MIN.get(e["tf"], 5)} min)</span>'
         elif e["result"] == "miss":
-            out = f'<span class="down">&#10007; failed</span> <span class="hint">({e["move"]:+.1f} ATR after {HORIZONS_MIN.get(e["tf"], 5)} min)</span>'
+            out = f'<span class="down"><i class=ico data-i=x></i> failed</span> <span class="hint">({e["move"]:+.1f} ATR after {HORIZONS_MIN.get(e["tf"], 5)} min)</span>'
         elif e["result"] == "flat":
             out = f'<span class="flat">&#8211; no real move</span> <span class="hint">({e["move"]:+.1f} ATR after {HORIZONS_MIN.get(e["tf"], 5)} min)</span>'
         else:
@@ -9107,7 +9126,7 @@ def build_stage_box(name, d, key):
     dec = d.get("price_decimals", 2)
     c = (d.get("stage_calls") or {}).get(key) or {}
     cls = "stage-box" + (" stage-sealed" if key == "sealed" else " stage-early")
-    title = f'{"&#128274; SEALED CALL" if key == "sealed" else "EARLY CALL"} &middot; {mk}'
+    title = f'{"<i class=ico data-i=lock></i> SEALED CALL" if key == "sealed" else "EARLY CALL"} &middot; {mk}'
     if c.get("call"):
         up = c["call"] == "YES"
         p_up = c.get("p_yes") or 0.5
@@ -9124,10 +9143,10 @@ def build_stage_box(name, d, key):
             agree = holding >= 0.5
             hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}">Kalshi now: <span><b>{holding:.0%}</b> - '
                          f'{"holding" if agree else "going AGAINST it"}</span></div>')
-        z80 = (f'<div class="sb-z80">&#9733; 80% SETUP &middot; won {c["zone80"]:.0%} in backtest'
+        z80 = (f'<div class="sb-z80"><i class=ico data-i=star></i> 80% SETUP &middot; won {c["zone80"]:.0%} in backtest'
                + (f' &middot; {c["zone80_roi"] * 100:+.0f}% per $ at Kalshi prices' if c.get("zone80_roi") is not None else "")
                + '</div>' if c.get("zone80") else "")
-        rev = z80 + (f'<div class="sb-rev">&#8634; REVERSAL{(" &middot; ~" + format(c["rev_payout"], ".1f") + "x") if c.get("rev_payout") else ""}</div>'
+        rev = z80 + (f'<div class="sb-rev"><i class=ico data-i=reversal></i> REVERSAL{(" &middot; ~" + format(c["rev_payout"], ".1f") + "x") if c.get("rev_payout") else ""}</div>'
                if c.get("reversal") else "")
         body = (f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>{rev}'
                 f'<div class="sb-tier {_TIER_CLS.get(tier, "")}">{tier}</div>'
@@ -9137,7 +9156,7 @@ def build_stage_box(name, d, key):
                 + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line, locked at {c.get("elapsed", 0) // 60}:{c.get("elapsed", 0) % 60:02d}</div>' if diff is not None else "")
                 + hold_html
                 + ('' if c.get("radar_agree") is None else
-                   f'<div class="sb-line">&#128225; Top traders {"agree" if c["radar_agree"] else "lean the other way"}</div>')
+                   f'<div class="sb-line"><i class=ico data-i=radar></i> Top traders {"agree" if c["radar_agree"] else "lean the other way"}</div>')
                 + _sig_html(c.get("signals"))
                 + (f'<!--OWNER--><div class="sb-note">{c["why"]}</div><!--/OWNER-->' if c.get("why") else ""))
         tip = "locked call - graded when the round settles"
@@ -9154,7 +9173,7 @@ def build_stage_box(name, d, key):
             hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}">Kalshi now: <span><b>{holding:.0%}</b> - '
                          f'{"holding" if agree else "going AGAINST it"}</span></div>')
         p_side = (lt.get("p_yes") or 0.5) if up else 1 - (lt.get("p_yes") or 0.5)
-        body = (f'<div class="sb-late">&#9201; LATE CALL &middot; PRICE HAS DECIDED</div>'
+        body = (f'<div class="sb-late"><i class=ico data-i=clock></i> LATE CALL &middot; PRICE HAS DECIDED</div>'
                 f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>'
                 f'<div class="sb-tier {_TIER_CLS.get(lt.get("tier") or "GOOD", "")}">{lt.get("tier") or "GOOD"}</div>'
                 + _conf_lines(p_side, lt.get("tier") or "GOOD", _kalshi_at_lock(lt), f' &middot; called at {el_ // 60}:{el_ % 60:02d}')
@@ -9198,7 +9217,7 @@ def build_stage_box(name, d, key):
             except Exception:
                 _rv = None
             if _rv and _rv["call"] != pc:
-                pc, pt = _rv["call"], _rv["tier"] + " &#8634; REVERSAL" + (f' ~{_rv["payout"]:.1f}x' if _rv.get("payout") else "")
+                pc, pt = _rv["call"], _rv["tier"] + " <i class=ico data-i=reversal></i> REVERSAL" + (f' ~{_rv["payout"]:.1f}x' if _rv.get("payout") else "")
             if pc:
                 prev = (f'<div class="sb-line">Right now: <span class="{"up" if pc == "YES" else "down"}"><b>{"UP" if pc == "YES" else "DOWN"} '
                         f'{pt}</b></span></div>')
@@ -9401,21 +9420,21 @@ def build_rsi_box(name, d):
             return f"{v:.0f}" if v is not None else "--"
         ok = ck.get("agree")
         gap = ck.get("gap_wb")
-        verdict = ('<span class="rc-ok">&#10003; matches</span>' if ok
-                   else f'<span class="rc-off">&#9888; {gap:.0f} pts apart</span>' if gap is not None else "")
+        verdict = ('<span class="rc-ok"><i class=ico data-i=check></i> matches</span>' if ok
+                   else f'<span class="rc-off"><i class=ico data-i=warn></i> {gap:.0f} pts apart</span>' if gap is not None else "")
         tip = (f'Big number = TradingView RSI(14), {ck.get("source")} 1-min, live candle included ({ck.get("bars1")} candles). '
                f'5-min: TradingView {_n(ck.get("tv5"))} / Webull-style {_n(ck.get("wb5"))}. ' + (ck.get("pick_why") or ""))
         _acc = lambda m: (_rcb.get(m) or {}).get("acc")
         _tv_acc, _wb_acc = _acc("tradingview"), _acc("webull")
-        _star_tv = "&#9733; " if _pick == "tradingview" else ""
-        _star_wb = "&#9733; " if _pick == "webull" else ""
+        _star_tv = "<i class=ico data-i=star></i> " if _pick == "tradingview" else ""
+        _star_wb = "<i class=ico data-i=star></i> " if _pick == "webull" else ""
         _avg = ((ck.get("tv1") + ck.get("wb1")) / 2) if (ck.get("tv1") is not None and ck.get("wb1") is not None) else None
         _bt_line = (f'backtest: TradingView {_tv_acc * 100:.0f}% vs Webull {_wb_acc * 100:.0f}% right'
                     if (_tv_acc is not None and _wb_acc is not None) else "backtest pending")
         chk = (f'<div class="rsi-check" title="{_html_attr(tip)}">'
                f'<div class="rc-row{" rc-pick" if _pick == "tradingview" else ""}"><span>{_star_tv}TradingView</span><b>{_n(ck.get("tv1"))}</b></div>'
                f'<div class="rc-row{" rc-pick" if _pick == "webull" else ""}"><span>{_star_wb}Webull</span><b>{_n(ck.get("wb1"))}</b></div>'
-               f'<div class="rc-row"><span>Average of both</span><b>{_n(_avg)}</b></div>'
+               f'<div class="rc-row"><span>Avg of both</span><b>{_n(_avg)}</b></div>'
                f'<div class="rc-verdict">{verdict} &middot; {_bt_line}</div></div>')
     src = ("TradingView method" if _pick == "tradingview" else "Webull method") if ck else "all exchanges"
     return (f'<div class="rs-tile rsi-box {c}"><div class="rs-title">RSI (14)</div><div class="rsi-num">{r:.0f}</div>'
@@ -9825,7 +9844,7 @@ def build_flip_radar(name, d):
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
             f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
             f'<div class="fr-txt">Chance {which} ({"UP" if call == "YES" else "DOWN"}) flips</div>'
-            + '<!--OWNER-->' + (f'<div class="fr-txt">&#9888; {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
+            + '<!--OWNER-->' + (f'<div class="fr-txt"><i class=ico data-i=warn></i> {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
             + f'<div class="fr-txt hint">{_html_attr(tip).replace("&amp;middot;", "&middot;")}</div><!--/OWNER-->'
             + f'{spike}{kal}{marker}</div>')
@@ -9991,7 +10010,7 @@ def winrate_badge_html(name):
     et = ZoneInfo("America/New_York")
     day0 = dt.datetime.now(dt.timezone.utc).astimezone(et).replace(hour=0, minute=0, second=0, microsecond=0)
     today = [r["ok"] for r in rows if r["t"] and r["t"] > day0]
-    fire = "&#128293; " if ct and cn >= 3 else ""
+    fire = "<i class=ico data-i=flame></i> " if ct and cn >= 3 else ""
     return (f'<div class="wr-streak {"wr-w" if ct else "wr-l"}">{fire}{cn}{"W" if ct else "L"} <span>streak</span></div>'
             f'<div class="wr-sub"><b>{st["pct"]:.0f}%</b> win &middot; {st["n"]:,} rnds</div>'
             f'<div class="wr-sub">today {sum(today)}-{len(today) - sum(today)} &middot; {name} {WR_CALLS[call][0].split()[0].lower()}</div>')
@@ -10040,12 +10059,12 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
         dl = [bool(h["decided_correct"]) for h in _history.get(name, []) if h.get("decided_correct") is not None
               and (since is None or ((_window_close_utc(h.get("ticker")) or now_et) > since))]
         if dl:
-            grid += (f'<div class="wr-rev">&#9201; Late calls (price has decided): <b class="skw">{sum(dl)}W</b> - '
+            grid += (f'<div class="wr-rev"><i class=ico data-i=clock></i> Late calls (price has decided): <b class="skw">{sum(dl)}W</b> - '
                      f'<b class="skl">{len(dl) - sum(dl)}L</b> ({sum(dl) / len(dl):.0%}) &middot; not part of the streak</div>')
     z8 = [r for r in sel if r.get("z80")]
     if z8:
         zw = sum(r["ok"] for r in z8)
-        grid += (f'<div class="wr-rev">&#9733; 80% setups (live): <b class="skw">{zw}W</b> - <b class="skl">{len(z8) - zw}L</b> '
+        grid += (f'<div class="wr-rev"><i class=ico data-i=star></i> 80% setups (live): <b class="skw">{zw}W</b> - <b class="skl">{len(z8) - zw}L</b> '
                  f'({zw / len(z8):.0%})</div>')
     rv = [r for r in sel if r.get("rev")]
     if rv:
@@ -10053,7 +10072,7 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
         pays = [r["payout"] for r in rv if r.get("payout")]
         # $1 on every reversal at its locked price: a win returns payout x, a loss loses the $1
         ret = sum((r["payout"] - 1) if r["ok"] else -1 for r in rv if r.get("payout"))
-        grid += (f'<div class="wr-rev">&#8634; Reversal calls (losing side): <b class="skw">{rw}W</b> - <b class="skl">{len(rv) - rw}L</b> '
+        grid += (f'<div class="wr-rev"><i class=ico data-i=reversal></i> Reversal calls (losing side): <b class="skw">{rw}W</b> - <b class="skl">{len(rv) - rw}L</b> '
                  f'({rw / len(rv):.0%})' + (f' &middot; avg payout {sum(pays) / len(pays):.1f}x &middot; '
                  f'<span class="{"up" if ret >= 0 else "down"}">{ret:+.1f} units</span> on 1 unit each' if pays else "") + '</div>')
     daily = bucket_table(lambda t: t.date(), lambda k: k.strftime("%a %b %d"), 60, "Day by day (last 60)")
@@ -10068,7 +10087,7 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
         px = (fmt_price(r["final"], dec) if r["final"] is not None else "")
         if r.get("strike"):
             px += f' vs {fmt_price(r["strike"], dec)}'
-        lst.append(f'<div class="wr-row"><span>{tm}</span><span>{"&#8634; " if r.get("rev") else ""}{"&#9733; " if r.get("z80") else ""}{call_txt} &rarr; {act}{(" &middot; " + r["tier"]) if r.get("tier") else ""}'
+        lst.append(f'<div class="wr-row"><span>{tm}</span><span>{"<i class=ico data-i=reversal></i> " if r.get("rev") else ""}{"<i class=ico data-i=star></i> " if r.get("z80") else ""}{call_txt} &rarr; {act}{(" &middot; " + r["tier"]) if r.get("tier") else ""}'
                    f'<span class="hint"> {px}</span></span><b class="{"skw" if r["ok"] else "skl"}">{"W" if r["ok"] else "L"}</b></div>')
     more = (f'<button class="wr-btn" onclick="loadWr({{limit:{limit + 300}}})">Show more ({len(sel) - limit:,} older)</button>'
             if limit and len(sel) > limit else "")
@@ -10178,7 +10197,7 @@ def _call_tag(c, actual, key="early"):
     if not c:
         return ""
     if c.get("call"):
-        ok = "" if actual is None else (" &#10003;" if c["call"] == actual else " &#10007;")
+        ok = "" if actual is None else (" <i class=ico data-i=check></i>" if c["call"] == actual else " <i class=ico data-i=x></i>")
         okc = "" if actual is None else (" tag-ok" if c["call"] == actual else " tag-bad")
         return (f'<span class="call-tag{okc}">{"4m" if key == "early" else "8m"} '
                 f'{"UP" if c["call"] == "YES" else "DN"} {(c.get("tier") or "").lower()}{ok}</span>')
@@ -10308,7 +10327,7 @@ def build_pressure_bar(asset_name, d=None, part="all"):
     deriv_html = f'<div class="hint press-deriv">{" &nbsp;|&nbsp; ".join(dv)}</div>' if dv else ""
     h = _flow.HUB.feed_health()
     ps = _ENG.print_stats(asset_name, 60)
-    health = (f'<div class="hint press-health">&#10003; {h["n_live"]}/{h["n_total"]} feeds live &middot; each trade counted once '
+    health = (f'<div class="hint press-health"><i class=ico data-i=check></i> {h["n_live"]}/{h["n_total"]} feeds live &middot; each trade counted once '
               f'({h["dupes_15m"]} repeat{"s" if h["dupes_15m"] != 1 else ""} dropped, 15 min)</div>')
     rows = []
     for v in s["venues"]:
@@ -10334,22 +10353,22 @@ def build_pressure_bar(asset_name, d=None, part="all"):
     if mc and mc["checked"]:
         bad = mc["flags"]
         if bad:
-            head_ = (f'<span class="warn">&#9888; Math check: {", ".join(r["label"] for r in bad[:4])} '
+            head_ = (f'<span class="warn"><i class=ico data-i=warn></i> Math check: {", ".join(r["label"] for r in bad[:4])} '
                      f'{"look" if len(bad) > 1 else "looks"} off compared with {"their" if len(bad) > 1 else "its"} own numbers - see the table</span>')
         else:
-            head_ = (f'<span class="up">&#10003; Math check passed:</span> {mc["checked"]} exchanges match their own 24h volume and price '
+            head_ = (f'<span class="up"><i class=ico data-i=check></i> Math check passed:</span> {mc["checked"]} exchanges match their own 24h volume and price '
                      f'(right now the market is trading at {mc["ratio"]:.1f}x its normal pace)')
         trs = []
         for r in mc["rows"]:
             ratio = f'{r["ratio"]:.1f}x' if r["ratio"] is not None else "-"
             pd_ = f'{r["pdiff"]:+.3f}%' if r["pdiff"] is not None else "-"
             trs.append(f'<tr class="{"mc-bad" if r["flag"] else ""}"><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td>'
-                       f'<td>{r["normal"]:,.2f}</td><td>{ratio}</td><td>{pd_}</td><td>{"&#9888; check" if r["flag"] else "&#10003;"}</td></tr>'
+                       f'<td>{r["normal"]:,.2f}</td><td>{ratio}</td><td>{pd_}</td><td>{"<i class=ico data-i=warn></i> check" if r["flag"] else "<i class=ico data-i=check></i>"}</td></tr>'
                        if r["normal"] is not None else
                        f'<tr class="{"mc-bad" if r["flag"] else ""}"><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td>'
                        f'<td class="hint" colspan="2">trade ticks only: <span class="up">{r["buy_q"]:,.2f} bought</span> / '
                        f'<span class="down">{r["sell_q"]:,.2f} sold</span> (taker side)</td><td>{pd_}</td>'
-                       f'<td>{"&#9888; check" if r["flag"] else "&#10003;"}</td></tr>'
+                       f'<td>{"<i class=ico data-i=warn></i> check" if r["flag"] else "<i class=ico data-i=check></i>"}</td></tr>'
                        if r.get("tick_only") else
                        f'<tr><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td><td>-</td><td>-</td><td>{pd_}</td><td class="hint">no 24h figure</td></tr>')
         mc_html = (f'<div class="press-health">{head_}</div><details class="press-more" data-pat="MATH|{asset_name}"><summary class="hint">'
@@ -11639,7 +11658,7 @@ def bt100_widget_html(name):
                 f'<td class="{cls}">{b["roi"]:+.1f}%</td>')
     rows = ""
     for call, lab in (("early", "Early 4:00"), ("sealed", "Sealed 8:00")):
-        star = ' &#9733;' if r["pick"] == call else ""
+        star = ' <i class=ico data-i=star></i>' if r["pick"] == call else ""
         rows += (f'<tr class="{"bt100-pick" if r["pick"] == call else ""}"><td><b>{lab}</b>{star}</td>{cell(r[call]["band"])}</tr>'
                  f'<tr class="bt100-any"><td class="hint">&nbsp;&nbsp;any price</td>{cell(r[call]["any"])}</tr>')
     b = r[r["pick"]]["band"]
@@ -11649,7 +11668,7 @@ def bt100_widget_html(name):
     return (f'<div class="bt100"><div class="bt100-h">If you had put <b>$100 on each</b> {name} call it buys '
             f'(bought at {lo * 100:.0f}-{hi * 100:.0f}&cent;, held to settlement, Kalshi fee included)</div>'
             f'<table class="bt100-t"><tr><th>Call</th><th>Trades</th><th>Profit</th><th>Return</th></tr>{rows}</table>'
-            f'<div class="hint">&#9733; = the call auto-buy follows ({auto}). Best winning streak {b.get("best_run", 0)} in a row &middot; '
+            f'<div class="hint"><i class=ico data-i=star></i> = the call auto-buy follows ({auto}). Best winning streak {b.get("best_run", 0)} in a row &middot; '
             f'worst drop along the way ${b["dd"]:,.0f}{(" &middot; " + span) if span else ""}. Uses the price Kalshi showed at the moment of '
             f'the call; real fills can differ by a cent or two.</div></div>')
 
@@ -11705,7 +11724,7 @@ def radar_html(name, ticker):
     marks = "".join(f'<span class="radar-alert" data-name="{name}" data-who="{_html_attr(e["who"])}" data-side="{e["side"]}" '
                     f'data-usd="{e["usd"]:.0f}" data-key="{_html_attr(e["msg_id"] or (e["who"] + e["ticker"] + e["side"]))}" style="display:none;"></span>'
                     for e in _radar.recent_trusted(30) if e["asset"] == name)
-    return (f'<div class="radar-box"><div class="rd-h">&#128225; TRADER RADAR &middot; {name} '
+    return (f'<div class="radar-box"><div class="rd-h"><i class=ico data-i=radar></i> TRADER RADAR &middot; {name} '
             f'<span class="hint">verified accounts only</span></div>{bar}{rows}{fakes}{tabs}{marks}</div>')
 
 
@@ -11739,11 +11758,11 @@ def target_history_html(name, d):
         up = h["actual_side"] == "YES"
         sc = h.get("sealed_call")
         ok = h.get("sealed_correct")
-        call_txt = (f'BRAIN said {"UP" if sc == "YES" else "DOWN"} <b class="{"th-ok" if ok else "th-bad"}">{"&#10003;" if ok else "&#10007;"}</b>'
+        call_txt = (f'BRAIN said {"UP" if sc == "YES" else "DOWN"} <b class="{"th-ok" if ok else "th-bad"}">{"<i class=ico data-i=check></i>" if ok else "<i class=ico data-i=x></i>"}</b>'
                     if sc else '<span class="hint">no sealed call</span>')
         fin = h.get("final_price")
         rows += (f'<div class="th-row"><span class="hint">{t.astimezone(et):%b %d %-I:%M %p}</span> '
-                 f'target {fmt_price(h["strike"], dec)}{" (exact)" if exact == 0 else f" ({diff * 100:.2f}% off)"} &rarr; '
+                 f'target {fmt_price(h["strike"], dec)}{" (exact)" if exact == 0 else f" ({fmt_price(abs(h['strike'] - line), dec)} off)"} &rarr; '
                  f'<b class="{"up" if up else "down"}">ended {"UP" if up else "DOWN"}</b>'
                  f'{f" at {fmt_price(fin, dec)}" if fin else ""} &middot; {call_txt}</div>')
     ups = sum(1 for c in cands[:3] if c[3]["actual_side"] == "YES")
