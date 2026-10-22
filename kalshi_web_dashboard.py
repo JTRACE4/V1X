@@ -281,6 +281,7 @@ MIN_RANGE_PCT = 0.00025        # the round's high-low so far under 0.025% (~$27 
 ROUNDS_FILE = os.path.join(_DATA_ROOT, "data_cache", "round_paths.json")
 ROUNDS_KEEP = 24
 _rounds = {}                   # asset name -> [finished round records], oldest first (persisted)
+_last_good = {}                # asset name -> (ts, last snapshot without an error) - see the publish step in poll_loop
 _kalshi_path = {}              # asset name -> {"ticker", "pts": [[elapsed_s, yes_price]]} - the live Kalshi odds this round
 
 
@@ -5225,6 +5226,14 @@ def poll_loop():
                 snapshot[pseudo_asset["name"]] = {"error": str(exc)}
 
         with _lock:
+            # 2026-10-22 (user: "stop the charts from completely disappearing every round"): when a coin's poll fails for a
+            # moment - usually the next round's market not listed yet at the switch - keep showing its last good card
+            # (marked as switching) for up to 2 minutes instead of replacing the whole card with an error line.
+            for _nm, _sd in list(snapshot.items()):
+                if "error" not in _sd:
+                    _last_good[_nm] = (time.time(), _sd)
+                elif _nm in _last_good and time.time() - _last_good[_nm][0] < 120:
+                    snapshot[_nm] = dict(_last_good[_nm][1], round_switching=True)
             _state.update(snapshot)
         for _n, _dd in snapshot.items():
             if "error" not in _dd:
@@ -6073,6 +6082,34 @@ body.has-flip-watch { padding-top:0; }
 /* 2026-10-22 (user): a correct call's letter is white; a wrong call's letter keeps the circle's color */
 .sk-chips i.ok.cu, .sc-chips i.ok.cu, .sk-chips i.ok.cd, .sc-chips i.ok.cd, .sk-chips i.ok.w, .sc-chips i.ok.w { color:#ffffff !important; }
 .sc-legend { font-size:10px; margin-top:4px; }
+/* 2026-10-22: live chart (same as the free page) */
+.lw-box { margin-top:6px; }
+.lw-tabs { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px; }
+.lw-tabs button { background:rgba(255,255,255,0.05); color:#e9ded8; border:1px solid rgba(255,255,255,0.12); border-radius:999px; padding:4px 11px; font:inherit; font-size:12px; font-weight:800; cursor:pointer; }
+.lw-tabs button.on { background:rgba(233,165,187,0.20); border-color:#e9a5bb; color:#fbf4ec; }
+.lw-zoom { margin-left:auto; font-size:11px; }
+.lw-chart { position:relative; height:380px; border-radius:12px; overflow:hidden; background:rgba(20,15,18,0.35); }
+@media (max-width:760px) { .lw-chart { height:320px; } }
+.lw-corner { position:absolute; top:8px; left:10px; z-index:5; max-width:68%; padding:6px 9px; border-radius:10px; font-size:12px; line-height:1.35;
+  background:rgba(26,20,22,0.78); border:1px solid rgba(255,255,255,0.10); pointer-events:none; }
+.lw-corner .lw-macd { margin-top:2px; }
+.lw-key { margin:4px 2px 2px; font-size:11px; }
+.lw-pats { margin-top:6px; }
+.lw-pat-head { margin:8px 2px 4px; font-size:11px; letter-spacing:.3px; }
+.lw-pat { padding:6px 8px; border-radius:10px; background:rgba(42,34,38,0.55); border:1px solid rgba(255,255,255,0.06); margin-bottom:5px; font-size:13px; }
+.lw-pat summary { cursor:pointer; }
+.lw-pat .hint { margin-top:4px; font-size:12px; }
+/* 2026-10-22 (user: "make sure the top screen is centered on all versions"): header and coin cards centered at every
+   width, and no card is ever wider than the screen (the 640px minimum pushed phones off-center) */
+html, body { overflow-x:hidden; }
+.g-top { justify-content:center !important; text-align:center; }
+.g-brand, .g-tag { justify-content:center; }
+.view-bar { justify-content:center; flex-wrap:wrap; }
+#content { justify-content:center; }
+.card { min-width:0 !important; max-width:min(1180px, 100%) !important; box-sizing:border-box; margin-left:auto !important; margin-right:auto !important; }
+@media (max-width:760px) { body { padding-left:10px !important; padding-right:10px !important; } .card { flex-basis:100% !important; } }
+@media (min-width:761px) { .g-top { padding:0 150px; } .g-top .snd-toggle { position:absolute !important; right:0; top:50%; transform:translateY(-50%); margin:0 !important; } }
+
 .rv-watch { margin-top:8px; padding:7px 9px; border-radius:10px; font-size:11.5px; line-height:1.35; border:1px solid rgba(255,255,255,0.10); background:rgba(154,90,68,0.10); }
 .rv-watch b { letter-spacing:.5px; }
 .rv-ready { border-color:#c98a6a; background:rgba(154,90,68,0.30); box-shadow:0 0 14px rgba(231,184,130,0.18); color:#f6ece5; }
@@ -7260,6 +7297,38 @@ function checkIncomingAlerts() {
   });
 }
 const HUGE_PRINT_USD = { BTC: 1000000, XRP: 150000 };
+// ---- 2026-10-22 (user: "for the big buys or sales say them or the total of them once every minute if needed, or once every
+// 3-6 minutes depending on change"): whales are added up per coin and read as one line. Soonest (1 min) when a significant
+// whale hit or the money switched direction; every 3 min when the totals are big; otherwise every 6 min; never when tiny.
+const WAGG = {};
+function _whaleAgg(name, side, usd, sig) {
+  const g = WAGG[name] || (WAGG[name] = {buy: 0, sell: 0, sig: false, since: Date.now(), lastSay: 0, lastDir: null});
+  if (!g.buy && !g.sell) g.since = Date.now();
+  g[side] += usd; if (sig) g.sig = true;
+}
+function _usdWords(v) { return v >= 1e6 ? (v / 1e6).toFixed(1) + ' million' : (v >= 1e3 ? Math.round(v / 1e3) + ' thousand' : Math.round(v) + ' dollars'); }
+function whaleSummaryTick() {
+  const now = Date.now();
+  Object.keys(WAGG).forEach(name => {
+    const g = WAGG[name], tot = g.buy + g.sell;
+    if (!tot) return;
+    const big = HUGE_PRINT_USD[name] || 1e6, dir = g.buy >= g.sell ? 'buy' : 'sell', lop = Math.abs(g.buy - g.sell) / tot;
+    const changed = g.lastDir && dir !== g.lastDir && tot >= big * 0.5;
+    const gap = (g.sig || changed) ? 60000 : (tot >= big ? 180000 : 360000);
+    if (now - g.lastSay < gap || now - g.since < 30000) return;
+    if (tot < big * 0.25 && !g.sig) { if (now - g.since > 360000) { g.buy = g.sell = 0; } return; }   // too small to mention
+    const cm = document.querySelector('.flip-chance-value[data-flip-chance-key^="' + name + '::"]');
+    const cc = cm ? cm.getAttribute('data-call') : null, ccn = cm ? cm.getAttribute('data-call-name') : '';
+    const hasCall = (ccn === 'early' || ccn === 'sealed') && (cc === 'YES' || cc === 'NO') && lop >= 0.2;
+    const coin = name === 'BTC' ? 'Bitcoin' : name;
+    const line = coin + ' whales: ' + _usdWords(g.buy) + ' bought, ' + _usdWords(g.sell) + ' sold'
+      + (lop >= 0.2 ? ', mostly ' + (dir === 'buy' ? 'buying' : 'selling') : '')
+      + (hasCall ? (((dir === 'buy') === (cc === 'YES')) ? ', with the call.' : ', against the call.') : '.');
+    if (soundEnabled && voiceAlertsEnabled && assetSoundEnabled[name] !== false) _voicePush(line, false, 20000, g.sig || changed);
+    g.lastSay = now; g.lastDir = dir; g.buy = g.sell = 0; g.sig = false;
+  });
+}
+setInterval(whaleSummaryTick, 10000);
 const alertedLocks = new Set();
 function checkLockAlerts() {
   document.querySelectorAll('.lock-alert').forEach(el => {
@@ -7508,6 +7577,7 @@ function checkWhaleAlerts() {
       alertedWhales.add(key);
       const wusd = parseFloat(el.getAttribute('data-whale-usd')) || 0;
       showWhaleCrossing(name, wside, wusd, el.getAttribute('data-whale-venue') || '');
+      _whaleAgg(name, wside, wusd, (parseFloat(el.getAttribute('data-whale-impact') || '0') || 0) >= 60 || wusd >= (HUGE_PRINT_USD[name] || 1e9));
       if (wusd >= (HUGE_PRINT_USD[name] || 1e9)) {
         showIncomingBanner(name, wside, wusd, 'HUGE ' + wside.toUpperCase() + ' PRINT', fmtUsdShort(wusd) + ' just went through on ' + (el.getAttribute('data-whale-venue') || 'an exchange'));
       }
@@ -7521,17 +7591,7 @@ function checkWhaleAlerts() {
         const amt = wusd >= 1e6 ? (wusd / 1e6).toFixed(1) + ' million dollar ' : (wusd >= 1e3 ? Math.round(wusd / 1e3) + ' thousand dollar ' : '');
         // 2026-10-22: then how much it can matter for this round (size vs volume, distance to the line, Kalshi's odds)
         const wsay = el.getAttribute('data-whale-say') || '';
-        // 2026-10-22 (user): only speak a whale that is SIGNIFICANT for this round (impact score 60+ of 100, or a huge print),
-        // and say plainly whether it is with or against BRAIN's call
-        const wimp = parseFloat(el.getAttribute('data-whale-impact') || '0') || 0;
-        if (wimp >= 60 || wusd >= (HUGE_PRINT_USD[name] || 1e9)) {
-          const cm = document.querySelector('.flip-chance-value[data-flip-chance-key^="' + name + '::"]');
-          const cc = cm ? cm.getAttribute('data-call') : null, ccn = cm ? cm.getAttribute('data-call-name') : '';
-          const hasCall = (ccn === 'early' || ccn === 'sealed') && (cc === 'YES' || cc === 'NO');
-          const withC = hasCall ? ((wside === 'buy') === (cc === 'YES')) : null;
-          setTimeout(() => speak('Big whale ' + wside + ' on ' + wcoin + (amt ? ', ' + amt.replace(' dollar ', '').trim() : '')
-            + (withC === null ? '.' : (withC ? ', with the call.' : ', against the call.')), false, 12000), 1300);
-        }
+        // 2026-10-22 (user): whales are added up and spoken as ONE summary (see whaleSummaryTick) instead of one by one
       }
     }
   });
@@ -7866,6 +7926,7 @@ async function refresh() {
     }
   }
   contentEl.innerHTML = data.html;
+  try { lwAttach(); } catch (e) {}
   try { tickClocks(); } catch (e) {}
   try { updateWrBadge(data.wr); } catch (e) {}
   if (savedId) {
@@ -8074,6 +8135,139 @@ window.onload = function() {
   refresh();
 };
 </script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+/* ---- 2026-10-22 (user): the free page's zoomable chart inside the dashboard. One chart per coin, created once and kept
+   OUTSIDE the 1-second re-render (re-attached into its slot after every refresh), so zoom / pan never reset.
+   RSI(14) + MACD(12,26,9) are read in the corner in plain words (no side bar); under the chart only reliable patterns. */
+const LW = {}, LW_TFS = ['1m', '5m', '15m', '1h', '1d'], LW_SEC = {'1m': 60, '5m': 300, '15m': 900, '1h': 3600, '1d': 86400};
+const lwFmtT = new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit'});
+const lwFmtD = new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric'});
+function lwMoney(a, v) { const d = a === 'XRP' ? 4 : 2; return v == null ? '--' : '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); }
+function lwEma(vals, n) { const k = 2 / (n + 1); const out = []; let e = null; vals.forEach((v, i) => { e = e === null ? v : v * k + e * (1 - k); out.push(e); }); return out; }
+function lwRsi(cl, n) {
+  if (cl.length < n + 1) return null;
+  let g = 0, l = 0;
+  for (let i = 1; i <= n; i++) { const d = cl[i] - cl[i - 1]; g += Math.max(d, 0); l += Math.max(-d, 0); }
+  g /= n; l /= n;
+  for (let i = n + 1; i < cl.length; i++) { const d = cl[i] - cl[i - 1]; g = (g * (n - 1) + Math.max(d, 0)) / n; l = (l * (n - 1) + Math.max(-d, 0)) / n; }
+  return l === 0 ? 100 : 100 - 100 / (1 + g / l);
+}
+function lwMacd(cl) {
+  if (cl.length < 35) return null;
+  const e12 = lwEma(cl, 12), e26 = lwEma(cl, 26), m = cl.map((_, i) => e12[i] - e26[i]), sg = lwEma(m, 9);
+  return m.map((v, i) => v - sg[i]);                       // histogram
+}
+function lwRead(a, o) {
+  const cl = o.bars.map(b => b.close);
+  const r = lwRsi(cl.slice(-200), 14), h = lwMacd(cl.slice(-200));
+  let rs = '', mc = '';
+  if (r !== null) {
+    const z = r >= 70 ? ['overbought', 'down'] : r <= 30 ? ['oversold', 'up'] : r >= 55 ? ['bullish', 'up'] : r <= 45 ? ['bearish', 'down'] : ['neutral', 'flat'];
+    rs = '<b>RSI ' + r.toFixed(0) + '</b> <span class="' + z[1] + '">' + z[0] + '</span>';
+  }
+  if (h && h.length > 3) {
+    const h0 = h[h.length - 1], h1 = h[h.length - 2], h2 = h[h.length - 3], up = h0 > 0;
+    const fading = up ? (h0 < h1 && h1 < h2) : (h0 > h1 && h1 > h2);
+    const step = Math.abs(h2 - h0) / 2;
+    const bars = fading && step > 0 ? Math.max(1, Math.round(Math.abs(h0) / step)) : null;
+    const tf = o.tf, unit = tf === '1d' ? 'day' : 'candle';
+    if (fading && bars !== null && bars <= 3)
+      mc = '<b>MACD</b> <span class="' + (up ? 'up' : 'down') + '">' + (up ? 'bullish' : 'bearish') + '</span>, but fading - could flip '
+        + (up ? 'down' : 'up') + ' in ~' + bars + ' ' + unit + (bars > 1 ? 's' : '') + '. That can ' + (up ? 'pull price lower' : 'lift price') + ' into the close.';
+    else if (fading)
+      mc = '<b>MACD</b> <span class="' + (up ? 'up' : 'down') + '">' + (up ? 'bullish' : 'bearish') + '</span>, momentum easing - no flip yet.';
+    else
+      mc = '<b>MACD</b> <span class="' + (up ? 'up' : 'down') + '">' + (up ? 'bullish' : 'bearish') + ' and building</span> - supports price ' + (up ? 'holding up' : 'staying down') + '.';
+  }
+  o.corner.innerHTML = (rs ? '<div>' + rs + '</div>' : '') + (mc ? '<div class="lw-macd">' + mc + '</div>' : '');
+}
+function lwIndicators(o) {
+  const cl = o.bars.map(b => b.close), t = o.bars.map(b => b.time);
+  [[12, o.e1], [25, o.e2], [50, o.e3]].forEach(([n, s]) => { const e = lwEma(cl, n); s.setData(t.map((x, i) => ({time: x, value: e[i]})).slice(n)); });
+}
+function lwCreate(a) {
+  const box = document.createElement('div'); box.className = 'lw-box';
+  box.innerHTML = '<div class="lw-tabs">' + LW_TFS.map(t => '<button data-tf="' + t + '">' + t + '</button>').join('')
+    + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
+    + '<div class="lw-chart"><div class="lw-corner"></div></div>'
+    + '<div class="lw-key hint"><span style="color:#e5b85c">EMA 12</span> &middot; <span style="color:#a9cfc1">EMA 25</span> &middot; <span style="color:#c9a6e8">EMA 50</span> &middot; dashed = round line</div>'
+    + '<div class="lw-pats"></div>';
+  const el = box.querySelector('.lw-chart');
+  const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: 'Nunito'},
+    grid: {vertLines: {color: 'rgba(240,214,200,.06)'}, horzLines: {color: 'rgba(240,214,200,.06)'}},
+    rightPriceScale: {borderColor: 'rgba(240,214,200,.13)'},
+    timeScale: {borderColor: 'rgba(240,214,200,.13)', timeVisible: true, secondsVisible: false,
+      tickMarkFormatter: t => (LW[a] && LW[a].tf === '1d') ? lwFmtD.format(new Date(t * 1000)) : lwFmtT.format(new Date(t * 1000))},
+    localization: {timeFormatter: t => lwFmtT.format(new Date(t * 1000)), priceFormatter: v => lwMoney(a, v)}, crosshair: {mode: 0}});
+  const o = {a, box, chart, corner: box.querySelector('.lw-corner'), pats: box.querySelector('.lw-pats'), bars: [], line: null, lineV: null,
+    tf: (() => { try { return localStorage.getItem('lwTf_' + a) || '1m'; } catch (e) { return '1m'; } })(), busy: false};
+  o.candle = chart.addCandlestickSeries({upColor: '#43cdb7', downColor: '#e8798f', borderVisible: false, wickUpColor: '#43cdb7', wickDownColor: '#e8798f'});
+  const ln = c => chart.addLineSeries({color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
+  o.e1 = ln('#e5b85c'); o.e2 = ln('#a9cfc1'); o.e3 = ln('#c9a6e8');
+  box.querySelectorAll('.lw-tabs button').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
+  lwLoad(o);
+  return o;
+}
+async function lwLoad(o) {
+  o.box.querySelectorAll('.lw-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tf === o.tf));
+  try {
+    const j = await (await fetch('/public/candles?asset=' + o.a + '&tf=' + o.tf, {cache: 'no-store'})).json();
+    o.bars = (j.candles || []).map(c => ({time: c[0], open: c[1], high: c[2], low: c[3], close: c[4]}));
+    o.candle.setData(o.bars); lwIndicators(o); lwRead(o.a, o);
+    const n = o.bars.length; if (n) o.chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - 90), to: n + 3});
+  } catch (e) {}
+  lwPatterns(o);
+}
+async function lwTick(o) {
+  if (o.busy || !o.bars.length) return;
+  o.busy = true;
+  try {
+    const t = await (await fetch('/public/ticker?asset=' + o.a, {cache: 'no-store'})).json();
+    if (t.price != null) {
+      const g = LW_SEC[o.tf], b = Math.floor(Date.now() / 1000 / g) * g, last = o.bars[o.bars.length - 1];
+      if (b > last.time) o.bars.push({time: b, open: t.price, high: t.price, low: t.price, close: t.price});
+      else { last.high = Math.max(last.high, t.price); last.low = Math.min(last.low, t.price); last.close = t.price; }
+      if (o.bars.length > 400) o.bars.shift();
+      o.candle.update(o.bars[o.bars.length - 1]);
+      lwIndicators(o); lwRead(o.a, o);
+    }
+    if (t.line && t.line !== o.lineV) {
+      if (o.line) o.candle.removePriceLine(o.line);
+      o.line = o.candle.createPriceLine({price: t.line, color: '#fbf4ec', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Round line'});
+      o.lineV = t.line;
+    }
+  } catch (e) {} finally { o.busy = false; }
+}
+async function lwPatterns(o) {
+  let j;
+  try { j = await (await fetch('/chart_patterns?asset=' + o.a + '&tf=' + o.tf, {cache: 'no-store'})).json(); } catch (e) { return; }
+  const g = LW_SEC[o.tf], marks = [], esc = x => String(x).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const row = (x, worked) => {
+    const up = x.bias === 'bullish';
+    const st = worked ? '<span class="up">worked</span>' : (x.status === 'formed' ? 'formed' : 'forming ' + Math.round(x.pct * 100) + '%');
+    return '<details class="lw-pat"><summary><span class="' + (up ? 'up' : 'down') + '">' + (up ? '&#9650;' : '&#9660;') + '</span> <b>' + esc(x.name) + '</b> &middot; '
+      + st + ' <span class="hint">&middot; right ' + Math.round(x.rate * 100) + '% of ' + x.n + '</span></summary>'
+      + (x.means ? '<div class="hint">' + esc(x.means) + (x.watch ? ' ' + esc(x.watch) : '') + '</div>' : '') + '</details>';
+  };
+  (j.items || []).forEach(x => marks.push({time: Math.floor(x.ts / g) * g, position: x.bias === 'bullish' ? 'belowBar' : 'aboveBar',
+    color: x.bias === 'bullish' ? '#43cdb7' : '#e8798f', shape: x.bias === 'bullish' ? 'arrowUp' : 'arrowDown', text: x.name.split(' (')[0].slice(0, 22)}));
+  try { o.candle.setMarkers(marks.filter(m => o.bars.length && m.time >= o.bars[0].time).sort((p, q) => p.time - q.time)); } catch (e) {}
+  const items = (j.items || []).map(x => row(x, false)).join(''), worked = (j.worked || []).map(x => row(x, true)).join('');
+  o.pats.innerHTML = '<div class="hint lw-pat-head">Patterns: only 80%+ formed or finished, with a proven record on this coin and timeframe</div>'
+    + (items || '<div class="hint">Nothing reliable forming right now.</div>') + (worked ? '<div class="hint lw-pat-head">Recently worked</div>' + worked : '');
+}
+function lwAttach() {
+  if (typeof LightweightCharts === 'undefined') return;
+  document.querySelectorAll('.lw-slot[data-asset]').forEach(slot => {
+    const a = slot.dataset.asset;
+    const o = LW[a] || (LW[a] = lwCreate(a));
+    if (o.box.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(o.box); }
+  });
+}
+setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o.box.isConnected) lwTick(o); }); }, 2000);
+setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o.box.isConnected) lwPatterns(o); }); }, 15000);
+</script>
 </head><body>
 <div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>BTC market &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false"><i class=ico data-i=sound-off></i> Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
@@ -8113,8 +8307,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="speakRaw('Bitcoin, ninety seconds, looking good.')">Test 90-second check-in</button>
       <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
       <button onclick="speakRaw('XRP is a toss-up, 2 minutes left. It just crossed the line.')">Test late toss-up</button>
-      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Big whale buy on Bitcoin, 2.4 million, with the call.'),1300)">Test whale BUY (cha-ching)</button>
-      <button onclick="playDenied(); setTimeout(()=>speakRaw('Big whale sell on XRP, 850 thousand, against the call.'),1300)">Test whale SELL (double beep)</button>
+      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Bitcoin whales: 2.4 million bought, 600 thousand sold, mostly buying, with the call.'),1300)">Test whale BUY (cha-ching)</button>
+      <button onclick="playDenied(); setTimeout(()=>speakRaw('XRP whales: 200 thousand bought, 850 thousand sold, mostly selling, against the call.'),1300)">Test whale SELL (double beep)</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
         the early (4:00) and sealed (8:00) calls, and whale trades - a cha-ching when the whale pushes price further the way it is
         already going, a "denied" buzz when it trades against the move.</div>
@@ -8459,80 +8653,67 @@ _VOL_HELP = ('<details class="vol-help" data-pat="VOLHELP|{a}"><summary>? what i
 
 
 def build_pattern_window(asset_name):
-    """The live 'what is being formed' window: real candles with every detected pattern drawn on them, a timeframe
-    switch, and a pull-down explanation for each pattern being formed. Information only - never used for buying."""
-    from html import escape
-    from pattern_detector import _structure as _st, _candle_patterns as _cp
-    from pattern_overlay import render_window_svg
-    if _mtf is None:
-        return ""
+    """2026-10-22 (user): the same zoomable live chart as the free page, with RSI + MACD read in its corner and, under it,
+    only the patterns that are 80%+ formed or finished AND have a proven track record. The chart is drawn in the browser
+    and kept between the page's 1-second refreshes, so zoom / scroll survive. Information only."""
+    return (f'<div class="row lw-win" data-asset="{asset_name}"><div class="pat-win-head"><b>{asset_name} LIVE CHART</b></div>'
+            f'<div class="lw-slot" data-asset="{asset_name}"><span class="hint">loading chart...</span></div></div>')
+
+
+# ---- reliable patterns for the live chart (2026-10-22, user: "only 80%+ formed or successfully formed; keep the most
+# accurate; anything misleading stop showing it")
+CHART_PAT_MIN_PCT = 0.80        # still forming: shown once it is at least 80% built
+CHART_PAT_MIN_N = 20            # needs this many scored calls before we trust its record ...
+CHART_PAT_MIN_RATE = 0.55       # ... and must have worked at least 55% of the time
+_chart_pat_cache = {}
+
+
+def chart_patterns_payload(asset_name, tf):
+    from pattern_detector import _structure as _st, _candle_patterns as _cp, TF_SECONDS as _TFS
+    if _mtf is None or tf not in _PAT_WINDOW_TFS:
+        return {"tf": tf, "items": [], "worked": []}
+    hit = _chart_pat_cache.get((asset_name, tf))
+    if hit and time.time() - hit[0] < 4:
+        return hit[1]
     sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(asset_name)
-    tf = _pat_window_tf.get(asset_name, "1m")
     cs = (_mtf.windows.get(sym) or {}).get(tf) if sym else None
-    btns = "".join(
-        f'<button class="{"size-mode-btn size-mode-active" if t == tf else "size-mode-btn"}" '
-        f"onclick=\"setPatternTf('{asset_name}','{t}')\">{_MTF_NAMES[t]}</button>" for t in _PAT_WINDOW_TFS)
-    head = (f'<div class="pat-win-head"><b>What is being formed - {asset_name} live pattern window</b> '
-            f'<span class="hint">(information only - never used for buying)</span><div class="pat-win-tfs"><!--OWNER-->{btns}<!--/OWNER-->'
-            f'<button class="size-mode-btn ov-toggle" onclick="toggleOverlays()">Indicators: <b class="ov-state">ON</b></button></div></div>')
-    if not cs or len(cs) < 25:
-        return f'<div class="row pat-win">{head}<span class="flat">loading candle history...</span></div>'
-    cs = _live_patched(cs, sym, tf)
-    labels = _st(cs, tf) + _cp(cs, tf, max_age=3)
-    from pattern_detector import TF_SECONDS as _TFS
-    for _l in labels:
-        if _l["family"] == "candle" and _l["status"] == "formed" and len(cs) >= 3 + _l.get("age", 0):
-            _l["done_ts"] = cs[len(cs) - 2 - _l.get("age", 0)][0] + _TFS.get(tf, 0)
-    from pattern_detector import FailTracker
-    ghosts = _win_trackers.setdefault((asset_name, tf), FailTracker()).update(labels)
-    svg, shown = render_window_svg(cs, labels, title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)")
-    items = []
-    for l in list(shown) + list(ghosts):
-        e = _pat_explain(l["name"])
-        key = e["key"] if e else ""
-        st = _mtf.stats.summary(asset_name, tf, l["name"])
-        col = {"bullish": "up", "bearish": "down"}.get(l["bias"], "flat")
-        items.append(
-            f'<details class="pat" data-pat="WIN|{asset_name}|{tf}|{escape(l["name"][:50])}|{l.get("age", 0)}" data-patkey="{escape(key)}" data-bias="{l["bias"]}">'
-            f'<summary>{_pat_summary_html(l, col, _pat_rate_html(st, l["bias"]), asset_name, tf)}</summary>'
-            f'<div class="pat-info"></div></details>')
-    kept_html = ""
-    try:
-        from mtf_structure import _pkey as _pk_
-        keep_s = min(3 * 86400, max(1800, 6 * HORIZONS_MIN.get(tf, 5) * 60))
-        standing_ids = set()        # only the exact calls already on screen are skipped - an OLDER call of the same pattern still gets its row
-        for l in shown:
-            if l["status"] in ("formed", "confirmed"):
-                e0 = _mtf.history.latest_event(asset_name, tf, l["name"])
-                info0 = _mtf.history.completed_info(asset_name, tf, l["name"])
-                if e0 is not None and info0 is not None and abs(e0["ts"] - info0[0]) <= 90:
-                    standing_ids.add(e0["id"])
-        kept = [e for e in _mtf.history.recent_completed(asset_name, tf, time.time() - keep_s)
-                if e["bias"] in ("bullish", "bearish") and e["id"] not in standing_ids][:14]
-        rows_ = []
-        for e in kept:
-            ex = _pat_explain(e["name"])
-            colk = {"bullish": "up", "bearish": "down"}.get(e["bias"], "flat")
-            lab = {"name": e["name"], "bias": e["bias"], "status": e["status"], "pct": 1.0, "done_ts": e["ts"], "family": e["family"]}
-            rows_.append(
-                f'<details class="pat" data-pat="KEPT|{e["id"]}" data-patkey="{escape(ex["key"] if ex else "")}" data-bias="{e["bias"]}">'
-                f'<summary>{_pat_summary_html(lab, colk, _pat_rate_html(_mtf.stats.summary(asset_name, tf, e["name"]), e["bias"]), asset_name, tf, ev=e)}</summary>'
-                f'<div class="pat-info"></div></details>')
-        if rows_:
-            n_hit = sum(1 for e in kept if e.get("result") == "hit")
-            n_miss = sum(1 for e in kept if e.get("result") == "miss")
-            tally = f' - <span class="up">{n_hit} worked</span> &middot; <span class="down">{n_miss} failed</span>'
-            kept_html = (f'<details class="kept-drop" data-pat="KEPTLIST|{asset_name}|{tf}"><summary class="hint">Recent completed calls on this timeframe '
-                         f'({len(rows_)}){tally} - click to open</summary>'
-                         f'<div class="hint kept-head">kept for {keep_s // 60} min - <i class=ico data-i=check></i> worked &middot; <i class=ico data-i=x></i> failed &middot; &#8211; no real move</div>'
-                         + "".join(rows_) + '</details>')
-    except Exception as _ke:
-        print(f"[history] kept calls failed: {_ke!r}")
-    legend = "".join(items) + kept_html or '<span class="flat">no clear pattern forming on this timeframe right now</span>'
-    return (f'<div class="row pat-win" data-asset="{asset_name}">{head}'
-            f"<div class=\"pat-chart-row\"><div class=\"pat-chart\" onclick=\"expandPatternChart('{asset_name}')\" title=\"click to make it full-screen\">{svg}</div>{build_volume_bar(asset_name)}</div>"
-            f'<div class="hint">click the chart to make it full-screen (Esc to close)</div>'
-            f'<div class="pat-win-legend">{legend}</div></div>')
+    out = {"tf": tf, "items": [], "worked": [], "rule": f"{int(CHART_PAT_MIN_PCT * 100)}%+ formed, proven {int(CHART_PAT_MIN_RATE * 100)}%+ right"}
+    if cs and len(cs) >= 25:
+        cs = _live_patched(cs, sym, tf)
+        seen = set()
+        for l in _st(cs, tf) + _cp(cs, tf, max_age=3):
+            if l.get("bias") not in ("bullish", "bearish") or l["name"] in seen:
+                continue
+            done = l.get("status") in ("formed", "confirmed")
+            if not done and (l.get("pct") or 0) < CHART_PAT_MIN_PCT:
+                continue
+            st = _mtf.stats.summary(asset_name, tf, l["name"])
+            if st["decisive"] < CHART_PAT_MIN_N or (st["rate"] or 0) < CHART_PAT_MIN_RATE:
+                continue                                  # unproven or misleading on this coin + timeframe -> not shown
+            seen.add(l["name"])
+            ex = _pat_explain(l["name"]) or {}
+            age = l.get("age", 0) or 0
+            ts = cs[max(0, len(cs) - 1 - age)][0]
+            out["items"].append({"name": l["name"], "bias": l["bias"], "status": "formed" if done else "forming",
+                                 "pct": round(l.get("pct") or 1.0, 2), "rate": round(st["rate"], 3), "n": st["decisive"],
+                                 "ts": int(ts), "means": ex.get("means", ""), "watch": ex.get("watch", "")})
+        out["items"].sort(key=lambda x: (x["status"] != "formed", -x["rate"]))
+        try:
+            keep_s = min(3 * 86400, max(1800, 6 * HORIZONS_MIN.get(tf, 5) * 60))
+            for e in _mtf.history.recent_completed(asset_name, tf, time.time() - keep_s):
+                if e.get("result") != "hit" or e.get("bias") not in ("bullish", "bearish"):
+                    continue
+                st = _mtf.stats.summary(asset_name, tf, e["name"])
+                if st["decisive"] < CHART_PAT_MIN_N or (st["rate"] or 0) < CHART_PAT_MIN_RATE:
+                    continue
+                out["worked"].append({"name": e["name"], "bias": e["bias"], "ts": int(e["ts"]), "rate": round(st["rate"], 3),
+                                      "n": st["decisive"]})
+                if len(out["worked"]) >= 6:
+                    break
+        except Exception as _we:
+            print(f"[chart patterns] history: {_we!r}")
+    _chart_pat_cache[(asset_name, tf)] = (time.time(), out)
+    return out
 
 
 _PCT_TIP = ("how complete this pattern is. It climbs as the pattern builds and DROPS if price moves against it; "
@@ -11703,15 +11884,15 @@ def render_html():
               <div class="big">{fmt_price(d["target_price"], decimals) if d.get("target_price") is not None else "--"}</div>
               {line_diff_html}
               {build_twap_lock(name, d)}
-              <div class="lbl" style="margin-top:2px;">{', '.join(d.get("live_venues") or []) or 'connecting...'}</div>
+              <div class="lbl" style="margin-top:2px;">{(f"{len(d.get('live_venues') or [])} live price sources" + (" &middot; next round loading..." if d.get("round_switching") else "")) if d.get("live_venues") else ("next round loading..." if d.get("round_switching") else "connecting...")}</div>
               {_kalshi_line(d)}
             </div>
             {build_time_until_call(name, d)}
           </div>
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}
-          {build_scoreboard(name, d)}
           {build_top_strip(name, d)}
+          {build_scoreboard(name, d)}
           {stage_summary_row(name, d)}
           {pattern_window_html}
           {build_rounds_panel(name, d)}
@@ -12773,6 +12954,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = "\n".join(out).encode()
             self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(body))); self.end_headers()
             self.wfile.write(body)
+            return
+        if parsed.path == "/chart_patterns":
+            qs = urllib.parse.parse_qs(parsed.query)
+            a_, tf_ = (qs.get("asset") or [""])[0], (qs.get("tf") or ["1m"])[0]
+            try:
+                pl = chart_patterns_payload(a_, tf_) if a_ in LIVE_ASSETS else {"items": [], "worked": []}
+            except Exception as _cpe:
+                print(f"[chart patterns] {_cpe!r}")
+                pl = {"items": [], "worked": []}
+            _send_body(self, json.dumps(pl).encode(), "application/json")
             return
         if parsed.path == "/chart_live":
             qs = urllib.parse.parse_qs(parsed.query)
