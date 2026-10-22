@@ -6507,6 +6507,15 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .mini-call.mc-small { padding:5px 10px !important; opacity:.85; }
 .mini-call.mc-small .mc-dir { font-size:15px !important; } .mini-call.mc-small .mc-pct { font-size:13px !important; }
 .mini-call.mc-small .mc-lbl { font-size:11px !important; }
+.rc-grid.rc-one { grid-template-columns:1fr !important; }
+.rp-past { margin-top:10px; }
+.rp-past > summary { cursor:pointer; list-style:none; font-family:var(--br-label); font-weight:800; font-size:12px; letter-spacing:1.4px; text-transform:uppercase; color:var(--br-tan); }
+.rp-past > summary::-webkit-details-marker { display:none; }
+.rp-past > summary::before { content:"\25B8  "; color:var(--br-blush); } .rp-past[open] > summary::before { content:"\25BE  "; }
+.rp-past > summary span { font-family:var(--br-sans); font-weight:400; letter-spacing:0; text-transform:none; color:var(--br-mute); margin-left:6px; }
+.rp-line { font-size:13px; line-height:1.5; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+.rp-line .rp-time { display:inline-block; min-width:118px; color:#fbf4ec; font-weight:700; }
+.rp-line .call-tag { margin-left:4px; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8842,7 +8851,7 @@ setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o
 setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o.box.isConnected) lwPatterns(o); }); }, 15000);
 </script>
 </head><body>
-<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>BTC market &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false"><i class=ico data-i=sound-off></i> Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
+<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Market Watcher</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false"><i class=ico data-i=sound-off></i> Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
 <div id="vol-warn" class="vol-warn" style="display:none;"><i class=ico data-i=warn></i> Round history is NOT on a Railway volume - every redeploy wipes it.
 This page keeps a backup on this device and puts it back after a wipe, but add a volume to fix it for good:
@@ -11311,22 +11320,25 @@ def build_rounds_panel(name, d):
                      f'<b>{ls["crosses"]}</b> cross{"es" if ls["crosses"] != 1 else ""} '
                      f'<span class="hint"><i class=va-u></i>{ls["up"]} <i class=va-d></i>{ls["down"]}</span> {tags}</div>'
                      f'{_round_svg({"ticker": d.get("ticker"), "path": ls["path"], "events": ls["events"]}, w=620, h=110, live=True)}</div>')
+    # 2026-10-22 (user): only the CURRENT round is drawn; the last rounds are plain text in a dropdown
     past = (_rounds.get(name) or [])[-6:][::-1]
+    lines = []
     for r in past:
         h = hist_by.get(r.get("ticker")) or {}
         actual = h.get("actual_side") or r.get("actual")
-        res = (f'<span class="{"up" if actual == "YES" else "down"}">settled {"UP" if actual == "YES" else "DOWN"}</span>' if actual else
-               '<span class="hint">result pending</span>')
+        res = (f'<b class="{"up" if actual == "YES" else "down"}">{"<i class=va-u></i> ended UP" if actual == "YES" else "<i class=va-d></i> ended DOWN"}</b>'
+               if actual else '<span class="hint">result pending</span>')
         sc = r.get("stage_calls") or {}
         tags = " ".join(_call_tag(sc.get(k), actual, k) for k in ("early", "sealed"))
         n = r.get("crosses", 0)
-        cells.append(f'<div class="rc"><div class="rc-head"><b>{_round_label(r.get("ticker"))}</b> &middot; '
-                     f'<b class="{"down" if n >= CROSS_SKIP else ("warn" if n == 2 else "")}">{n}</b> cross{"es" if n != 1 else ""} '
-                     f'<span class="hint"><i class=va-u></i>{r.get("up", 0)} <i class=va-d></i>{r.get("down", 0)}</span> &middot; {res}<br>{tags}</div>{_round_svg(r)}</div>')
-    if len(cells) <= 1:
-        cells.append('<div class="rc hint" style="padding:18px;">Finished rounds show up here.</div>')
+        lines.append(f'<div class="rp-line"><span class="rp-time">{_round_label(r.get("ticker"))}</span> '
+                     f'<b class="{"down" if n >= CROSS_SKIP else ("warn" if n == 2 else "")}">{n}</b> line cross{"es" if n != 1 else ""} '
+                     f'<span class="hint">(<i class=va-u></i>{r.get("up", 0)} <i class=va-d></i>{r.get("down", 0)})</span> &middot; {res} {tags}</div>')
     tot = [r.get("crosses", 0) for r in past]
-    avg = f' &middot; average {sum(tot) / len(tot):.1f} crosses per round over the last {len(tot)}' if tot else ""
+    avg = (f'<div class="rp-line hint">Average: {sum(tot) / len(tot):.1f} line crosses per round over the last {len(tot)}. '
+           f'More crosses = a choppier round that is harder to call.</div>') if tot else ""
+    past_html = (f'<details class="rp-past"><summary>Last {len(past)} rounds <span>line crosses, results and calls</span></summary>'
+                 f'{"".join(lines)}{avg}</details>') if past else ""
     # 2026-10-22 (user: "combine the tabs, reduce redundancy, give it a cool name, plain American English"):
     # one panel - what happened the last times we were here + how price moved around the line in the last 6 rounds
     _TGT_BODY.pop(name, None)
@@ -11336,8 +11348,8 @@ def build_rounds_panel(name, d):
         print(f"[been here before] {_e!r}")
     return (f'<div class="rounds-panel"><div class="top-w-title">BEEN HERE BEFORE</div>'
             + _TGT_BODY.get(name, "") +
-            f'<div class="bhb-sub">Last 6 rounds vs the line <span class="hint">(white line = the line &middot; dots = times price crossed it{avg})</span></div>'
-            f'<div class="rc-grid">{"".join(cells)}</div></div>')
+            f'<div class="bhb-sub">This round vs the line <span class="hint">(white line = the line &middot; dots = times price crossed it)</span></div>'
+            f'<div class="rc-grid rc-one">{"".join(cells)}</div>{past_html}</div>')
 
 
 def _call_tag(c, actual, key="early"):
