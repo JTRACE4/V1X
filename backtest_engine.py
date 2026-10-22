@@ -530,6 +530,42 @@ def loss_check(rs, mark):
                 "units": v[2], "avg_price": v[3] / v[0]} for k, v in out.items()}
 
 
+# ============================================================================ REVERSAL RULE SEARCH (2026-10-22, user)
+# "Reversal calls need to be better - run a test and make the fixes." A reversal = calling the market's UNDERDOG. Thousands of
+# filter combinations are tried on the older 70% of rounds and kept only if they MADE MONEY there with enough trades; the
+# best one is then checked on the newest 30%. Live reversals only fire when a rule passes that check.
+REV_GRID = [{"cap": cap, "d": d, "c": c, "v": v, "rsi": rsi}
+            for cap in (0.60, 0.65, 0.70, 0.75, 0.80, 0.85)          # market favorite priced at or below this
+            for d in (0.0002, 0.0004, 0.0008, 1.0)                    # price within this far of the line
+            for c in (0, 1, 2)                                        # at least this many line crosses so far
+            for v in (1, 2, 3, 4)                                     # at least this many reads turning against the favorite
+            for rsi in (False, True)]                                 # RSI must be stretched in the favorite's direction
+REV_MIN_TRAIN = 25
+REV_MIN_HOLD = 8
+
+
+def rev_votes(f, fav):
+    """How many reads are turning against the favorite side (fav = +1 UP favorite, -1 DOWN favorite)."""
+    r = f.get("r1_tv") if f.get("r1_tv") is not None else f.get("r1")
+    rsi_st = r is not None and ((fav > 0 and r >= 70) or (fav < 0 and r <= 30))
+    sig = f.get("sig") or {}
+    v = sum(1 for k in ("trend", "flow", "candles") if sig.get(k) == -fav) + (1 if rsi_st else 0)
+    return v, rsi_st
+
+
+def rev_rule_match(f, rule):
+    if f.get("kp") is None or f.get("dist") is None:
+        return None
+    fav_yes = f["kp"] >= 0.5
+    fav = 1 if fav_yes else -1
+    if price_of(fav_yes, f["kp"]) > rule["cap"] or abs(f["dist"]) > rule["d"] or (f.get("crosses") or 0) < rule["c"]:
+        return None
+    v, rsi_st = rev_votes(f, fav)
+    if v < rule["v"] or (rule["rsi"] and not rsi_st):
+        return None
+    return "NO" if fav_yes else "YES"
+
+
 def evaluate(rounds):
     """rounds: [{"m": market, "f": {mark: features}}] oldest first."""
     n_hold = max(1, int(len(rounds) * HOLDOUT_FRAC))
@@ -580,6 +616,26 @@ def evaluate(rounds):
                 s_.update({"min_score": ms, "min_votes": mv})
                 sweep.append(s_)
         st["reversal_sweep"] = sweep
+        # data-driven reversal rule: chosen on train by profit, then graded on the holdout
+        best = None
+        for ri, rule in enumerate(REV_GRID):
+            if ri % 60 == 0:
+                time.sleep(0.01)
+            tt = [trade(r, mark, c) for r in [x for x in train if x["f"].get(mark)] for c in [rev_rule_match(r["f"][mark], rule)] if c]
+            if len(tt) < REV_MIN_TRAIN:
+                continue
+            s_ = _summ(tt)
+            # 2026-10-22 (user wants WINS): a reversal must win MORE than half the time (so it adds wins vs calling the
+            # favorite) AND make money
+            if s_["roi"] > 0 and s_["win"] > 0.5 and (best is None or s_["units"] > best[1]["units"]):
+                best = (rule, s_)
+        if best:
+            th = [trade(r, mark, c) for r in hs for c in [rev_rule_match(r["f"][mark], best[0])] if c]
+            sh = _summ(th)
+            st["reversal_rule"] = {"rule": best[0], "train": best[1], "holdout": sh,
+                                   "validated": bool(sh["n"] >= REV_MIN_HOLD and sh["roi"] is not None and sh["roi"] > 0 and sh["win"] > 0.5)}
+        else:
+            st["reversal_rule"] = None
         # 80% rule search: pick on train only, then check on the holdout
         tr = [r for r in train if r["f"].get(mark)]
         best_cov, best_ev = None, None
@@ -730,6 +786,8 @@ def evaluate(rounds):
         "rule80": {k: (out["stages"][k]["rule80"].get("best_profit") or out["stages"][k]["rule80"].get("most_rounds"))
                    for k in ("early", "sealed")},
         "rsi_pick": out["rsi_check"]["sealed"]["pick"],
+        "reversal_rule": {k: ((out["stages"][k].get("reversal_rule") or {}).get("rule")
+                              if (out["stages"][k].get("reversal_rule") or {}).get("validated") else None) for k in ("early", "sealed")},
         "flip_guard": (out["flip_check"]["threshold"] if out["flip_check"]["enabled"] else None),
         "regime": {k: (out["stages"][k]["regime"]["table"] if out["stages"][k]["regime"]["enabled"] else None)
                    for k in ("early", "sealed")},
@@ -867,6 +925,15 @@ def summary_text(r=None):
             L.append(f"  {lab:17s} n={x['n']:5d} win={pct(x['win'])} roi={roi(x['roi'])} avg price={ap}")
         for t, x in sorted(s["current_by_tier"].items(), key=lambda z: str(z[0])):
             L.append(f"    tier {t:6s} n={x['n']:5d} win={pct(x['win'])} roi={roi(x['roi'])}")
+        rr = s.get("reversal_rule")
+        if rr:
+            ru, tr_, ho = rr["rule"], rr["train"], rr["holdout"]
+            L.append(f"  REVERSAL RULE: favorite <= {ru['cap']:.2f}, price within {ru['d'] * 100:.2f}% of line, crosses >= {ru['c']}, "
+                     f"{ru['v']}+ reads turning{', RSI stretched' if ru['rsi'] else ''}")
+            L.append(f"    train n={tr_['n']} win={pct(tr_['win'])} roi={roi(tr_['roi'])} | newest unseen n={ho['n']} win={pct(ho['win'])} "
+                     f"roi={roi(ho['roi'])} avg price={(ho['avg_price'] or 0):.2f} -> {'LIVE' if rr['validated'] else 'not used'}")
+        else:
+            L.append("  REVERSAL RULE: no underdog filter both won 50%+ and made money on the training rounds -> reversals off")
         L.append("  reversal sweep (min flip score / min votes):")
         for x in s["reversal_sweep"]:
             L.append(f"    {x['min_score']:3d}/{x['min_votes']}  n={x['n']:4d} win={pct(x['win'])} roi={roi(x['roi'])}")

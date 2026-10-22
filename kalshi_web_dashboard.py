@@ -9857,13 +9857,43 @@ REVERSAL_RSI_HI, REVERSAL_RSI_LO = 68, 32
 
 def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_multi, sig, kalshi_yes, ticker=None, stage=None):
     """None, or {"call", "tier", "why", "score", "votes", "payout"} - call the side that is LOSING right now.
-    Exactly as in the version that went 22 for 22 on XRP sealed calls (2026-10-20) - instant flip score, always on."""
+    2026-10-22 (user: "reversal calls need to be better - run a test and make the fixes"): the backtest showed the old
+    always-on version LOSING at 4:00 (25-40% right) and too rare at 8:00 to trust. Now a reversal only fires when the
+    backtest's profit-tested underdog rule for that mark matches (checked on rounds it never saw); otherwise the old
+    flip-score version runs only if the backtest has it enabled for that mark, and then only at a higher bar."""
     if not spot or not line or abs(spot - line) / line < CROSS_BAND_PCT:
         return None
+    try:
+        _dec = _bt.decisions()
+    except Exception:
+        _dec = {}
+    _rule = (_dec.get("reversal_rule") or {}).get(stage) if stage else None
+    if _rule:
+        _f = {"kp": kalshi_yes, "dist": (spot - line) / line, "crosses": (line_stats or {}).get("crosses") or 0,
+              "r1_tv": (rsi_multi or {}).get("rsi1"), "sig": sig or {}}
+        _c = _bt.rev_rule_match(_f, _rule)
+        if not _c:
+            return None
+        _ho = {}
+        try:
+            _ho = ((_bt.load_saved() or {}).get("stages") or {}).get(stage, {}).get("reversal_rule", {}).get("holdout") or {}
+        except Exception:
+            pass
+        _kp = (kalshi_yes if _c == "YES" else 1 - kalshi_yes) if kalshi_yes is not None else None
+        _pay = (1 / _kp) if _kp else None
+        _v, _ = _bt.rev_votes(_f, 1 if kalshi_yes >= 0.5 else -1)
+        _why = (f"REVERSAL - calling the underdog: {_v} reads turning against the favorite"
+                + (f" &middot; setups like this won {_ho['win']:.0%} at ~{_ho['avg_price'] * 100:.0f}c on unseen rounds"
+                   if _ho.get("win") is not None and _ho.get("avg_price") else "")
+                + (f" &middot; pays ~{_pay:.1f}x" if _pay else ""))
+        return {"call": _c, "tier": "GOOD" if (_ho.get("win") or 0) >= 0.5 else "WEAK", "why": _why, "score": None,
+                "votes": [], "payout": round(_pay, 2) if _pay else None, "kp": _kp}
+    if stage and not (_dec.get("reversal_enabled") or {}).get(stage):
+        return None                                       # not proven for this mark -> no reversal
     fav = 1 if spot > line else -1                       # the side price is on now
     ls = line_stats or {}
     fr = flip_risk_core(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
-    if not fr or fr["score"] < REVERSAL_MIN_SCORE:
+    if not fr or fr["score"] < max(REVERSAL_MIN_SCORE, 65):    # 2026-10-22: higher bar (65+ held up best in the sweep)
         return None
     rm = rsi_multi or {}
     r1, r5 = rm.get("rsi1"), rm.get("rsi5")
