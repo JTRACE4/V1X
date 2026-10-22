@@ -3,9 +3,9 @@
 Added 2026-10-22. Positions come from the position badges in Kalshi's Live Chat ("MOGS  UP $140"), read by BRAIN's own
 small browser extension while the owner has a round's Live Chat open, and posted to /radar_ingest with a secret token.
 
-Anti-impostor: a watched name is only trusted once the owner has locked it to ONE Kalshi account ID (from the admin
-Radar box, after checking the real profile). Every other account using that name, or a lookalike (M0GS, MOGS_, mogs,
-Cyrillic letters...), is kept apart as an impostor and never counted.
+Anti-impostor: every chat message links to the poster's Kalshi profile (/ideas/profiles/<handle>); handles are unique
+per account, so each watched name is locked to its exact handle. Any other account using a lookalike name (M0GS, MOGS_,
+Cyrillic letters...) is kept apart as an impostor and never counted.
 
 Storage: one JSON line per sighting in DATA_DIR/bot_state/trader_radar.jsonl, pruned to the last 7 days. Everything is
 in memory and tiny; nothing here polls anything.
@@ -26,7 +26,14 @@ EVENTS_FILE = os.path.join(_DIR, "trader_radar.jsonl")
 REG_FILE = os.path.join(_DIR, "radar_traders.json")
 KEEP_SECONDS = 7 * 24 * 3600
 ET = ZoneInfo("America/New_York")
-DEFAULT_WATCH = ["MOGS", "RichieRich", "Vince23", "Maxy", "smolsquid", "DineroBoy", "BagsChasing"]
+# Owner's picks + Kalshi's top 20 Crypto traders by all-time profit (leaderboard, read 2026-10-22).
+# Identity = the Kalshi profile handle each chat message links to (/ideas/profiles/<handle>, case-insensitive, unique per
+# account), so each name is locked to its own handle automatically - a lookalike (M0GS, mogs_) is a different handle.
+DEFAULT_WATCH = ["MOGS", "RichieRich", "Vince23", "maxy", "smolsquid", "DineroBoy",
+                 "financial.eagle6896", "gamma.goblin", "horrible.wildcat3161", "boostedtea", "KneeHowdy", "szg.szg",
+                 "written.sheepdog2191", "mushy.basset5206", "plunder", "aware.mallard2262", "princezote",
+                 "my.nickname.telegram.dorin1986", "zdxa", "vicious.boxer7605", "flag.tea", "representative.bulldog9046",
+                 "jakeharv88", "lerugi", "System.AI", "misleading.chameleon2328"]
 
 _lock = threading.Lock()
 _events = []                     # dicts, oldest first
@@ -73,7 +80,10 @@ def load():
             _reg["token"] = secrets.token_urlsafe(24)
         for n in DEFAULT_WATCH:
             if not any(norm(k) == norm(n) for k in _reg["traders"]):
-                _reg["traders"][n] = {"account_id": None, "added": _now(), "note": ""}
+                _reg["traders"][n] = {"account_id": n.lower(), "added": _now(), "note": ""}
+        for k, t in _reg["traders"].items():          # every watched name is locked to its own profile handle
+            if not t.get("account_id"):
+                t["account_id"] = k.lower()
         _save_reg()
         cutoff = _now() - KEEP_SECONDS
         _events.clear()
@@ -93,7 +103,7 @@ def load():
 
 
 def token():
-    return _reg.get("token")
+    return os.environ.get("RADAR_TOKEN") or _reg.get("token")
 
 
 def traders():
@@ -108,9 +118,9 @@ def watch(name, note=""):
     with _lock:
         if any(norm(k) == norm(name) for k in _reg["traders"]):
             return False, f"{name} is already on the list."
-        _reg["traders"][name] = {"account_id": None, "added": _now(), "note": note[:80]}
+        _reg["traders"][name] = {"account_id": name.lower(), "added": _now(), "note": note[:80]}
         _save_reg()
-    return True, f"Watching {name}. Lock it to the real account once a sighting comes in."
+    return True, f"Watching {name} (locked to the Kalshi profile handle '{name.lower()}')."
 
 
 def unwatch(name):
@@ -128,7 +138,7 @@ def trust(name, account_id, note=""):
         t = _reg["traders"].get(name)
         if t is None or not account_id:
             return False, "Pick a watched name and a sighting's account."
-        t["account_id"] = account_id
+        t["account_id"] = account_id.lower()
         if note:
             t["note"] = note[:80]
         _save_reg()
@@ -143,12 +153,24 @@ def _match(display_name, account_id):
         if norm(k) != n:
             continue
         if t.get("account_id"):
-            return k, ("trusted" if str(account_id) == t["account_id"] else "impostor")
+            return k, ("trusted" if str(account_id).lower() == t["account_id"].lower() else "impostor")
         return k, "pending"
     return None, None
 
 
 _TICKER = re.compile(r"^KX(BTC|XRP)15M-[0-9A-Z]+-[0-9]+$")
+_EVENT = re.compile(r"^KX(BTC|XRP)15M-\d{2}[A-Z]{3}\d{6}$")
+
+
+def _market_ticker(tk, asset, ts):
+    """Event ticker KXBTC15M-26OCT221245 -> market KXBTC15M-26OCT221245-45. No ticker -> the round open at ts."""
+    if _EVENT.match(tk):
+        return tk + "-" + tk[-2:]
+    if not tk and asset in ("BTC", "XRP"):
+        t = dt.datetime.fromtimestamp(ts, ET)
+        close = (t.replace(second=0, microsecond=0, minute=(t.minute // 15) * 15) + dt.timedelta(minutes=15))
+        return f"KX{asset}15M-{close.strftime('%y%b%d%H%M').upper()}-{close.strftime('%M')}"
+    return tk
 
 
 def ingest(rows):
@@ -161,7 +183,8 @@ def ingest(rows):
         for r in rows[:200]:
             try:
                 side = str(r.get("side", "")).upper()
-                tk = str(r.get("ticker", "")).upper()
+                tk = _market_ticker(str(r.get("ticker", "")).upper(), str(r.get("asset", "")).upper(),
+                                    min(now, float(r.get("ts") or now)))
                 acct = str(r.get("account_id") or "").strip()[:80]
                 usd = float(r.get("usd") or 0)
                 mid = str(r.get("msg_id") or "")[:120]
@@ -214,7 +237,7 @@ def _status(e):
         return None
     if not t.get("account_id"):
         return "pending"
-    return "trusted" if e.get("acct") == t["account_id"] else "impostor"
+    return "trusted" if (e.get("acct") or "").lower() == t["account_id"].lower() else "impostor"
 
 
 def _with_status(evts):
