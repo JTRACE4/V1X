@@ -518,11 +518,16 @@ def loss_check(rs, mark):
         cs = 1 if call == "YES" else -1
         tv = f.get("trend", 0) or 0
         k = "with_trend" if tv == cs else ("against_trend" if tv == -cs else "no_trend")
-        b = out.setdefault(k, [0, 0])
+        b = out.setdefault(k, [0, 0, 0.0, 0.0])
+        win = (call == "YES") == (r["m"]["result"] == "yes")
+        pr = price_of(call == "YES", f["kp"])
         b[0] += 1
-        b[1] += (call == "YES") == (r["m"]["result"] == "yes")
+        b[1] += win
+        b[2] += pnl(win, pr)          # profit per $1 at the market's price, with fee + slippage
+        b[3] += pr
     losses = sum(v[0] - v[1] for v in out.values()) or 1
-    return {k: {"n": v[0], "win": v[1] / v[0], "loss_share": (v[0] - v[1]) / losses} for k, v in out.items()}
+    return {k: {"n": v[0], "win": v[1] / v[0], "loss_share": (v[0] - v[1]) / losses, "roi": v[2] / v[0],
+                "units": v[2], "avg_price": v[3] / v[0]} for k, v in out.items()}
 
 
 def evaluate(rounds):
@@ -887,13 +892,18 @@ def summary_text(r=None):
             lc = rg.get("loss_check") or {}
             if lc:
                 L.append("    WHERE THE CURRENT RULES LOSE: " + " | ".join(
-                    f"{k.replace('_', ' ')}: win {pct(v['win'])} of {v['n']}, {v['loss_share'] * 100:.0f}% of all losses"
+                    f"{k.replace('_', ' ')}: win {pct(v['win'])} of {v['n']}, {v['loss_share'] * 100:.0f}% of all losses, "
+                    f"roi {roi(v.get('roi'))} at avg price {v.get('avg_price', 0):.2f}"
                     for k, v in lc.items()))
                 kept = [lc[k] for k in ("with_trend", "no_trend") if k in lc]
                 if kept and "against_trend" in lc:
                     kn = sum(v["n"] for v in kept)
                     kw = sum(v["win"] * v["n"] for v in kept)
-                    L.append(f"    SKIPPING AGAINST-TREND CALLS: win {pct(kw / kn)} on {kn} calls ({lc['against_trend']['n']} rounds sat out)")
+                    ku = sum(v.get("units", 0) for v in kept)
+                    au = lc["against_trend"].get("units", 0)
+                    L.append(f"    SKIPPING AGAINST-TREND CALLS: win {pct(kw / kn)} on {kn} calls ({lc['against_trend']['n']} rounds sat out) | "
+                             f"profit per $100/call: kept calls {ku * 100:+,.0f} vs all calls {(ku + au) * 100:+,.0f} "
+                             f"(the skipped ones made {au * 100:+,.0f})")
             edges = ["<-0.15%"] + [f"{REG_DIST[i] * 100:+.3f}..{REG_DIST[i + 1] * 100:+.3f}%" for i in range(len(REG_DIST) - 1)] + [">+0.15%"]
             L.append("    UP won from each spot vs the line: " + " | ".join(
                 f"{edges[int(k)]}: {x['up'] / x['n'] * 100:.0f}% of {x['n']}" for k, x in rg["dist_map"].items() if x["n"]))
