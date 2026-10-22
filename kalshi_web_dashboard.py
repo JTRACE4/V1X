@@ -6719,7 +6719,7 @@ function updateFlipWatch() {
     const st = v.strength !== null ? Math.round(v.strength * 100) + '%' : '';
     let badge = '';
     if (v.withCall === true) badge = '<span class="fw-badge fw-hold" title="the market is holding with the call"><i class=ico data-i=hold></i> HOLDING</span>';
-    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev" title="the market has turned 60%+ against the call"><i class=ico data-i=reversal></i> REVERSAL</span>';
+    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev" title="the market has turned 60%+ against the call"><i class=ico data-i=warn></i> TURNED</span>';
     return '<div class="fw-item ' + cls + '" title="' + n + ' flip watch: heading ' + (v.goingUp ? 'up' : 'down') + (rel ? ', ' + rel + ' (' + callWord + ')' : '')
       + (st ? ', ' + _strengthWord(v.strength) + ' ' + st + ' on the market' : '') + '"><b>' + n + '</b><span class="fw-dir">' + (v.goingUp ? '&#9650; UP' : '&#9660; DOWN') + '</span>'
       + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span class="fw-st">' + st + '</span>' : '') + badge + '</div>';
@@ -9331,7 +9331,9 @@ def build_stage_box(name, d, key):
                                      d.get("rsi_multi"), sg, d.get("kalshi_price"), d.get("ticker"), stage=key)
             except Exception:
                 _rv = None
-            if _rv and _rv["call"] != pc:
+            # 2026-10-22 (user): no "reversal" talk until the early call is in - only the sealed preview can show one
+            _early_in = bool(((d.get("stage_calls") or {}).get("early") or {}).get("call"))
+            if _rv and _rv["call"] != pc and key == "sealed" and _early_in:
                 pc, pt = _rv["call"], _rv["tier"] + " <i class=ico data-i=reversal></i> REVERSAL" + (f' ~{_rv["payout"]:.1f}x' if _rv.get("payout") else "")
             if pc:
                 prev = (f'<div class="sb-line">Right now: <span class="{"up" if pc == "YES" else "down"}"><b>{"UP" if pc == "YES" else "DOWN"} '
@@ -10042,14 +10044,15 @@ def build_flip_radar(name, d):
               f'data-call="{call}" data-call-name="{_cname}" '
               f'data-kup="{kp if kp is not None else -1:.3f}" data-left="{int(d.get("seconds_left") or 0)}" '
               f'data-above="{1 if spot >= line else 0}" style="display:none;"></span>')
-    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR &middot; REVERSAL WATCH</div>'
+    _early_in = bool(((d.get("stage_calls") or {}).get("early") or {}).get("call"))     # 2026-10-22 (user)
+    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR{" &middot; REVERSAL WATCH" if _early_in else ""}</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
             f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
             f'<div class="fr-txt">Chance {which} ({"UP" if call == "YES" else "DOWN"}) flips</div>'
             + '<!--OWNER-->' + (f'<div class="fr-txt"><i class=ico data-i=warn></i> {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
             + f'<div class="fr-txt hint">{_html_attr(tip).replace("&amp;middot;", "&middot;")}</div><!--/OWNER-->'
-            + f'{spike}{kal}{_reversal_watch_html(name, d)}{marker}</div>')
+            + f'{spike}{kal}{_reversal_watch_html(name, d) if _early_in else ""}{marker}</div>')
 
 
 def _mmss_words(sec):
