@@ -6346,6 +6346,24 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 /* 2026-10-22 (user): alert dollar values in the same bold face as the buy-pressure numbers */
 .card .fa-item .fa-usd, .card .top-alerts .fa-item .fa-usd { font-family:var(--br-bold) !important; font-weight:800 !important; font-size:17px !important;
   letter-spacing:-.2px !important; font-variant-numeric:tabular-nums; }
+/* 2026-10-22 (user): flip %, RSI number and line-cross number in the live-price serif */
+.card .flip-radar .fr-big, .card .rsi-num, .card .lx-num { font-family:var(--br-serif) !important; font-weight:800 !important; letter-spacing:0 !important;
+  font-variation-settings:"opsz" 72, "SOFT" 50 !important; font-variant-numeric:lining-nums tabular-nums; }
+.card .flip-radar .fr-big span { font-family:var(--br-label) !important; }
+.lw-arr { width:18px; height:18px; display:block; margin:2px auto 0; }
+.v-arr { width:12px; height:12px; vertical-align:-1px; }
+.fr-txt b.up { color:#3dd69c; } .fr-txt b.down { color:#f05454; }
+.lw-learn { margin:6px 2px 4px; border-top:1px solid rgba(255,255,255,0.08); padding-top:6px; }
+.lw-learn summary { cursor:pointer; font-family:var(--br-label); font-weight:800; font-size:12px; letter-spacing:1.4px; text-transform:uppercase; color:var(--br-tan); list-style:none; }
+.lw-learn summary::-webkit-details-marker { display:none; }
+.lw-learn summary::before { content:"\25B8  "; color:var(--br-blush); }
+.lw-learn[open] summary::before { content:"\25BE  "; }
+.lw-learn summary span { font-family:var(--br-sans); font-weight:400; letter-spacing:0; text-transform:none; color:var(--br-mute); margin-left:6px; }
+.lw-learn-body { font-size:13.5px; line-height:1.5; color:var(--br-text); padding:6px 4px 2px; }
+.lw-learn-body p { margin:0 0 8px; } .lw-learn-body b { color:#fbf4ec; }
+.lw-learn-body .lwl-rsi, .lw-learn-body .lwl-macd { display:inline-block; min-width:18px; color:#ffd23f; }
+.lw-learn-body .lwl-macd svg { display:inline-block !important; margin:0 !important; width:13px; height:13px; vertical-align:-1px; }
+.lw-learn-body .lwl-rsi-t, .lw-learn-body .lwl-macd-t, .lw-learn-body .lwl-15 { color:#ffd23f; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8456,6 +8474,11 @@ function lwMacd(cl) {
   const e12 = lwEma(cl, 12), e26 = lwEma(cl, 26), m = cl.map((_, i) => e12[i] - e26[i]), sg = lwEma(m, 9);
   const h = m.map((v, i) => v - sg[i]); h.line = m[m.length - 1]; return h;      // histogram (+ the MACD line's last value)
 }
+// 2026-10-22 (user): vector arrows instead of the words UP / DOWN
+function lwArrow(dir) {
+  if (!dir) return '<svg class="lw-arr" viewBox="0 0 20 20" aria-label="flat"><path d="M3 10h14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>';
+  return '<svg class="lw-arr" viewBox="0 0 20 20" aria-label="' + (dir > 0 ? 'up' : 'down') + '"><path d="' + (dir > 0 ? 'M10 3 L17.5 14 H2.5 Z' : 'M10 17 L17.5 6 H2.5 Z') + '" fill="currentColor"/></svg>';
+}
 function lwRead(a, o) {
   const cl = o.bars.map(b => b.close);
   const r = lwRsi(cl.slice(-200), 14), h = lwMacd(cl.slice(-200));
@@ -8476,13 +8499,28 @@ function lwRead(a, o) {
     const mk = flat ? 'nt' : (up ? 'up' : 'dn');
     const word = flat ? 'FLAT' : (up ? 'UP' : 'DOWN');
     const sub = flat ? 'no push' : soon ? 'may flip' : fading ? 'slowing' : 'building';
-    chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w">' + word + '</b><span>' + sub + '</span></span>';
+    chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w">' + lwArrow(flat ? 0 : (up ? 1 : -1)) + '</b><span>' + sub + '</span></span>';
     if (flat) mc = 'Momentum: no real push either way right now.';
     else if (soon) mc = 'Momentum is ' + word + ' but fading fast - it may turn ' + (up ? 'DOWN' : 'UP') + ' in about ' + bars + ' ' + unit + (bars > 1 ? 's' : '') + '.';
     else if (fading) mc = 'Momentum is ' + word + ' but slowing down.';
     else mc = 'Momentum is ' + word + ' and getting stronger.';
   }
   o.corner.innerHTML = '<div class="lw-chips">' + chips + '</div>' + (mc ? '<div class="lw-macd">' + mc + '</div>' : '');
+  try {
+    const L = o.corner.closest('.lw-box'), q = c => L && L.querySelector(c);
+    if (r !== null && q('.lwl-rsi')) {
+      q('.lwl-rsi').textContent = r.toFixed(0);
+      q('.lwl-rsi-t').textContent = 'Right now: ' + (r >= 70 ? 'overbought.' : r <= 30 ? 'oversold.' : r >= 55 ? 'leaning bullish.' : r <= 45 ? 'leaning bearish.' : 'neutral.');
+    }
+    if (mc && q('.lwl-macd-t')) q('.lwl-macd-t').textContent = 'Right now: ' + mc;
+    if (q('.lwl-macd')) q('.lwl-macd').innerHTML = (h && h.length > 3) ? lwArrow(Math.abs(h[h.length - 1]) < (cl[cl.length - 1] || 1) * 0.00002 ? 0 : (h[h.length - 1] > 0 ? 1 : -1)) : '--';
+    const px = cl[cl.length - 1];
+    if (o.lineV && px && q('.lwl-15')) {
+      const d = (px - o.lineV) / o.lineV * 100;
+      q('.lwl-15').textContent = 'Right now price is ' + Math.abs(d).toFixed(3) + '% ' + (d >= 0 ? 'above' : 'below') + ' the line'
+        + (Math.abs(d) < 0.05 ? ' - that is very close, so small moves matter a lot.' : Math.abs(d) < 0.15 ? ' - close enough that a quick move can still flip it.' : ' - a real cushion, so it would take a bigger move to flip.');
+    }
+  } catch (e) {}
 }
 // 2026-10-22 (user): Heikin Ashi candles (smoothed trend view). Indicators always use the REAL prices.
 function lwHA(bars) {
@@ -8506,6 +8544,19 @@ function lwCreate(a) {
     + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
     + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line</div>'
+    // 2026-10-22 (user): tap to learn - EMA, the live RSI + MACD read, and why it matters in a 15-minute round
+    + '<details class="lw-learn"><summary>What do these mean? <span>EMA &middot; RSI &middot; MACD &middot; 15-minute rounds</span></summary><div class="lw-learn-body">'
+    + '<p><b>EMA lines</b> - the average price over the last 12, 25 and 50 candles, with the newest candles counting the most. '
+    + 'Price above the lines with 12 on top, then 25, then 50 means an uptrend. The reverse order means a downtrend. '
+    + 'Lines bunched together and crossing each other means there is no clear trend.</p>'
+    + '<p><b>RSI <span class="lwl-rsi">--</span></b> <span class="lwl-rsi-t"></span> RSI runs from 0 to 100 and measures how hard price has been pushed lately. '
+    + 'Over 70 is <i>overbought</i> - it ran up fast and often cools off. Under 30 is <i>oversold</i> - it sold off fast and often bounces. Around 50 is neutral.</p>'
+    + '<p><b>MACD <span class="lwl-macd">--</span></b> <span class="lwl-macd-t"></span> MACD compares a fast average (12 candles) to a slow one (26). '
+    + 'When the fast one pulls above the slow one, momentum is up. When the gap between them shrinks, momentum is fading and a turn may be coming.</p>'
+    + '<p><b>Why it matters in a 15-minute round</b> <span class="lwl-15"></span> Each round is decided by one thing: is price above or below the line when the 15 minutes end. '
+    + 'When price is sitting close to the line, even a small push decides the round, so short-term reads (1-minute RSI, a MACD turn, buy pressure) matter more than the long-term trend. '
+    + 'Fast charts react fast and can flip back just as fast - that is why BRAIN weighs several reads plus the history of rounds like this one before it calls.</p>'
+    + '<p class="hint">Information only - not financial advice.</p></div></details>'
     + '<div class="lw-pats"></div>';
   const el = box.querySelector('.lw-chart');
   const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: 'Montserrat'},
@@ -10664,11 +10715,15 @@ def build_flip_radar(name, d):
     return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
             f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
-            f'<div class="fr-txt">chance <b>{"UP" if call == "YES" else "DOWN"}</b> flips <span class="hint">({which.replace("the ", "")})</span></div>'
+            f'<div class="fr-txt">chance <b class="{"up" if call == "YES" else "down"}">{_ARROW_UP if call == "YES" else _ARROW_DN}</b> flips <span class="hint">({which.replace("the ", "")})</span></div>'
             + '<!--OWNER-->' + (f'<div class="fr-txt"><i class=ico data-i=warn></i> {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
             + f'<div class="fr-txt hint">{_html_attr(tip).replace("&amp;middot;", "&middot;")}</div><!--/OWNER-->'
             + f'{spike}{kal}{_reversal_watch_html(name, d) if _early_in else ""}{marker}</div>')
+
+
+_ARROW_UP = '<svg class="v-arr" viewBox="0 0 20 20" aria-label="up"><path d="M10 3 L17.5 14 H2.5 Z" fill="currentColor"/></svg>'
+_ARROW_DN = '<svg class="v-arr" viewBox="0 0 20 20" aria-label="down"><path d="M10 17 L17.5 6 H2.5 Z" fill="currentColor"/></svg>'
 
 
 def _mmss_words(sec):
