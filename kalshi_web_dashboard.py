@@ -797,7 +797,7 @@ def render_candle_chart_svg(candles, target, current_price, typical_move, second
     bars = []
     for i, (ts, o, h, l, c) in enumerate(candles):
         cx = x_of(ts) + candle_w / 2
-        color = "#3dd69c" if c >= o else "#f05454"
+        color = "#1ff28a" if c >= o else "#ff3b4f"
         body_top, body_bot = y(max(o, c)), y(min(o, c))
         body_h = max(1.0, abs(body_bot - body_top))
         bars.append(f'<line x1="{cx:.1f}" y1="{y(h):.1f}" x2="{cx:.1f}" y2="{y(l):.1f}" '
@@ -839,7 +839,7 @@ def render_candle_chart_svg(candles, target, current_price, typical_move, second
             wx = x_of(ts)
             frac = min(1.0, usd / max_usd)
             mh = max(2, strip_h * (0.25 + 0.75 * frac))
-            color = "#3dd69c" if side == "buy" else "#f05454"
+            color = "#1ff28a" if side == "buy" else "#ff3b4f"
             opacity = 0.4 + 0.6 * frac
             marks.append(f'<line x1="{wx:.1f}" y1="{strip_top + strip_h:.1f}" '
                         f'x2="{wx:.1f}" y2="{strip_top + strip_h - mh:.1f}" '
@@ -864,7 +864,7 @@ def build_chart_svg(closes, width=780, height=60):
         x = (i / (n - 1)) * width
         y = height - ((c - lo) / span) * height
         points.append(f"{x:.1f},{y:.1f}")
-    color = "#3dd69c" if closes[-1] >= closes[0] else "#f05454"
+    color = "#1ff28a" if closes[-1] >= closes[0] else "#ff3b4f"
     poly = " ".join(points)
     return (f'<svg viewBox="0 0 {width} {height}" width="100%" height="{height}" '
             f'preserveAspectRatio="none" style="display:block;margin-top:6px;">'
@@ -916,7 +916,7 @@ def build_flip_gauge_svg(pct):
         rad = math.radians(angle_deg)
         return cx + radius * math.cos(rad), cy - radius * math.sin(rad)
 
-    zones = [(0, 30, "#3dd69c"), (30, 40, "#d29922"), (40, 45, "#f0883e"), (45, 60, "#f05454")]
+    zones = [(0, 30, "#1ff28a"), (30, 40, "#d29922"), (40, 45, "#f0883e"), (45, 60, "#ff3b4f")]
     arcs = []
     for zstart, zend, color in zones:
         a1 = 180 - (zstart / max_scale) * 180
@@ -5282,15 +5282,15 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .chart-controls { display:flex; justify-content:flex-end; gap:4px; margin-bottom:2px; }
 .chart-tf-btn { background:#352b30; color:#bcaaa1; border:1px solid #4a3c43; border-radius:5px; padding:2px 9px; font-size:11px; cursor:pointer; }
 .chart-tf-btn:hover { background:#4a3c43; }
-.chart-tf-btn.chart-tf-active { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
+.chart-tf-btn.chart-tf-active { background:#0d2818; border-color:#1ff28a; color:#1ff28a; }
 /* whale-cross: position/left are set inline per-instance (JS computes the
    target card's on-screen rect) since the card it flies over is rebuilt via
    innerHTML every 3s poll - a child element would get wiped mid-animation,
    so this lives under <body> instead and is just visually aligned over the
    card. See showWhaleCrossing(). */
 .whale-cross { font-size:90px; white-space:nowrap; pointer-events:none; z-index:9999; }
-.whale-cross.whale-buy { filter: drop-shadow(0 0 6px #3dd69c); }
-.whale-cross.whale-sell { filter: drop-shadow(0 0 6px #f05454); }
+.whale-cross.whale-buy { filter: drop-shadow(0 0 6px #1ff28a); }
+.whale-cross.whale-sell { filter: drop-shadow(0 0 6px #ff3b4f); }
 /* big, screen-center "for sure" flip alert - added 2026-09-24 per user
    request for something bigger/louder than the small BOOM pill. Fixed under
    <body> (not #content, which gets wiped every 1s poll) so it survives the
@@ -5305,8 +5305,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
    property fights the JS-driven transform instead of combining with it (the
    same conflict that broke the flame effect earlier in this project) and
    would drop the translate(-50%,-50%) centering entirely. */
-.big-flip-alert.flip-down { border-color:#f05454; box-shadow:0 0 40px rgba(248,81,73,0.6); }
-.big-flip-alert.flip-up { border-color:#3dd69c; box-shadow:0 0 40px rgba(63,185,80,0.6); }
+.big-flip-alert.flip-down { border-color:#ff3b4f; box-shadow:0 0 40px rgba(248,81,73,0.6); }
+.big-flip-alert.flip-up { border-color:#1ff28a; box-shadow:0 0 40px rgba(63,185,80,0.6); }
 .big-flip-title { font-size:clamp(22px,5vw,40px); font-weight:900; color:#fff; letter-spacing:0.5px; }
 .big-flip-sub { font-size:14px; color:#bcaaa1; margin-top:8px; }
 /* "cha-ching" money banner - added 2026-09-27 per user request ("if the bet
@@ -5315,7 +5315,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
    driven entirely by the JS Web Animations API call in showMoneyBanner()
    below (animating `left` across the viewport), no CSS animation here. */
 .money-banner { position:fixed; top:45%; z-index:10001; pointer-events:none;
-                 font-size:clamp(20px,4vw,34px); font-weight:900; color:#3dd69c;
+                 font-size:clamp(20px,4vw,34px); font-weight:900; color:#1ff28a;
                  text-shadow:0 0 16px rgba(63,185,80,0.85); white-space:nowrap; }
 .money-banner-emoji { font-size:5.5em; vertical-align:middle; }  /* "make sure it's big" per user
                                                                      request 2026-09-27, bumped up
@@ -5328,7 +5328,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 /* loss banner - added 2026-09-27 per user request ("when it's wrong...
    fuck you, Kalshi"). Same technique/motion as .money-banner. */
 .loss-banner { position:fixed; top:45%; z-index:10001; pointer-events:none;
-                font-size:clamp(20px,4vw,34px); font-weight:900; color:#f05454;
+                font-size:clamp(20px,4vw,34px); font-weight:900; color:#ff3b4f;
                 text-shadow:0 0 16px rgba(248,81,73,0.85); white-space:nowrap; }
 .loss-banner-emoji { font-size:5.5em; vertical-align:middle; }  /* "make sure it's big" - same
                                                                     bump as the money emoji */
@@ -5336,7 +5336,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #352b30; }
 .label { color:#bcaaa1; }
 .value { font-weight:600; }
-.up { color:#3dd69c; }
+.up { color:#1ff28a; }
 .fire-streak { display:flex; justify-content:flex-end; margin-bottom:2px; }
 /* real-fire technique: blurred, glowing, layered blobs (not a vector
    outline) - soft irregular edges + screen blend = reads like actual flame/
@@ -5360,7 +5360,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
                           50% { transform:scaleY(1.16) scaleX(0.82) translateX(-1px); opacity:1; } }
 .smoke-streak { font-size:16px; line-height:1; text-align:right; margin-bottom:2px; opacity:0.7; animation: smoke-rise 2.2s ease-in-out infinite; }
 @keyframes smoke-rise { 0% { opacity:0; transform:translateY(4px) scale(0.9); } 30% { opacity:0.7; } 100% { opacity:0; transform:translateY(-10px) scale(1.15); } }
-.down { color:#f05454; }
+.down { color:#ff3b4f; }
 .warn { color:#d29922; }
 .position-tag { color:#e9a5bb; }  /* live position summary label - added 2026-09-27 per user
                                      request ("a different color other than white green or red...
@@ -5382,27 +5382,27 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .tug-diff { font-size:22px; font-weight:800; }
 .tug-gauge { position:relative; height:26px; margin:6px 0 0; display:flex; align-items:center; justify-content:space-between; }
 .tug-gline { position:absolute; left:6%; right:6%; top:50%; height:2px; background:#4a3c43; }
-.tug-gauge i { position:absolute; top:3px; width:16px; height:20px; margin-left:-8px; border-radius:50%; background:#3dd69c; box-shadow:0 0 8px #3dd69c; }
+.tug-gauge i { position:absolute; top:3px; width:16px; height:20px; margin-left:-8px; border-radius:50%; background:#1ff28a; box-shadow:0 0 8px #1ff28a; }
 .tug-gl, .tug-gr { position:relative; z-index:1; font-size:10px; }
 .tug-cap { text-align:center; font-size:10px; margin-bottom:4px; }
 .tug-head { font-size:20px; font-weight:800; margin:4px 0; }
 .tug-lean { font-size:13px; margin-top:2px; }
-.tug-bar { position:relative; height:12px; border-radius:6px; background:#cf3b3b; margin:4px 0 8px; }
-.tug-bar i { position:absolute; left:0; top:0; bottom:0; border-radius:6px 0 0 6px; background:#26a878; }
+.tug-bar { position:relative; height:12px; border-radius:6px; background:#d9142f; margin:4px 0 8px; }
+.tug-bar i { position:absolute; left:0; top:0; bottom:0; border-radius:6px 0 0 6px; background:#0fbf68; }
 .tug-bar b { position:absolute; top:-3px; width:4px; height:18px; margin-left:-2px; background:#fbf4ec; border-radius:2px; }
 .tug-row { display:flex; align-items:center; gap:8px; font-size:12px; margin:2px 0; }
 .tug-lab { flex:0 0 170px; color:#bcaaa1; }
 .tug-track { position:relative; flex:1 1 auto; height:6px; background:#352b30; border-radius:3px; overflow:hidden; }
 .tug-fill { position:absolute; top:0; bottom:0; border-radius:3px; }
 .tug-center::after { content:""; position:absolute; left:50%; top:-2px; bottom:-2px; width:2px; margin-left:-1px; background:#fbf4ec; opacity:0.7; }
-.tug-fill.up { background:#3dd69c; } .tug-fill.down { background:#f05454; } .tug-fill.flat { background:#bcaaa1; }
+.tug-fill.up { background:#1ff28a; } .tug-fill.down { background:#ff3b4f; } .tug-fill.flat { background:#bcaaa1; }
 .tug-val { flex:0 0 118px; text-align:right; font-weight:700; }
 .tug-boxes { display:flex; gap:8px; margin:8px 0 6px; }
 .tug-box { flex:1 1 0; padding:6px 10px; border-radius:6px; font-size:12px; border:1px solid #4a3c43; }
-.tug-box.up { background:#0f2a1a; border-color:#26a878; } .tug-box.down { background:#2a1212; border-color:#cf3b3b; }
+.tug-box.up { background:#0f2a1a; border-color:#0fbf68; } .tug-box.down { background:#2a1212; border-color:#d9142f; }
 .tug-box span { color:#bcaaa1; font-size:11px; }
 .tug-agree { font-size:12px; padding:5px 10px; border-radius:6px; margin:4px 0; }
-.tug-agree.ok { background:#0f2a1a; border:1px solid #26a878; color:#3dd69c; }
+.tug-agree.ok { background:#0f2a1a; border:1px solid #0fbf68; color:#1ff28a; }
 .tug-agree.warn { background:#2d2606; border:1px solid #d4b106; color:#e3b341; }
 .tug-around { margin-top:4px; font-size:11px; }
 .line-diff { font-size:12px; font-weight:800; margin-top:2px; white-space:nowrap; }
@@ -5413,7 +5413,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .asset-BTC { color:#f7931a; } .asset-XRP { color:#4aa8ff; }
 .clock { display:flex; align-items:center; gap:5px; margin-top:4px; font-family:Consolas, 'Courier New', monospace; font-size:17px; font-weight:700; color:#fbf4ec; }
 .clock svg { display:block; }
-.clock.clock-warn { color:#d29922; } .clock.clock-hot { color:#f05454; }
+.clock.clock-warn { color:#d29922; } .clock.clock-hot { color:#ff3b4f; }
 .callbox-locked { background:#2d2606; border:2px solid #d4b106; box-shadow:0 0 8px rgba(212,177,6,0.5); }
 .callbox-locked .lbl { color:#f0d040; }
 .callbox-locked .big { color:#ffe680; }
@@ -5425,21 +5425,21 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .head-row .kalshi-arrow-pct { font-size:19px; text-align:center; }
 .boom { display:inline-block; padding:6px 16px; border-radius:20px; font-weight:800; font-size:14px;
         margin-left:12px; animation: boom-pulse 0.9s infinite; vertical-align:middle; }
-.boom-up { background:#0d2818; color:#3dd69c; border:2px solid #3dd69c; }
-.boom-down { background:#2d0d0d; color:#f05454; border:2px solid #f05454; }
+.boom-up { background:#0d2818; color:#1ff28a; border:2px solid #1ff28a; }
+.boom-down { background:#2d0d0d; color:#ff3b4f; border:2px solid #ff3b4f; }
 @keyframes boom-pulse { 0% { opacity:1; transform:scale(1); } 50% { opacity:0.65; transform:scale(1.08); } 100% { opacity:1; transform:scale(1); } }
 .meter-track { display:inline-block; width:90px; height:8px; background:#211b1e; border:1px solid #4a3c43;
                border-radius:4px; overflow:hidden; vertical-align:middle; margin-left:8px; }
 .meter-fill { height:100%; border-radius:3px; }
-.meter-fill-up { background:#3dd69c; }
-.meter-fill-down { background:#f05454; }
+.meter-fill-up { background:#1ff28a; }
+.meter-fill-down { background:#ff3b4f; }
 .sound-bar { margin-bottom:16px; padding:12px 16px; background:#2a2226; border:1px solid #4a3c43; border-radius:8px; }
 .sound-bar button { background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:6px; padding:8px 14px; margin-right:8px; margin-bottom:6px; cursor:pointer; font-size:13px; }
 .sound-bar button:hover { background:#4a3c43; }
 #sound-enable-btn { font-weight:700; }
-#sound-enable-btn.sound-on { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
-.asset-sound-on { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
-.asset-sound-off { background:#2d0d0d; border-color:#f05454; color:#f05454; }
+#sound-enable-btn.sound-on { background:#0d2818; border-color:#1ff28a; color:#1ff28a; }
+.asset-sound-on { background:#0d2818; border-color:#1ff28a; color:#1ff28a; }
+.asset-sound-off { background:#2d0d0d; border-color:#ff3b4f; color:#ff3b4f; }
 .sound-bar .hint { color:#bcaaa1; font-size:12px; margin-top:6px; }
 .live-trading-row { align-items:flex-start; background:#2a2226; border:1px solid #4a3c43; border-radius:8px; padding:10px 12px; margin:4px 0 10px; }
 .live-trading-row .hint { color:#bcaaa1; font-size:12px; margin-top:4px; }
@@ -5453,9 +5453,9 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .box-position-line { display:block; margin-top:8px; font-size:14px; font-weight:400;
                       white-space:normal; }
 .live-trading-row button { border-radius:6px; padding:6px 12px; margin-left:10px; cursor:pointer; font-weight:700; font-size:13px; border:1px solid; }
-.live-btn-on { background:#2d0d0d; border-color:#f05454; color:#f05454; }
+.live-btn-on { background:#2d0d0d; border-color:#ff3b4f; color:#ff3b4f; }
 .live-btn-on:hover { background:#3d1111; }
-.live-btn-off { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
+.live-btn-off { background:#0d2818; border-color:#1ff28a; color:#1ff28a; }
 .live-btn-off:hover { background:#123322; }
 .size-mode-btn { background:#352b30; border-color:#4a3c43; color:#bcaaa1; font-weight:400 !important; }
 /* buy/sell volume "tug of war" bar - added 2026-09-30 per user request
@@ -5483,7 +5483,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
                    animation:rsiPulse 1.1s ease-in-out infinite; max-width:94vw; }
 .incoming-head { font-size:42px; font-weight:900; letter-spacing:1px; line-height:1.1; }
 .incoming-detail { font-size:17px; margin-top:6px; color:#fbf4ec; font-weight:600; }
-.incoming-buy { color:#3dd69c; } .incoming-sell { color:#f05454; }
+.incoming-buy { color:#1ff28a; } .incoming-sell { color:#ff3b4f; }
 .whale-latest { margin-top:3px; font-size:12px; text-align:right; line-height:1.4; font-weight:400; }
 .pat-win { display:block; }
 .pat-chart { cursor:zoom-in; flex:1 1 auto; min-width:0; }
@@ -5498,11 +5498,11 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   background:#2a2226; border:1px solid #4a3c43; border-radius:8px; padding:10px 12px; box-shadow:0 6px 20px rgba(0,0,0,0.5); color:#eee2d7; }
 .vol-title { font-size:11px; font-weight:800; letter-spacing:0.5px; color:#fbf4ec; }
 .vol-legend { font-size:10px; text-align:left; line-height:1.4; }
-.lg-buy { color:#26a878; } .lg-sell { color:#cf3b3b; } .lg-norm { color:#fbf4ec; }
+.lg-buy { color:#0fbf68; } .lg-sell { color:#d9142f; } .lg-norm { color:#fbf4ec; }
 .tug-sub .tug-lab { color:#a8968e; font-size:11px; }
 .vol-track { position:relative; flex:1 1 auto; width:32px; min-height:120px; background:#352b30; border-radius:6px; overflow:hidden; display:flex; align-items:flex-end; }
 .vol-fill { width:100%; display:flex; flex-direction:column; transition:height 0.4s ease; }
-.vol-buy { background:#26a878; } .vol-sell { background:#cf3b3b; }
+.vol-buy { background:#0fbf68; } .vol-sell { background:#d9142f; }
 .vol-normal { position:absolute; left:0; right:0; height:2px; background:#fbf4ec; opacity:0.85; }
 @media (max-width:560px) { .vol-bar { flex-basis:46px; font-size:10px; } .vol-track { width:24px; } }
 #pat-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:#211b1e; z-index:100000; overflow:auto; padding:10px 16px; }
@@ -5517,7 +5517,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 details.pat-main > summary { cursor:pointer; list-style:none; }
 .pat-chips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
 .pat-chip { font-size:12px; padding:3px 8px; border-radius:12px; border:1px solid #4a3c43; background:#2a2226; }
-.pat-chip.up { color:#3dd69c; border-color:#26a878; } .pat-chip.down { color:#f05454; border-color:#cf3b3b; } .pat-chip.flat { color:#bcaaa1; }
+.pat-chip.up { color:#1ff28a; border-color:#0fbf68; } .pat-chip.down { color:#ff3b4f; border-color:#d9142f; } .pat-chip.flat { color:#bcaaa1; }
 .pat-table { width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
 .pat-table th { text-align:left; color:#bcaaa1; font-weight:400; border-bottom:1px solid #4a3c43; padding:4px 6px; }
 .pat-table td { vertical-align:top; padding:6px; border-bottom:1px solid #352b30; }
@@ -5555,7 +5555,7 @@ details.pat > summary { cursor:pointer; }
 .pat-info b { color:#f2cc60; }
 .pat-dir { margin-top:8px; font-size:20px; font-weight:800; line-height:1; }
 .pat-dir small { font-size:11px; font-weight:400; opacity:0.8; margin-left:4px; }
-.pat-dir.up { color:#3dd69c; } .pat-dir.down { color:#f05454; } .pat-dir.flat { color:#bcaaa1; }
+.pat-dir.up { color:#1ff28a; } .pat-dir.down { color:#ff3b4f; } .pat-dir.flat { color:#bcaaa1; }
 .pat-disc { margin-top:8px; font-size:12px; color:#a8968e; font-size:11px; }
 .flip-combo { display:grid; grid-template-columns:1fr auto; align-items:center; column-gap:8px; padding:4px 0; }
 .flip-combo .flip-gauge { grid-column:1; grid-row:1; justify-self:center; }
@@ -5579,28 +5579,28 @@ details.pat > summary { cursor:pointer; }
 .press-head { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:baseline; margin-bottom:4px; }
 .press-verdict { font-weight:700; font-size:13px; }
 .press-bar { position:relative; display:flex; height:22px; border-radius:5px; overflow:hidden; background:#352b30; }
-.press-buy { background:#26a878; color:#fff; font-size:12px; font-weight:700; line-height:22px; padding-left:8px; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; }
-.press-sell { background:#cf3b3b; color:#fff; font-size:12px; font-weight:700; line-height:22px; padding-right:8px; text-align:right; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; }
+.press-buy { background:#0fbf68; color:#fff; font-size:12px; font-weight:700; line-height:22px; padding-left:8px; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; }
+.press-sell { background:#d9142f; color:#fff; font-size:12px; font-weight:700; line-height:22px; padding-right:8px; text-align:right; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; }
 .press-mid { position:absolute; left:50%; top:0; bottom:0; width:2px; background:#fbf4ec; opacity:0.7; }
 .press-chips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
 .press-chip { font-size:12px; padding:2px 8px; border-radius:10px; border:1px solid #4a3c43; background:#2a2226; }
-.press-chip.up { color:#3dd69c; border-color:#26a878; } .press-chip.down { color:#f05454; border-color:#cf3b3b; } .press-chip.flat { color:#bcaaa1; }
+.press-chip.up { color:#1ff28a; border-color:#0fbf68; } .press-chip.down { color:#ff3b4f; border-color:#d9142f; } .press-chip.flat { color:#bcaaa1; }
 .press-more { margin-top:6px; }
 .press-more > summary { cursor:pointer; }
 .press-table { width:100%; border-collapse:collapse; margin-top:6px; font-size:12px; }
 .press-table th { text-align:left; color:#bcaaa1; font-weight:400; border-bottom:1px solid #4a3c43; padding:3px 6px; }
 .press-table td { padding:3px 6px; border-bottom:1px solid #352b30; }
 .press-idle { opacity:0.45; }
-.press-mini { width:90px; height:8px; background:#cf3b3b; border-radius:3px; overflow:hidden; }
-.press-mini i { display:block; height:100%; background:#26a878; }
+.press-mini { width:90px; height:8px; background:#d9142f; border-radius:3px; overflow:hidden; }
+.press-mini i { display:block; height:100%; background:#0fbf68; }
 .tug-row { margin-top:6px; }
 .tug-bar { position:relative; height:18px; border-radius:4px; overflow:hidden;
            background:#352b30; display:flex; margin-top:3px; }
-.tug-bar-buy { background:#3dd69c; height:100%; transition:width 0.3s ease; }
-.tug-bar-sell { background:#f05454; height:100%; transition:width 0.3s ease; }
+.tug-bar-buy { background:#1ff28a; height:100%; transition:width 0.3s ease; }
+.tug-bar-sell { background:#ff3b4f; height:100%; transition:width 0.3s ease; }
 .tug-bar-label { display:flex; justify-content:space-between; font-size:12px; margin-top:2px; }
 .size-mode-btn:hover { background:#4a3c43; }
-.size-mode-active { background:#0d2818 !important; border-color:#3dd69c !important; color:#3dd69c !important; }
+.size-mode-active { background:#0d2818 !important; border-color:#1ff28a !important; color:#1ff28a !important; }
 .live-trading-row input[type="number"] { background:#211b1e; border:1px solid #4a3c43; border-radius:6px;
                                           color:#fbf4ec; padding:5px 8px; margin-left:8px; font-size:13px; }
 /* ---- 2026-10-20: top strip (RSI flip meter / flip meter / whale & liquidity alert box), stage calls, bought-sold bar ---- */
@@ -5623,7 +5623,7 @@ details.pat > summary { cursor:pointer; }
 .fr-high { color:#f0883e; } .fr-ext { color:#ff4dd2; font-weight:800; animation:rsiText 1.2s ease-in-out infinite; }
 .fa-list { max-height:196px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding-right:2px; }
 .fa-item { border-left:4px solid #4a3c43; background:#2a2226; border-radius:4px; padding:4px 7px; font-size:12px; line-height:1.3; }
-.fa-item.fa-up { border-left-color:#3dd69c; } .fa-item.fa-down { border-left-color:#f05454; }
+.fa-item.fa-up { border-left-color:#1ff28a; } .fa-item.fa-down { border-left-color:#ff3b4f; }
 .fa-item.fa-sev3 { background:#1f1a12; } .fa-item.fa-sev1 { opacity:0.8; }
 .fa-item.fa-fresh { animation:faFresh 1.2s ease-in-out 4; }
 @keyframes faFresh { 0%,100% { box-shadow:none; } 50% { box-shadow:0 0 0 2px #f2cc60; } }
@@ -5661,7 +5661,7 @@ details.pat > summary { cursor:pointer; }
 .sb-count { font-size:34px; font-family:Consolas, 'Courier New', monospace; }
 .sb-tier { display:inline-block; align-self:center; margin:6px 0 4px; padding:3px 16px; border-radius:20px; font-size:18px; font-weight:900; letter-spacing:2px; }
 .tier-super { color:#ffb347; background:rgba(255,215,106,0.12); border:2px solid #ffb347; text-shadow:0 0 10px rgba(255,215,106,0.7); animation:superGlow 1.8s ease-in-out infinite; }
-.tier-good { color:#3dd69c; background:rgba(90,209,160,0.12); border:2px solid #3dd69c; }
+.tier-good { color:#1ff28a; background:rgba(90,209,160,0.12); border:2px solid #1ff28a; }
 .tier-weak { color:#c7b98a; background:rgba(199,185,138,0.08); border:2px dashed #8f8466; }
 .tier-skip { color:#bcaaa1; border:2px dashed #4a5680; }
 span.tier-super, span.tier-good, span.tier-weak { padding:0 5px; border-radius:6px; font-size:11px; font-weight:800; border-width:1px; animation:none; }
@@ -5684,7 +5684,7 @@ span.tier-super, span.tier-good, span.tier-weak { padding:0 5px; border-radius:6
 .rc-head { font-size:11px; color:#eee2d7; margin-bottom:2px; line-height:1.4; }
 @media (max-width:700px) { .rc-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 .call-tag { display:inline-block; font-size:10px; padding:0 5px; border-radius:5px; border:1px solid #4a515e; color:#eee2d7; margin-right:2px; }
-.call-tag.tag-ok { border-color:#3dd69c; color:#3dd69c; } .call-tag.tag-bad { border-color:#f05454; color:#f05454; } .call-tag.tag-skip { opacity:0.6; }
+.call-tag.tag-ok { border-color:#1ff28a; color:#1ff28a; } .call-tag.tag-bad { border-color:#ff3b4f; color:#ff3b4f; } .call-tag.tag-skip { opacity:0.6; }
 /* ---- chill night theme (2026-10-20): deep indigo sky, soft moonlight text, mint / coral instead of hard green / red ---- */
 body { background:#211b1e; background-image:radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,0.55) 50%, transparent 51%),
   radial-gradient(1px 1px at 68% 9%, rgba(255,255,255,0.45) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 85% 32%, rgba(255,255,255,0.35) 50%, transparent 51%),
@@ -5710,7 +5710,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 #top-banner { position:fixed; top:0; left:0; right:0; z-index:100002; padding:9px 18px; font-size:14px; font-weight:700; text-align:center;
               cursor:pointer; background:#2a2226; border-bottom:2px solid currentColor; box-shadow:0 4px 16px rgba(0,0,0,0.45);
               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-#top-banner.tb-buy { color:#3dd69c; } #top-banner.tb-sell { color:#f05454; }
+#top-banner.tb-buy { color:#1ff28a; } #top-banner.tb-sell { color:#ff3b4f; }
 .rs-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#dcbb91; margin-bottom:6px; text-transform:uppercase; }
 .rs-title b { color:#fbf4ec; }
 .round-strip { display:grid; grid-template-columns:minmax(260px,1.3fr) minmax(200px,1fr) minmax(200px,1fr); gap:12px; margin-bottom:12px; }
@@ -5719,8 +5719,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .rs-clock { float:right; color:#fbf4ec; letter-spacing:0; font-family:'JetBrains Mono', Consolas, monospace; }
 .rs-odds-nums { display:flex; justify-content:space-between; font-size:15px; }
 .rs-odds-nums b { font-size:30px; font-weight:800; }
-.rs-odds-bar { position:relative; height:10px; border-radius:5px; background:#cf3b3b; overflow:hidden; margin:6px 0 4px; }
-.rs-odds-bar i { position:absolute; left:0; top:0; bottom:0; background:#26a878; transition:width 0.5s ease; }
+.rs-odds-bar { position:relative; height:10px; border-radius:5px; background:#d9142f; overflow:hidden; margin:6px 0 4px; }
+.rs-odds-bar i { position:absolute; left:0; top:0; bottom:0; background:#0fbf68; transition:width 0.5s ease; }
 .rs-odds-bar b { position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px; background:#fbf4ec; opacity:0.8; }
 .rs-lean { font-size:15px; font-weight:700; margin-bottom:4px; }
 .rs-sub { display:flex; justify-content:space-between; gap:8px; font-size:11px; margin-top:2px; flex-wrap:wrap; }
@@ -5777,12 +5777,12 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
   .wr-panel { top:calc(env(safe-area-inset-top,0px) + 60px); }
 }
 .sc-streak { display:inline-block; padding:4px 12px; border-radius:8px; font-size:14px; font-weight:800; letter-spacing:0.5px; }
-.sc-streak.win { color:#3dd69c; background:rgba(90,209,160,0.12); border:1px solid #26a878; }
-.sc-streak.loss { color:#f05454; background:rgba(240,84,84,0.12); border:1px solid #cf3b3b; }
+.sc-streak.win { color:#1ff28a; background:rgba(90,209,160,0.12); border:1px solid #0fbf68; }
+.sc-streak.loss { color:#ff3b4f; background:rgba(255,59,79,0.12); border:1px solid #d9142f; }
 .sc-stats { font-size:12px; color:#eee2d7; }
 .sc-chips { display:flex; gap:3px; margin-top:7px; flex-wrap:wrap; }
 .sc-chips i { font-style:normal; font-size:10px; font-weight:800; width:17px; height:17px; line-height:17px; text-align:center; border-radius:4px; }
-.sc-chips i.w { background:rgba(90,209,160,0.18); color:#3dd69c; } .sc-chips i.l { background:rgba(240,84,84,0.18); color:#f05454; }
+.sc-chips i.w { background:rgba(90,209,160,0.18); color:#1ff28a; } .sc-chips i.l { background:rgba(255,59,79,0.18); color:#ff3b4f; }
 .sc-empty { font-size:12px; color:#bcaaa1; }
 .sc-more { margin-top:8px; } .sc-more > summary { cursor:pointer; font-size:12px; }
 .streak-arrow { display:none; }
@@ -5793,8 +5793,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .k-line { margin-top:6px; width:100%; min-width:240px; }
 .k-nums { display:flex; justify-content:space-between; gap:8px; font-size:12px; font-weight:700; }
 .k-lean { color:#eee2d7; font-weight:600; }
-.k-bar { position:relative; height:6px; border-radius:3px; background:#cf3b3b; overflow:hidden; margin-top:3px; }
-.k-bar i { position:absolute; left:0; top:0; bottom:0; background:#26a878; transition:width 0.5s ease; }
+.k-bar { position:relative; height:6px; border-radius:3px; background:#d9142f; overflow:hidden; margin-top:3px; }
+.k-bar i { position:absolute; left:0; top:0; bottom:0; background:#0fbf68; transition:width 0.5s ease; }
 .k-bar b { position:absolute; left:50%; top:-1px; bottom:-1px; width:2px; margin-left:-1px; background:#fbf4ec; }
 .press-top { border-bottom:none; margin-bottom:10px; }
 .press-sub { font-size:11px; margin:-2px 0 3px; }
@@ -5828,9 +5828,9 @@ body.ov-off .ov { display:none; }
 .rsi-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
 .rsi-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
 .rz-ob { border-color:#ff4dd2; } .rz-ob .rsi-num, .rz-ob .rsi-zone { color:#ff4dd2; }
-.rz-bull { border-color:#26a878; } .rz-bull .rsi-num, .rz-bull .rsi-zone { color:#3dd69c; }
+.rz-bull { border-color:#0fbf68; } .rz-bull .rsi-num, .rz-bull .rsi-zone { color:#1ff28a; }
 .rz-norm .rsi-num, .rz-norm .rsi-zone { color:#eee2d7; }
-.rz-bear { border-color:#cf3b3b; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#f05454; }
+.rz-bear { border-color:#d9142f; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#ff3b4f; }
 .rz-os { border-color:#00e5ff; } .rz-os .rsi-num, .rz-os .rsi-zone { color:#00e5ff; }
 .flip-radar .fr-big { font-size:30px; font-weight:800; line-height:1.05; }
 .flip-radar .fr-big span { font-size:13px; letter-spacing:1px; vertical-align:middle; }
@@ -5855,7 +5855,7 @@ h1 { display:none; }
 .g-logo { font-family:'Bungee', 'Inter', sans-serif; font-size:42px; line-height:1; letter-spacing:3px; color:#ffffff;
   text-shadow:0 2px 0 rgba(0,0,0,0.5), 0 0 18px rgba(255,255,255,0.12); }
 .g-tag { display:flex; align-items:center; gap:12px; font-family:'Bebas Neue', 'Inter', sans-serif; font-size:20px; letter-spacing:2px; color:#dcbb91; }
-.g-live { color:#f05454; font-size:16px; text-shadow:0 0 10px rgba(240,84,84,0.7); }
+.g-live { color:#ff3b4f; font-size:16px; text-shadow:0 0 10px rgba(255,59,79,0.7); }
 .card { background:linear-gradient(180deg, rgba(44,35,39,0.92) 0%, rgba(36,29,32,0.94) 100%) !important;
   border:1px solid rgba(255,255,255,0.08) !important; border-radius:20px !important;
   box-shadow:0 18px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04) !important; backdrop-filter:blur(6px); }
@@ -5869,17 +5869,17 @@ h1 { display:none; }
 .sc-pct { font-size:26px; } .rsi-num { font-size:30px; } .flip-radar .fr-big { font-size:24px; }
 .asset-label { font-family:'Bungee', 'Inter', sans-serif; font-weight:400 !important; font-size:30px; }
 .asset-BTC { color:#e8c27c !important; } .asset-XRP { color:#dcbb91 !important; }
-.live-price-inline .big.up { color:#3dd69c !important; } .live-price-inline .big.down { color:#f05454 !important; }
+.live-price-inline .big.up { color:#1ff28a !important; } .live-price-inline .big.down { color:#ff3b4f !important; }
 .stage-early { border-color:#e9a5bb !important; box-shadow:0 0 16px rgba(233,165,187,0.18) !important; }
 .stage-sealed { border-color:#e8c27c !important; box-shadow:0 0 18px rgba(232,194,124,0.22) !important; background:rgba(34,32,30,0.92) !important; }
-.stage-box.stage-up { background:linear-gradient(180deg, rgba(61,214,156,0.18) 0%, rgba(48,39,43,0.92) 70%) !important; }
-.stage-box.stage-down { background:linear-gradient(180deg, rgba(240,84,84,0.20) 0%, rgba(48,39,43,0.92) 70%) !important; }
-.press-buy, .k-bar i, .rs-odds-bar i, .vol-buy { background:linear-gradient(90deg, #15a57d, #3dd69c) !important; }
-.press-sell, .k-bar, .rs-odds-bar, .vol-sell { background:linear-gradient(90deg, #f05454, #cf3b3b) !important; }
+.stage-box.stage-up { background:linear-gradient(180deg, rgba(31,242,138,0.18) 0%, rgba(48,39,43,0.92) 70%) !important; }
+.stage-box.stage-down { background:linear-gradient(180deg, rgba(255,59,79,0.20) 0%, rgba(48,39,43,0.92) 70%) !important; }
+.press-buy, .k-bar i, .rs-odds-bar i, .vol-buy { background:linear-gradient(90deg, #0fbf68, #1ff28a) !important; }
+.press-sell, .k-bar, .rs-odds-bar, .vol-sell { background:linear-gradient(90deg, #ff3b4f, #d9142f) !important; }
 .size-mode-btn, .chart-tf-btn, .sound-bar button { border-radius:10px !important; }
 .size-mode-active { background:rgba(233,165,187,0.16) !important; border-color:#e9a5bb !important; color:#f6d9e2 !important; }
 .tier-super { color:#e8c27c !important; border-color:#e8c27c !important; background:rgba(232,194,124,0.12) !important; }
-.tier-good { color:#3dd69c !important; border-color:#3dd69c !important; }
+.tier-good { color:#1ff28a !important; border-color:#1ff28a !important; }
 .more-detail > summary b { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:18px; letter-spacing:2px; color:#dcbb91; font-weight:400; }
 #top-banner { background:#2a2226 !important; }
 .sound-bar { background:rgba(48,39,43,0.9) !important; border-color:rgba(255,255,255,0.08) !important; border-radius:14px !important; }
@@ -5896,7 +5896,7 @@ h1 { display:none; }
 .mkt-btns { display:flex; gap:4px; }
 .mkt-btns button { flex:1; font-size:11px; font-weight:700; padding:3px 0; border-radius:7px; border:1px solid transparent; cursor:pointer;
   color:#0f1115; font-family:'Inter', sans-serif; }
-.mkt-btns button.bull { background:#3dd69c; } .mkt-btns button.bear { background:#f05454; } .mkt-btns button.neut { background:#5d6573; color:#fbf4ec; }
+.mkt-btns button.bull { background:#1ff28a; } .mkt-btns button.bear { background:#ff3b4f; } .mkt-btns button.neut { background:#5d6573; color:#fbf4ec; }
 .mkt-btns button.sel { outline:2px solid #ffffff; outline-offset:1px; }
 .mkt-pane { display:none; font-size:12px; margin-top:5px; } .mkt-pane.show { display:block; }
 .mkt-pane b { font-size:13px; }
@@ -5911,9 +5911,9 @@ h1 { display:none; }
 .lx-num { font-family:'Bungee', 'Inter', sans-serif; font-size:30px; line-height:1.05; }
 .lx-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
 .lx-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
-.lx-clean { border-color:#3dd69c !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:#3dd69c; }
+.lx-clean { border-color:#1ff28a !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:#1ff28a; }
 .lx-some { border-color:#e8c27c !important; } .lx-some .lx-num, .lx-some .lx-zone { color:#e8c27c; }
-.lx-chop { border-color:#f05454 !important; } .lx-chop .lx-num, .lx-chop .lx-zone { color:#f05454; }
+.lx-chop { border-color:#ff3b4f !important; } .lx-chop .lx-num, .lx-chop .lx-zone { color:#ff3b4f; }
 /* "FLIP" tag next to the calls (added 2026-09-25) - marks this window's
    real position as the flip-scalp entry, not the original locked call */
 .flip-badge { display:inline-block; background:#3d1a00; border:1px solid #d29922; color:#d29922;
@@ -6008,14 +6008,14 @@ body { background:#15110f !important; }
 @media (max-width:760px) { .g-logo { font-size:38px !important; } }
 /* ---- 2026-10-20 (7): the 80% setup pill is white, and wins / losses are green / red everywhere (streak, chips, scoreboard, badge) ---- */
 .sb-z80 { background:#fbf4ec !important; color:#1a1214 !important; }
-.wr-streak.wr-w, .skw, .sk-win .sk-num, .sk-win .sk-zone { color:#3dd69c !important; }
-.wr-streak.wr-l, .skl, .sk-loss .sk-num, .sk-loss .sk-zone { color:#f05454 !important; }
-.sk-win { border-color:#3dd69c !important; box-shadow:0 0 16px rgba(61,214,156,0.16) !important; }
-.sk-loss { border-color:#f05454 !important; box-shadow:0 0 16px rgba(240,84,84,0.16) !important; }
-.sk-chips i.w, .sc-chips i.w { background:rgba(61,214,156,0.22) !important; color:#3dd69c !important; }
-.snd-toggle { margin-left:auto; padding:9px 16px; border-radius:999px; border:1.5px solid #f05454; background:rgba(240,84,84,0.14); color:#ffd9df;
+.wr-streak.wr-w, .skw, .sk-win .sk-num, .sk-win .sk-zone { color:#1ff28a !important; }
+.wr-streak.wr-l, .skl, .sk-loss .sk-num, .sk-loss .sk-zone { color:#ff3b4f !important; }
+.sk-win { border-color:#1ff28a !important; box-shadow:0 0 16px rgba(31,242,138,0.16) !important; }
+.sk-loss { border-color:#ff3b4f !important; box-shadow:0 0 16px rgba(255,59,79,0.16) !important; }
+.sk-chips i.w, .sc-chips i.w { background:rgba(31,242,138,0.22) !important; color:#1ff28a !important; }
+.snd-toggle { margin-left:auto; padding:9px 16px; border-radius:999px; border:1.5px solid #ff3b4f; background:rgba(255,59,79,0.14); color:#ffd9df;
   font:800 14px 'Nunito', 'Inter', sans-serif; cursor:pointer; white-space:nowrap; min-height:40px; -webkit-tap-highlight-color:transparent; }
-.snd-toggle.on { border-color:#3dd69c; background:rgba(61,214,156,0.16); color:#c9f7e6; }
+.snd-toggle.on { border-color:#1ff28a; background:rgba(31,242,138,0.16); color:#c9f7e6; }
 .snd-toggle + .wr-badge { margin-left:8px; }
 .sb-conf b, .sb-klock b { font-size:1.08em; }
 .tgt-hist { margin:10px 0 4px; padding:10px 12px; border-radius:12px; background:rgba(251,244,236,0.05); border:1px solid #4a3c43; font-size:13px; }
@@ -6023,7 +6023,7 @@ body { background:#15110f !important; }
 .radar-box { margin:8px 0; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid #4a3c43; }
 .rd-h { font-weight:800; letter-spacing:1px; margin-bottom:6px; }
 .rd-bar { display:flex; height:10px; border-radius:6px; overflow:hidden; background:#352b30; margin:4px 0; }
-.rd-bar i.up { background:#3dd69c; } .rd-bar i.down { background:#f05454; }
+.rd-bar i.up { background:#1ff28a; } .rd-bar i.down { background:#ff3b4f; }
 .rd-tot { font-size:13px; margin-bottom:4px; } .rd-row { font-size:13px; padding:2px 0; } .rd-fake { margin-top:4px; }
 .rd-tab summary { cursor:pointer; font-size:13px; margin-top:6px; } .radar-admin { margin:8px 0; font-size:13px; }
 .radar-admin code { word-break:break-all; } .radar-admin ul { margin:6px 0; padding-left:18px; }
@@ -6051,7 +6051,7 @@ body { background:#15110f !important; }
 .bt100-t { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
 .bt100-t th { text-align:left; font-weight:700; color:#bcaaa1; padding:3px 6px; border-bottom:1px solid #4a3c43; }
 .bt100-t td { padding:4px 6px; }
-.bt100-t tr.bt100-pick td { background:rgba(61,214,156,0.10); }
+.bt100-t tr.bt100-pick td { background:rgba(31,242,138,0.10); }
 .bt100-t tr.bt100-any td { font-size:12px; opacity:0.8; }
 .bt100 .hint { margin-top:6px; }
 #flip-watch { position:fixed; top:0; left:0; right:0; z-index:100003; display:flex; flex-direction:column; align-items:center; gap:6px;
@@ -6077,10 +6077,10 @@ body.has-flip-watch { padding-top:0; }
   .snd-toggle { position:fixed; right:max(12px, env(safe-area-inset-right, 0px)); bottom:calc(12px + env(safe-area-inset-bottom, 0px));
     z-index:9500; box-shadow:0 6px 20px rgba(0,0,0,0.5); font-size:15px; padding:11px 18px; }
 }
-.sk-chips i.l, .sc-chips i.l { background:rgba(240,84,84,0.22) !important; color:#f05454 !important; }
+.sk-chips i.l, .sc-chips i.l { background:rgba(255,59,79,0.22) !important; color:#ff3b4f !important; }
 /* 2026-10-22 (user): circle color = how the round ENDED (green up / red down), letter = W or L on BRAIN's call */
-.sk-chips i.cu, .sc-chips i.cu { background:rgba(61,214,156,0.24) !important; color:#3dd69c !important; box-shadow:inset 0 0 0 1px rgba(61,214,156,0.55); border-radius:50% !important; }
-.sk-chips i.cd, .sc-chips i.cd { background:rgba(240,84,84,0.24) !important; color:#f05454 !important; box-shadow:inset 0 0 0 1px rgba(240,84,84,0.55); border-radius:50% !important; }
+.sk-chips i.cu, .sc-chips i.cu { background:rgba(31,242,138,0.24) !important; color:#1ff28a !important; box-shadow:inset 0 0 0 1px rgba(31,242,138,0.55); border-radius:50% !important; }
+.sk-chips i.cd, .sc-chips i.cd { background:rgba(255,59,79,0.24) !important; color:#ff3b4f !important; box-shadow:inset 0 0 0 1px rgba(255,59,79,0.55); border-radius:50% !important; }
 .sc-chips.wr-chip { margin-top:0; flex:0 0 auto; }
 /* 2026-10-22 (user): a correct call's letter is white; a wrong call's letter keeps the circle's color */
 .sk-chips i.ok.cu, .sc-chips i.ok.cu, .sk-chips i.ok.cd, .sc-chips i.ok.cd, .sk-chips i.ok.w, .sc-chips i.ok.w { color:#ffffff !important; }
@@ -6110,16 +6110,17 @@ body.has-flip-watch { padding-top:0; }
 }
 /* 2026-10-22 (user): whale & liquidity alerts - neon green buys / neon red sells, white text, big bold dollar value */
 .fa-item { padding:7px 10px !important; border-radius:10px !important; color:#ffffff; font-size:13px; margin-bottom:5px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
-.fa-item.fa-up { background:linear-gradient(90deg, rgba(61,214,156,0.20), rgba(61,214,156,0.04)) !important; border-left:5px solid #3dd69c !important;
-  box-shadow:0 0 14px rgba(61,214,156,0.18), inset 0 0 0 1px rgba(61,214,156,0.35); }
-.fa-item.fa-down { background:linear-gradient(90deg, rgba(240,84,84,0.22), rgba(240,84,84,0.04)) !important; border-left:5px solid #f05454 !important;
-  box-shadow:0 0 14px rgba(240,84,84,0.20), inset 0 0 0 1px rgba(240,84,84,0.38); }
+.fa-item.fa-up { background:linear-gradient(90deg, rgba(31,242,138,0.20), rgba(31,242,138,0.04)) !important; border-left:5px solid #1ff28a !important;
+  box-shadow:0 0 14px rgba(31,242,138,0.18), inset 0 0 0 1px rgba(31,242,138,0.35); }
+.fa-item.fa-down { background:linear-gradient(90deg, rgba(255,59,79,0.22), rgba(255,59,79,0.04)) !important; border-left:5px solid #ff3b4f !important;
+  box-shadow:0 0 14px rgba(255,59,79,0.20), inset 0 0 0 1px rgba(255,59,79,0.38); }
 .fa-item .fa-head { color:#ffffff !important; font-weight:900; letter-spacing:.3px; }
-.fa-item.fa-up .fa-arrow { color:#3dd69c; text-shadow:0 0 8px rgba(61,214,156,0.8); }
-.fa-item.fa-down .fa-arrow { color:#f05454; text-shadow:0 0 8px rgba(240,84,84,0.8); }
-.fa-usd { font-size:20px; font-weight:900; color:#ffffff; line-height:1; letter-spacing:.5px; }
-.fa-item.fa-up .fa-usd { text-shadow:0 0 10px rgba(61,214,156,0.85), 0 0 2px #3dd69c; }
-.fa-item.fa-down .fa-usd { text-shadow:0 0 10px rgba(240,84,84,0.9), 0 0 2px #f05454; }
+.fa-item.fa-up .fa-arrow { color:#1ff28a; text-shadow:0 0 8px rgba(31,242,138,0.8); }
+.fa-item.fa-down .fa-arrow { color:#ff3b4f; text-shadow:0 0 8px rgba(255,59,79,0.8); }
+.fa-usd { font-size:21px; font-weight:900; line-height:1; letter-spacing:.5px; padding:1px 7px; border-radius:7px; background:rgba(12,8,10,0.55); }
+.fa-item.fa-up .fa-usd { color:#1ff28a; text-shadow:0 0 10px rgba(31,242,138,0.9), 0 0 18px rgba(31,242,138,0.45); }
+.fa-item.fa-down .fa-usd { color:#ff3b4f; text-shadow:0 0 10px rgba(255,59,79,0.95), 0 0 18px rgba(255,59,79,0.5); }
+.fa-item, .fa-item .fa-where, .fa-item .fa-age { color:#ffffff !important; }
 .fa-item .fa-where { color:#efe6dc; font-size:12px; }
 .fa-item .fa-age { margin-left:auto; }
 /* 2026-10-22 (user): RSI + line crosses in one square; streak tile in the top row beside "time until call" */
@@ -6127,6 +6128,25 @@ body.has-flip-watch { padding-top:0; }
 @media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr !important; } }
 body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)) !important; }
 .rsi-lx { display:flex !important; flex-direction:column; justify-content:center; gap:8px; padding:10px 8px !important; }
+/* 2026-10-22 (user): market trend lives in the RSI + line-cross tile; all 4 tiles in one row on desktop */
+.lx-mkt { border-top:1px solid rgba(255,255,255,0.10); padding-top:8px; text-align:center; }
+.lx-mkt-lbl { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:13px; letter-spacing:2px; color:var(--br-tan, #dcbb91); }
+.lx-mkt .mkt { background:none !important; border:0 !important; padding:0 !important; margin:3px 0 0 !important; min-width:0 !important; box-shadow:none !important; }
+.lx-mkt .mkt-btns { display:flex; gap:3px; justify-content:center; flex-wrap:wrap; }
+.lx-mkt .mkt-btns button { font-size:10px !important; padding:3px 5px !important; min-width:0 !important; flex:1 1 0; }
+.lx-mkt .mkt-pane { font-size:11px; margin-top:4px; line-height:1.3; }
+.head-right:empty { min-width:0; }
+.calls-row, body[data-view="both"] .calls-row { grid-template-columns:repeat(4, minmax(0, 1fr)) !important; gap:10px !important; }
+@media (max-width:1100px) { body[data-view="both"] .calls-row { grid-template-columns:repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width:760px) { .calls-row, body[data-view="both"] .calls-row { grid-template-columns:repeat(2, minmax(0, 1fr)) !important; } }
+body[data-view="both"] .calls-row .stage-box { padding:10px 9px 9px !important; }
+body[data-view="both"] .calls-row .sb-dir { font-size:26px !important; }
+body[data-view="both"] .calls-row .sb-line { font-size:12px !important; }
+body[data-view="both"] .calls-row .sb-sig, body[data-view="both"] .calls-row .sb-rec { font-size:11px !important; }
+body[data-view="both"] .calls-row .sb-title, body[data-view="both"] .rs-title { font-size:11px !important; }
+body[data-view="both"] .stage-cd-t { font-size:24px; }
+.coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
+.asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
   min-height:0 !important; text-align:center; }
 .rsi-lx > .lx-box, .rsi-lx > .rs-tile.lx-box.lx-clean, .rsi-lx > .rs-tile.lx-box.lx-some, .rsi-lx > .rs-tile.lx-box.lx-chop {
@@ -6152,15 +6172,15 @@ body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minma
 .lw-chip i { font-style:normal; color:#f2c46b; font-weight:800; letter-spacing:.5px; }
 .lw-chip b { color:#fbf0d9; font-size:13px; }
 /* 2026-10-22 (user): green bullish / red bearish / grey neutral / blue oversold / red-pink gradient overbought */
-.lw-chip.c-up b, .lw-chip.c-up span { color:#3dd69c; } .lw-chip.c-up { border-color:rgba(61,214,156,0.45); }
-.lw-chip.c-dn b, .lw-chip.c-dn span { color:#f05454; } .lw-chip.c-dn { border-color:rgba(240,84,84,0.45); }
+.lw-chip.c-up b, .lw-chip.c-up span { color:#1ff28a; } .lw-chip.c-up { border-color:rgba(31,242,138,0.45); }
+.lw-chip.c-dn b, .lw-chip.c-dn span { color:#ff3b4f; } .lw-chip.c-dn { border-color:rgba(255,59,79,0.45); }
 .lw-chip.c-nt b, .lw-chip.c-nt span { color:#b9b3b0; } .lw-chip.c-nt { border-color:rgba(185,179,176,0.35); }
 .lw-chip.c-os b, .lw-chip.c-os span { color:#00e5ff; text-shadow:0 0 8px rgba(0,229,255,0.45); } .lw-chip.c-os { border-color:rgba(0,229,255,0.5); }
 .lw-chip.c-ob b, .lw-chip.c-ob span, .rz-ob .rsi-num, .rz-ob .rsi-zone {
   background:linear-gradient(90deg, #ff2a3d 0%, #ff4f7e 50%, #ff5fd0 100%); -webkit-background-clip:text; background-clip:text; color:transparent !important; }
 .lw-chip.c-ob { border-color:rgba(255,77,140,0.55); box-shadow:0 0 10px rgba(255,77,140,0.25); }
 .rz-ob { border-color:#ff4d8c !important; }
-.rz-bull .rsi-num, .rz-bull .rsi-zone { color:#3dd69c !important; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#f05454 !important; }
+.rz-bull .rsi-num, .rz-bull .rsi-zone { color:#1ff28a !important; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#ff3b4f !important; }
 .rz-norm .rsi-num, .rz-norm .rsi-zone { color:#b9b3b0 !important; }
 .lw-rec-g { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:3px 0 6px; }
 .lw-rec-h { font-size:11px; font-weight:800; color:#e6ddd6; min-width:86px; }
@@ -6189,9 +6209,9 @@ html, body { overflow-x:hidden; }
 .rv-near { border-color:rgba(231,184,130,0.45); color:#e7b882; }
 .rv-far { color:#bcaaa1; }
 .sc-rev .sc-title { color:#e7b882; }
-.sc-legend .u { color:#3dd69c; font-weight:800; } .sc-legend .d { color:#f05454; font-weight:800; }
-.sc-streak.win { color:#3dd69c !important; background:rgba(61,214,156,0.12) !important; border-color:#3dd69c !important; }
-.sc-streak.loss { color:#f05454 !important; background:rgba(240,84,84,0.12) !important; border-color:#f05454 !important; }
+.sc-legend .u { color:#1ff28a; font-weight:800; } .sc-legend .d { color:#ff3b4f; font-weight:800; }
+.sc-streak.win { color:#1ff28a !important; background:rgba(31,242,138,0.12) !important; border-color:#1ff28a !important; }
+.sc-streak.loss { color:#ff3b4f !important; background:rgba(255,59,79,0.12) !important; border-color:#ff3b4f !important; }
 </style>
 <script>
 let audioCtx = null;
@@ -8294,7 +8314,7 @@ function lwCreate(a) {
   const o = {a, box, chart, corner: box.querySelector('.lw-corner'), pats: box.querySelector('.lw-pats'), bars: [], line: null, lineV: null,
     tf: (() => { try { return localStorage.getItem('lwTf_' + a) || '1m'; } catch (e) { return '1m'; } })(), busy: false,
     ha: (() => { try { return localStorage.getItem('lwHA') !== '0'; } catch (e) { return true; } })()};
-  o.candle = chart.addCandlestickSeries({upColor: '#3dd69c', downColor: '#f05454', borderVisible: false, wickUpColor: 'rgba(61,214,156,0.85)', wickDownColor: 'rgba(240,84,84,0.85)'});
+  o.candle = chart.addCandlestickSeries({upColor: '#1ff28a', downColor: '#ff3b4f', borderVisible: false, wickUpColor: 'rgba(31,242,138,0.85)', wickDownColor: 'rgba(255,59,79,0.85)'});
   const ln = c => chart.addLineSeries({color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
   o.e1 = ln('#fbf0d9'); o.e2 = ln('#f2c46b'); o.e3 = ln('#c8963e');      // cream white / yellow / deep gold
   box.querySelectorAll('.lw-tabs button[data-tf]').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
@@ -8346,7 +8366,7 @@ async function lwPatterns(o) {
       + (x.means ? '<div class="hint">' + esc(x.means) + (x.watch ? ' ' + esc(x.watch) : '') + '</div>' : '') + '</details>';
   };
   (j.items || []).forEach(x => marks.push({time: Math.floor(x.ts / g) * g, position: x.bias === 'bullish' ? 'belowBar' : 'aboveBar',
-    color: x.bias === 'bullish' ? '#3dd69c' : '#f05454', shape: x.bias === 'bullish' ? 'arrowUp' : 'arrowDown', text: x.name.split(' (')[0].slice(0, 22)}));
+    color: x.bias === 'bullish' ? '#1ff28a' : '#ff3b4f', shape: x.bias === 'bullish' ? 'arrowUp' : 'arrowDown', text: x.name.split(' (')[0].slice(0, 22)}));
   try { o.candle.setMarkers(marks.filter(m => o.bars.length && m.time >= o.bars[0].time).sort((p, q) => p.time - q.time)); } catch (e) {}
   const items = (j.items || []).map(x => row(x, false)).join(''), worked = (j.worked || []).map(x => row(x, true)).join('');
   // formed in the last hour, grouped 5 / 10 / 15 / 30 / 60 minutes, every short timeframe
@@ -9821,15 +9841,15 @@ def _round_svg(rec, w=300, h=96, live=False):
     cid = f'c{abs(hash((rec.get("ticker"), live))) % 10 ** 8}'
     out = [f'<defs><clipPath id="{cid}a"><rect x="0" y="0" width="{w}" height="{h / 2}"/></clipPath>'
            f'<clipPath id="{cid}b"><rect x="0" y="{h / 2}" width="{w}" height="{h / 2}"/></clipPath></defs>',
-           f'<polygon points="{area}" fill="#3dd69c" fill-opacity="0.22" clip-path="url(#{cid}a)"/>',
-           f'<polygon points="{area}" fill="#f05454" fill-opacity="0.22" clip-path="url(#{cid}b)"/>']
+           f'<polygon points="{area}" fill="#1ff28a" fill-opacity="0.22" clip-path="url(#{cid}a)"/>',
+           f'<polygon points="{area}" fill="#ff3b4f" fill-opacity="0.22" clip-path="url(#{cid}b)"/>']
     for e, lbl in ((240, "4:00"), (480, "8:00")):
         out.append(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#7f8fff" stroke-dasharray="2 3" stroke-width="1" opacity="0.7"/>'
                    f'<text x="{X(e) + 2:.1f}" y="10" fill="#f6d9e2" font-size="9">{lbl}</text>')
     out.append(f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#fbf4ec" stroke-width="1" opacity="0.55"/>')
     out.append(f'<polyline points="{pts}" fill="none" stroke="#fbf4ec" stroke-width="1.6"/>')
     for e, sd in rec.get("events") or []:
-        out.append(f'<circle cx="{X(e):.1f}" cy="{h / 2}" r="3.2" fill="{"#3dd69c" if sd > 0 else "#f05454"}" stroke="#211b1e" stroke-width="1"/>')
+        out.append(f'<circle cx="{X(e):.1f}" cy="{h / 2}" r="3.2" fill="{"#1ff28a" if sd > 0 else "#ff3b4f"}" stroke="#211b1e" stroke-width="1"/>')
     return f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" preserveAspectRatio="none">{"".join(out)}</svg>'
 
 
@@ -9849,7 +9869,7 @@ def _kalshi_spark(pts, w=300, h=54):
     Y = lambda v: h - v * h
     line = " ".join(f"{X(e):.1f},{Y(v):.1f}" for e, v in pts)
     last = pts[-1][1]
-    col = "#3dd69c" if last >= 0.5 else "#f05454"
+    col = "#1ff28a" if last >= 0.5 else "#ff3b4f"
     marks = "".join(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#7f8fff" stroke-dasharray="2 3" opacity="0.6"/>'
                     for e in (240, 480))
     return (f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" preserveAspectRatio="none">{marks}'
@@ -10469,6 +10489,20 @@ def _mmss_words(sec):
     return (f"{m_} min {s_} sec" if m_ else f"{s_} sec")
 
 
+# 2026-10-22 (user): small vector coin badges beside the coin name (original BRAIN-style art, not exchange/brand logos)
+COIN_BADGE = {
+    "BTC": ('<svg class="coin-badge" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="cbB" x1="0" y1="0" x2="1" y2="1">'
+            '<stop offset="0" stop-color="#ffd27a"/><stop offset="1" stop-color="#e08a1e"/></linearGradient></defs>'
+            '<circle cx="20" cy="20" r="18" fill="url(#cbB)"/><circle cx="20" cy="20" r="14.5" fill="none" stroke="#fff3d6" stroke-opacity=".55" stroke-width="1.2"/>'
+            '<text x="20" y="27.5" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="21" fill="#2a1d10">&#8383;</text></svg>'),
+    "XRP": ('<svg class="coin-badge" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="cbX" x1="0" y1="0" x2="1" y2="1">'
+            '<stop offset="0" stop-color="#e9eef5"/><stop offset="1" stop-color="#8d9bb0"/></linearGradient></defs>'
+            '<circle cx="20" cy="20" r="18" fill="url(#cbX)"/><circle cx="20" cy="20" r="14.5" fill="none" stroke="#ffffff" stroke-opacity=".6" stroke-width="1.2"/>'
+            '<path d="M12.5 12.5 L27.5 27.5 M27.5 12.5 L12.5 27.5" stroke="#1d2430" stroke-width="4.2" stroke-linecap="round"/>'
+            '<circle cx="20" cy="20" r="2.6" fill="#e9eef5"/></svg>'),
+}
+
+
 @_never_break
 def build_time_until_call(name, d):
     """Top-row countdown to the next call: 'EARLY CALL coming in 2 min 31 sec', then 'SEALED CALL coming in ...';
@@ -10554,7 +10588,7 @@ def build_cross_box(name, d):
 def build_round_strip(name, d):
     # 2026-10-22 (user): RSI + line crosses share one square; the streak tile moved up next to "time until call"
     return (f'<div class="round-strip calls-row">{build_stage_box(name, d, "early")}{build_stage_box(name, d, "sealed")}'
-            f'{build_flip_radar(name, d)}<div class="rs-tile rsi-lx">{build_rsi_box(name, d)}{build_cross_box(name, d)}</div></div>')
+            f'{build_flip_radar(name, d)}<div class="rs-tile rsi-lx">{build_rsi_box(name, d)}{build_cross_box(name, d)}<div class="lx-mkt"><div class="lx-mkt-lbl">MARKET TREND</div>{build_market_box(name)}</div></div></div>')
 
 
 def _streak_stats(results):
@@ -10865,7 +10899,7 @@ def _cvd_svg(series, coin):
     pts = [((t - t0) / tspan * w, h - (c - lo) / span * h) for t, c, _q in series]
     zero_y = h - (0 - lo) / span * h
     last = vals[-1]
-    col = "#3dd69c" if last >= 0 else "#f05454"
+    col = "#1ff28a" if last >= 0 else "#ff3b4f"
     path = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
     area = f"0,{zero_y:.1f} " + path + f" {pts[-1][0]:.1f},{zero_y:.1f}"
     return (f'<svg class="cvd-svg" viewBox="0 0 {w} {h}" preserveAspectRatio="none" width="100%" height="{h}">'
@@ -11695,7 +11729,7 @@ def render_html():
         _left = max(0, int(d["seconds_left"]))
         _frac = min(1.0, _left / 900.0)
         _cl = "clock-hot" if _left <= 30 else ("clock-warn" if _left <= 120 else "")
-        _stroke = "#f05454" if _left <= 30 else ("#d29922" if _left <= 120 else "#e9a5bb")
+        _stroke = "#ff3b4f" if _left <= 30 else ("#d29922" if _left <= 120 else "#e9a5bb")
         _clock_to = f' data-to="{d["close_epoch"]:.0f}"' if d.get("close_epoch") else ""
         clock_html = (f'<div class="clock {_cl}" title="{d.get("ticker", "")}">'
                       f'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#4a3c43" stroke-width="3"/>'
@@ -11789,7 +11823,7 @@ def render_html():
             state_css = "down" if armed else "flat"
             state_label = "REAL MONEY: ARMED" if armed else "Real money: off (paper only)"
             pnl_css = "up" if pnl_today >= 0 else "down"
-            err_html = f'<div class="hint" style="color:#f05454;">{last_err}</div>' if last_err else ""
+            err_html = f'<div class="hint" style="color:#ff3b4f;">{last_err}</div>' if last_err else ""
             size_label = (f"${size_dollars:.0f}/trade" if size_mode == "dollars"
                           else f"{size_percent:.1f}% of balance/trade")
             # rolling 1h/24h up-down %, off the REAL settled trades log for
@@ -12058,7 +12092,7 @@ def render_html():
         <div class="card" data-asset="{name}">
           {experimental_html}
           <div class="head-row">
-            <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{boom_html}{win_alert_html}{lock_alert_html}<div class="round-left">{clock_html}</div></div>
+            <div class="asset-name"><span class="asset-label asset-{name}">{COIN_BADGE.get(name, "")}{name}</span> {flip_badge_html}{boom_html}{win_alert_html}{lock_alert_html}<div class="round-left">{clock_html}</div></div>
             <div class="live-price-inline">
               <div class="lbl">Live price</div>
               <div class="big {spot_vs_target_css}">{fmt_price(d["spot_price"], decimals)}</div>
@@ -12069,9 +12103,7 @@ def render_html():
               <div class="lbl" style="margin-top:2px;">{(f"{len(d.get('live_venues') or [])} live price sources" + (" &middot; next round loading..." if d.get("round_switching") else "")) if d.get("live_venues") else ("next round loading..." if d.get("round_switching") else "connecting...")}</div>
               {_kalshi_line(d)}
             </div>
-            <div class="head-right">
-              <div class="mkt-tile"><div class="tuc-lbl">MARKET TREND</div>{build_market_box(name)}</div>
-            </div>
+            <div class="head-right"></div>
           </div>
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}

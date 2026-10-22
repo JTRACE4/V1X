@@ -13,7 +13,7 @@ try:
 except ImportError:
     np = None
 
-COL = {"bullish": "#3dd69c", "bearish": "#f05454", "neutral": "#fbf4ec"}
+COL = {"bullish": "#1ff28a", "bearish": "#ff3b4f", "neutral": "#fbf4ec"}
 TWO = ("engulfing", "harami", "piercing line", "dark cloud", "tweezer", "inside bar", "outside bar", "window")
 THREE = ("morning", "evening", "three white", "three black", "three inside", "three outside")
 FIVE = ("three methods",)
@@ -331,7 +331,7 @@ def render_window_svg(cs, labels, title="", width=1100, height=640, max_labels=7
             lab(x0 + 3, y(d["hi"]) + fs, d["text"], "start", d["col"], prio=4)
     o.append('</g>')
     for i, (ts, op, h, l, c) in enumerate(cs):
-        col = "#3dd69c" if c >= op else "#f05454"
+        col = "#1ff28a" if c >= op else "#ff3b4f"
         forming = i == n - 1
         o.append(f'<line x1="{xi(i):.1f}" y1="{y(h):.1f}" x2="{xi(i):.1f}" y2="{y(l):.1f}" stroke="{col}" stroke-width="{1 * F:.1f}"/>')
         top, bot = y(max(op, c)), y(min(op, c))
