@@ -4099,6 +4099,8 @@ def _reconcile_pending_grades():
                             for _sk, _m, _lab, _mk in STAGE_CALLS:
                                 if h.get(f"{_sk}_call"):
                                     h[f"{_sk}_correct"] = h[f"{_sk}_call"] == real_result
+                            if h.get("mini_call"):
+                                h["mini_correct"] = h["mini_call"] == real_result
                             changed = True
                         break
                 # settle a real-money live position that was still open because
@@ -4430,6 +4432,10 @@ def poll_loop():
                         except Exception as _re:
                             print(f"[rounds] {_re!r}")
                         _sc_prev = prev_lock.get("stage_calls") or {}
+                        _mcp = _sc_prev.get("mini") or {}
+                        hist[-1]["mini_call"] = _mcp.get("call")
+                        hist[-1]["mini_pct"] = _mcp.get("pct")
+                        hist[-1]["mini_correct"] = (_mcp["call"] == actual_side) if _mcp.get("call") else None
                         for _sk, _m, _lab, _mk in STAGE_CALLS:
                             _c = _sc_prev.get(_sk) or {}
                             hist[-1][f"{_sk}_call"] = _c.get("call")
@@ -4818,6 +4824,16 @@ def poll_loop():
                         "ts": time.time(),
                     }
                     stage_just = _sk
+                    if _sk == "sealed":
+                        # 2026-10-22 (user): the MINI CALL gets its own scoreboard spot - lock it at the same 8:00 mark
+                        try:
+                            _mc = mini_call_now(asset["name"], target, live_price, elapsed_seconds, ticker, price_decimals)
+                            if _mc:
+                                stage_calls["mini"] = {"call": _mc["call"], "pct": _mc["pct"], "n": _mc["n"], "ts": time.time()}
+                                print(f"[{asset['name']}] MINI CALL (8:00): {'UP' if _mc['call'] == 'YES' else 'DOWN'} {_mc['pct']:.0%} "
+                                      f"from the last {_mc['n']} rounds near the target {ticker}")
+                        except Exception as _mce:
+                            print(f"[mini call] {_mce!r}")
                     print(f"[{asset['name']}] {_lab} ({_mk}): {(_call + ' ' + _tier) if _call else 'SKIPPED'} at {int(elapsed_seconds) // 60}:"
                           f"{int(elapsed_seconds) % 60:02d} - {stage_p_yes:.1%} UP, {_crosses} crosses {('- ' + _why) if _why else ''} {ticker}")
                     _save_locked_state()
@@ -11103,7 +11119,8 @@ def build_scoreboard(name, d):
     now_et = dt.datetime.now(dt.timezone.utc).astimezone(et)
     day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
     cols = []
-    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"))
+    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"),
+                               ("mini", "MINI CALL &middot; 8:00", "mini_correct"))
                               + ((("bot", "BOT CALL (auto-buy)", "correct"),) if SHOW_BOT_RECORD else ())):
         rows = [h for h in hist if h.get(field) is not None and not (key != "bot" and h.get(f"{key}_reversal"))]
         res = [bool(h[field]) for h in rows]
@@ -11114,8 +11131,17 @@ def build_scoreboard(name, d):
         else:
             fk = next((_window_close_utc(h.get("ticker")) for h in rows if _window_close_utc(h.get("ticker"))), None)
             first_k = fk.astimezone(et).strftime("%b %d") if fk else "-"
+        _mbt = ""
+        if key == "mini":
+            # the method's 30-day history (BTC), so the column isn't empty while the live record builds
+            _mb = mini_backtest() if name == "BTC" else None
+            if _mb and _mb.get("n"):
+                _mbt = (f'<div class="sc-stats hint">30-day test of this method (BTC): <b>{_mb["wins"] / _mb["n"]:.0%}</b> right '
+                        f'over {_mb["n"]:,} rounds</div>')
         if not n:
-            cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">No results yet.</div></div>')
+            cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">'
+                        + ("Starts tracking now &ndash; the mini call locks at 8:00 each round." if key == "mini" else "No results yet.")
+                        + f'</div>{_mbt}</div>')
             continue
         ct, cn, bw, bl = _streak_stats(res)
         streak = (f'<span class="sc-streak {"win" if ct else "loss"}">{cn} {("WIN" if cn == 1 else "WINS") if ct else ("LOSS" if cn == 1 else "LOSSES")} IN A ROW</span>')
@@ -11133,7 +11159,7 @@ def build_scoreboard(name, d):
             f'<br><span class="hint">{n} graded round{"s" if n != 1 else ""} since {first_k}</span></span></div>'
             f'<div class="sc-cur">{streak}</div>'
             f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; today: <b>{td}</b>'
-            + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div></div>')
+            + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div>{_mbt}</div>')
     # 2026-10-22 (user): reversals in their own column so the main win rate stays clean
     # 2026-10-22 (d, user: "reset the win to lose rate"): the reversal record restarts with the flip-history system
     def _after_reset(h):
@@ -12842,6 +12868,7 @@ TARGET_RECENT_PCT = 0.01       # 2026-10-22 (user): exact target first, then the
 TARGET_LOOKBACK_S = 30 * 86400
 _tgt_cache = {}
 _TGT_BODY = {}            # inner html of the target history (shown inside BEEN HERE BEFORE)
+_TGT_MINI_CALL = {}       # latest mini call per coin {ticker, call, pct, n} - locked into the round at 8:00
 _TGT_MINI = {}            # latest mini call html per coin (also shown in the price-vs-line panel)
 
 
@@ -12888,6 +12915,62 @@ def _target_touches(name, line):
         if hit[2]:
             break                                         # exact touch found - no need to look further back
     return out
+
+
+def mini_call_now(name, line, spot, elapsed, ticker, dec):
+    """The mini call for this round right now (computes the BEEN HERE BEFORE panel if needed)."""
+    if not line:
+        return None
+    target_history_html(name, {"target_price": line, "spot_price": spot, "elapsed_seconds": elapsed, "ticker": ticker,
+                               "price_decimals": dec})
+    mc = _TGT_MINI_CALL.get(name)
+    return mc if mc and mc.get("ticker") == ticker else None
+
+
+_mini_bt = {"ts": 0, "res": None, "busy": False}
+
+
+def mini_backtest():
+    """How the mini-call method would have done on the last 30 days of BTC rounds - each round only sees rounds that
+    had already settled before it opened (no peeking). Cached 6h, computed in the background."""
+    if _mini_bt["busy"] or (time.time() - _mini_bt["ts"] < 6 * 3600 and _mini_bt["res"] is not None):
+        return _mini_bt["res"]
+
+    def _run():
+        try:
+            mk = sorted((m for m in _bt.settled_markets() if m.get("strike") and m.get("result") in ("yes", "no")),
+                        key=lambda m: m["close"])
+            wins = n = 0
+            for i, m in enumerate(mk):
+                line = m["strike"]
+                opn = m.get("open") or (m["close"] - 900)
+                prev = [x for x in mk[:i] if x["close"] <= opn and opn - x["close"] <= TARGET_LOOKBACK_S]
+                if len(prev) < MINI_CALL_N:
+                    continue
+                near = sorted((x for x in prev if abs(x["strike"] - line) / line <= TARGET_RECENT_PCT), key=lambda x: -x["close"])[:MINI_CALL_N]
+                if len(near) < MINI_CALL_N:
+                    used = {id(x) for x in near}
+                    near += sorted((x for x in prev if id(x) not in used), key=lambda x: (abs(x["strike"] - line), -x["close"]))[:MINI_CALL_N - len(near)]
+                    near.sort(key=lambda x: -x["close"])
+                ups = sum(1 for x in near if x["result"] == "yes")
+                if ups * 2 == len(near):
+                    u5 = sum(1 for x in near[:5] if x["result"] == "yes")
+                    up = u5 * 2 > len(near[:5])
+                else:
+                    up = ups * 2 > len(near)
+                n += 1
+                wins += int(up == (m["result"] == "yes"))
+                if i % 200 == 0:
+                    time.sleep(0.01)
+            _mini_bt["res"] = {"n": n, "wins": wins}
+        except Exception as _e:
+            print(f"[mini backtest] {_e!r}")
+        finally:
+            _mini_bt["ts"], _mini_bt["busy"] = time.time(), False
+
+    _mini_bt["busy"] = True
+    threading.Thread(target=_run, daemon=True, name="mini-backtest").start()
+    return _mini_bt["res"]
 
 
 def target_history_html(name, d):
@@ -12954,6 +13037,7 @@ def target_history_html(name, d):
                    f"{max(u5, len(last5) - u5)} of {len(last5)} ended {'UP' if side_up else 'DOWN'}")
         cls = "up" if side_up else "down"
         word = "UP" if side_up else "DOWN"
+        _TGT_MINI_CALL[name] = {"ticker": cur, "call": "YES" if side_up else "NO", "pct": round(pct, 3), "n": len(near)}
         mini = (f'<div class="mini-call mc-{cls}"><span class="mc-lbl">MINI CALL</span><b class="mc-dir">{word}</b>'
                 f'<span class="mc-pct">{pct * 100:.0f}%</span><span class="mc-sub">{sub}</span></div>')
         # same spot: of those near rounds, the ones where price was on the SAME side of the line at this same minute
