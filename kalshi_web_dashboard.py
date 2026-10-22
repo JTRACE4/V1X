@@ -6084,6 +6084,27 @@ body.has-flip-watch { padding-top:0; }
 .sc-legend { font-size:10px; margin-top:4px; }
 /* 2026-10-22: live chart (same as the free page) */
 .lw-win { display:block; width:100%; margin:14px 0 6px; }
+/* 2026-10-22 (user): market-trend timeframes get their own tile in the top row */
+.mkt-tile { flex:0 1 270px; min-width:230px; margin-left:10px; text-align:center; padding:8px 12px; border-radius:14px;
+  border:1px solid rgba(255,255,255,0.10); background:rgba(48,39,43,0.9); align-self:stretch; display:flex; flex-direction:column; justify-content:center; }
+.mkt-tile .mkt { background:none; border:0; padding:0; margin:4px 0 0; min-width:0; }
+.mkt-tile .mkt-btns button { font-size:12px; padding:5px 0; }
+.mkt-tile .mkt-pane { font-size:13px; margin-top:7px; } .mkt-tile .mkt-help { font-size:10px; margin-top:4px; }
+@media (max-width:760px) { .mkt-tile { flex:1 1 100%; margin:0; } }
+/* 2026-10-22 (user): whale & liquidity alerts - neon green buys / neon red sells, white text, big bold dollar value */
+.fa-item { padding:7px 10px !important; border-radius:10px !important; color:#ffffff; font-size:13px; margin-bottom:5px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.fa-item.fa-up { background:linear-gradient(90deg, rgba(57,255,140,0.20), rgba(57,255,140,0.04)) !important; border-left:5px solid #39ff8c !important;
+  box-shadow:0 0 14px rgba(57,255,140,0.18), inset 0 0 0 1px rgba(57,255,140,0.35); }
+.fa-item.fa-down { background:linear-gradient(90deg, rgba(255,49,85,0.22), rgba(255,49,85,0.04)) !important; border-left:5px solid #ff3155 !important;
+  box-shadow:0 0 14px rgba(255,49,85,0.20), inset 0 0 0 1px rgba(255,49,85,0.38); }
+.fa-item .fa-head { color:#ffffff !important; font-weight:900; letter-spacing:.3px; }
+.fa-item.fa-up .fa-arrow { color:#39ff8c; text-shadow:0 0 8px rgba(57,255,140,0.8); }
+.fa-item.fa-down .fa-arrow { color:#ff3155; text-shadow:0 0 8px rgba(255,49,85,0.8); }
+.fa-usd { font-size:20px; font-weight:900; color:#ffffff; line-height:1; letter-spacing:.5px; }
+.fa-item.fa-up .fa-usd { text-shadow:0 0 10px rgba(57,255,140,0.85), 0 0 2px #39ff8c; }
+.fa-item.fa-down .fa-usd { text-shadow:0 0 10px rgba(255,49,85,0.9), 0 0 2px #ff3155; }
+.fa-item .fa-where { color:#efe6dc; font-size:12px; }
+.fa-item .fa-age { margin-left:auto; }
 /* 2026-10-22 (user): RSI + line crosses in one square; streak tile in the top row beside "time until call" */
 .calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(180px,1.05fr) minmax(150px,0.8fr) !important; }
 @media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr !important; } }
@@ -9505,11 +9526,15 @@ def build_alert_box(name):
         arrow = "&#10005;" if void else "&#10227;" if a["kind"] == "moved" else ("&#9650;" if a["side"] == "buy" else ("&#9660;" if a["side"] == "sell" else "&#9679;"))
         fresh = " fa-fresh" if time.time() - a["ts"] < 20 else ""
         head, where = _alert_line(a, dec)
+        usd_big = _usd_short(a["usd"]) if a.get("usd") else ""
+        if usd_big and usd_big in head:
+            head = head.replace(" " + usd_big, "").replace(usd_big, "").rstrip(" :")
         items.append(
             f'<div class="fa-item fa-sev{a["sev"]} fa-{side_cls}{fresh}" title="{_html_attr(a["detail"])}" data-alert-id="{name}::{a["id"]}" data-kind="{a["kind"]}" '
             f'data-side="{a["side"] or ""}" data-sev="{a["sev"]}" data-sound="{1 if a.get("sound") else 0}" data-ts="{a["ts"]:.0f}" '
             f'data-name="{name}" data-title="{_html_attr(a["title"])}" data-usd="{a.get("usd") or 0:.0f}">'
-            f'<span class="fa-arrow {side_cls}">{arrow}</span> <b class="{side_cls}">{head}</b>'
+            f'<span class="fa-arrow {side_cls}">{arrow}</span> <b class="fa-head {side_cls}">{head}</b>'
+            + (f' <span class="fa-usd">{usd_big}</span>' if usd_big else "")
             + (f' <span class="fa-where">{where}</span>' if where else "")
             + f'<span class="fa-age hint">{_ago(a["ts"])}</span><div class="fa-detail">{a["detail"]}</div></div>')
     if not items:
@@ -11997,7 +12022,7 @@ def render_html():
         <div class="card" data-asset="{name}">
           {experimental_html}
           <div class="head-row">
-            <div class="asset-name">{build_market_box(name)}<span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{clock_html}{boom_html}{win_alert_html}{lock_alert_html}</div>
+            <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{clock_html}{boom_html}{win_alert_html}{lock_alert_html}</div>
             <div class="live-price-inline">
               <div class="lbl">Live price</div>
               <div class="big {spot_vs_target_css}">{fmt_price(d["spot_price"], decimals)}</div>
@@ -12009,6 +12034,7 @@ def render_html():
               {_kalshi_line(d)}
             </div>
             {build_time_until_call(name, d)}
+            <div class="mkt-tile"><div class="tuc-lbl">MARKET TREND</div>{build_market_box(name)}<div class="hint mkt-help">tap a timeframe</div></div>
           </div>
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}
