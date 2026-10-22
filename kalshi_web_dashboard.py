@@ -6084,25 +6084,39 @@ body.has-flip-watch { padding-top:0; }
 .sc-legend { font-size:10px; margin-top:4px; }
 /* 2026-10-22: live chart (same as the free page) */
 .lw-win { display:block; width:100%; margin:14px 0 6px; }
-/* 2026-10-22 (user): market-trend timeframes get their own tile in the top row */
-.mkt-tile { flex:0 1 270px; min-width:230px; margin-left:10px; text-align:center; padding:8px 12px; border-radius:14px;
-  border:1px solid rgba(255,255,255,0.10); background:rgba(48,39,43,0.9); align-self:stretch; display:flex; flex-direction:column; justify-content:center; }
-.mkt-tile .mkt { background:none; border:0; padding:0; margin:4px 0 0; min-width:0; }
-.mkt-tile .mkt-btns button { font-size:12px; padding:5px 0; }
-.mkt-tile .mkt-pane { font-size:13px; margin-top:7px; } .mkt-tile .mkt-help { font-size:10px; margin-top:4px; }
-@media (max-width:760px) { .mkt-tile { flex:1 1 100%; margin:0; } }
+/* 2026-10-22 (user): top row = coin | live price (centered, unchanged) | timer + round clock and a small market-trend tile */
+.head-row { display:grid !important; grid-template-columns:minmax(90px, 1fr) auto minmax(0, 1fr); align-items:center; column-gap:14px; }
+.head-row > .asset-name { justify-self:start; }
+.head-row > .live-price-inline { justify-self:center; }
+.head-right { justify-self:end; display:flex; gap:10px; align-items:stretch; flex-wrap:wrap; justify-content:flex-end; }
+.time-tile { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:8px 12px;
+  border:1px solid rgba(255,255,255,0.10); border-radius:14px; background:rgba(48,39,43,0.9); min-width:150px; }
+.time-tile .tuc { border:0 !important; background:none !important; padding:0 !important; min-width:0 !important; flex:none !important; box-shadow:none !important; }
+.round-left { display:flex; align-items:center; gap:5px; margin-top:4px; font-size:11px; }
+.round-left .clock { margin:0 !important; }
+.mkt-tile { width:200px; text-align:center; padding:6px 10px; border-radius:14px; border:1px solid rgba(255,255,255,0.10);
+  background:rgba(48,39,43,0.9); display:flex; flex-direction:column; justify-content:center; }
+.mkt-tile .tuc-lbl { font-size:12px; }
+.mkt-tile .mkt { background:none; border:0; padding:0; margin:3px 0 0; min-width:0; }
+.mkt-tile .mkt-btns button { font-size:10px; padding:3px 0; }
+.mkt-tile .mkt-pane { font-size:11px; margin-top:5px; }
+@media (max-width:900px) {
+  .head-row { grid-template-columns:1fr !important; row-gap:10px; justify-items:center; }
+  .head-row > .asset-name, .head-right { justify-self:center; }
+  .head-right { justify-content:center; }
+}
 /* 2026-10-22 (user): whale & liquidity alerts - neon green buys / neon red sells, white text, big bold dollar value */
 .fa-item { padding:7px 10px !important; border-radius:10px !important; color:#ffffff; font-size:13px; margin-bottom:5px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
-.fa-item.fa-up { background:linear-gradient(90deg, rgba(57,255,140,0.20), rgba(57,255,140,0.04)) !important; border-left:5px solid #39ff8c !important;
-  box-shadow:0 0 14px rgba(57,255,140,0.18), inset 0 0 0 1px rgba(57,255,140,0.35); }
-.fa-item.fa-down { background:linear-gradient(90deg, rgba(255,49,85,0.22), rgba(255,49,85,0.04)) !important; border-left:5px solid #ff3155 !important;
-  box-shadow:0 0 14px rgba(255,49,85,0.20), inset 0 0 0 1px rgba(255,49,85,0.38); }
+.fa-item.fa-up { background:linear-gradient(90deg, rgba(61,214,156,0.20), rgba(61,214,156,0.04)) !important; border-left:5px solid #3dd69c !important;
+  box-shadow:0 0 14px rgba(61,214,156,0.18), inset 0 0 0 1px rgba(61,214,156,0.35); }
+.fa-item.fa-down { background:linear-gradient(90deg, rgba(240,84,84,0.22), rgba(240,84,84,0.04)) !important; border-left:5px solid #f05454 !important;
+  box-shadow:0 0 14px rgba(240,84,84,0.20), inset 0 0 0 1px rgba(240,84,84,0.38); }
 .fa-item .fa-head { color:#ffffff !important; font-weight:900; letter-spacing:.3px; }
-.fa-item.fa-up .fa-arrow { color:#39ff8c; text-shadow:0 0 8px rgba(57,255,140,0.8); }
-.fa-item.fa-down .fa-arrow { color:#ff3155; text-shadow:0 0 8px rgba(255,49,85,0.8); }
+.fa-item.fa-up .fa-arrow { color:#3dd69c; text-shadow:0 0 8px rgba(61,214,156,0.8); }
+.fa-item.fa-down .fa-arrow { color:#f05454; text-shadow:0 0 8px rgba(240,84,84,0.8); }
 .fa-usd { font-size:20px; font-weight:900; color:#ffffff; line-height:1; letter-spacing:.5px; }
-.fa-item.fa-up .fa-usd { text-shadow:0 0 10px rgba(57,255,140,0.85), 0 0 2px #39ff8c; }
-.fa-item.fa-down .fa-usd { text-shadow:0 0 10px rgba(255,49,85,0.9), 0 0 2px #ff3155; }
+.fa-item.fa-up .fa-usd { text-shadow:0 0 10px rgba(61,214,156,0.85), 0 0 2px #3dd69c; }
+.fa-item.fa-down .fa-usd { text-shadow:0 0 10px rgba(240,84,84,0.9), 0 0 2px #f05454; }
 .fa-item .fa-where { color:#efe6dc; font-size:12px; }
 .fa-item .fa-age { margin-left:auto; }
 /* 2026-10-22 (user): RSI + line crosses in one square; streak tile in the top row beside "time until call" */
@@ -6134,6 +6148,17 @@ body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minma
   border:1px solid rgba(242,196,107,0.30); font-size:11px; white-space:nowrap; }
 .lw-chip i { font-style:normal; color:#f2c46b; font-weight:800; letter-spacing:.5px; }
 .lw-chip b { color:#fbf0d9; font-size:13px; }
+/* 2026-10-22 (user): green bullish / red bearish / grey neutral / blue oversold / red-pink gradient overbought */
+.lw-chip.c-up b, .lw-chip.c-up span { color:#3dd69c; } .lw-chip.c-up { border-color:rgba(61,214,156,0.45); }
+.lw-chip.c-dn b, .lw-chip.c-dn span { color:#f05454; } .lw-chip.c-dn { border-color:rgba(240,84,84,0.45); }
+.lw-chip.c-nt b, .lw-chip.c-nt span { color:#b9b3b0; } .lw-chip.c-nt { border-color:rgba(185,179,176,0.35); }
+.lw-chip.c-os b, .lw-chip.c-os span { color:#00e5ff; text-shadow:0 0 8px rgba(0,229,255,0.45); } .lw-chip.c-os { border-color:rgba(0,229,255,0.5); }
+.lw-chip.c-ob b, .lw-chip.c-ob span, .rz-ob .rsi-num, .rz-ob .rsi-zone {
+  background:linear-gradient(90deg, #ff2a3d 0%, #ff4f7e 50%, #ff5fd0 100%); -webkit-background-clip:text; background-clip:text; color:transparent !important; }
+.lw-chip.c-ob { border-color:rgba(255,77,140,0.55); box-shadow:0 0 10px rgba(255,77,140,0.25); }
+.rz-ob { border-color:#ff4d8c !important; }
+.rz-bull .rsi-num, .rz-bull .rsi-zone { color:#3dd69c !important; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#f05454 !important; }
+.rz-norm .rsi-num, .rz-norm .rsi-zone { color:#b9b3b0 !important; }
 .lw-rec-g { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:3px 0 6px; }
 .lw-rec-h { font-size:11px; font-weight:800; color:#e6ddd6; min-width:86px; }
 .lw-rec { padding:3px 8px; border-radius:999px; background:rgba(42,34,38,0.7); border:1px solid rgba(255,255,255,0.08); font-size:12px; }
@@ -8208,13 +8233,14 @@ function lwRead(a, o) {
   const r = lwRsi(cl.slice(-200), 14), h = lwMacd(cl.slice(-200));
   let rs = '', mc = '', chips = '';
   if (r !== null) {
-    const z = r >= 70 ? ['overbought', 'down'] : r <= 30 ? ['oversold', 'up'] : r >= 55 ? ['bullish', 'up'] : r <= 45 ? ['bearish', 'down'] : ['neutral', 'flat'];
-    chips += '<span class="lw-chip"><i>RSI</i><b>' + r.toFixed(0) + '</b><span class="' + z[1] + '">' + z[0] + '</span></span>';
+    const z = r >= 70 ? ['overbought', 'ob'] : r <= 30 ? ['oversold', 'os'] : r >= 55 ? ['bullish', 'up'] : r <= 45 ? ['bearish', 'dn'] : ['neutral', 'nt'];
+    chips += '<span class="lw-chip c-' + z[1] + '"><i>RSI</i><b>' + r.toFixed(0) + '</b><span>' + z[0] + '</span></span>';
   }
   if (h && h.length > 3) {
-    const hv = h[h.length - 1], dp = o.a === 'XRP' ? 5 : 2;
-    chips += '<span class="lw-chip"><i>MACD</i><b>' + (h.line >= 0 ? '+' : '') + h.line.toFixed(dp) + '</b><span class="' + (hv >= 0 ? 'up' : 'down') + '">'
-      + (hv >= 0 ? '&#9650; ' : '&#9660; ') + Math.abs(hv).toFixed(dp) + '</span></span>';
+    const hv = h[h.length - 1], dp = o.a === 'XRP' ? 5 : 2, px = cl[cl.length - 1] || 1;
+    const mk = Math.abs(hv) < px * 0.00002 ? 'nt' : (hv >= 0 ? 'up' : 'dn');           // tiny histogram = neutral (grey)
+    chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b>' + (h.line >= 0 ? '+' : '') + h.line.toFixed(dp) + '</b><span>'
+      + (mk === 'nt' ? 'flat ' : (hv >= 0 ? '&#9650; ' : '&#9660; ')) + Math.abs(hv).toFixed(dp) + '</span></span>';
   }
   if (h && h.length > 3) {
     const h0 = h[h.length - 1], h1 = h[h.length - 2], h2 = h[h.length - 3], up = h0 > 0;
@@ -12022,7 +12048,7 @@ def render_html():
         <div class="card" data-asset="{name}">
           {experimental_html}
           <div class="head-row">
-            <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{clock_html}{boom_html}{win_alert_html}{lock_alert_html}</div>
+            <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{boom_html}{win_alert_html}{lock_alert_html}</div>
             <div class="live-price-inline">
               <div class="lbl">Live price</div>
               <div class="big {spot_vs_target_css}">{fmt_price(d["spot_price"], decimals)}</div>
@@ -12033,8 +12059,10 @@ def render_html():
               <div class="lbl" style="margin-top:2px;">{(f"{len(d.get('live_venues') or [])} live price sources" + (" &middot; next round loading..." if d.get("round_switching") else "")) if d.get("live_venues") else ("next round loading..." if d.get("round_switching") else "connecting...")}</div>
               {_kalshi_line(d)}
             </div>
-            {build_time_until_call(name, d)}
-            <div class="mkt-tile"><div class="tuc-lbl">MARKET TREND</div>{build_market_box(name)}<div class="hint mkt-help">tap a timeframe</div></div>
+            <div class="head-right">
+              <div class="time-tile">{build_time_until_call(name, d)}<div class="round-left"><span class="hint">round ends in</span> {clock_html}</div></div>
+              <div class="mkt-tile"><div class="tuc-lbl">MARKET TREND</div>{build_market_box(name)}</div>
+            </div>
           </div>
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}
@@ -12073,8 +12101,8 @@ def render_html():
           {near_footer_html}
           </details><!--/OWNER-->
           <!--OWNER-->{live_pull_html}<!--/OWNER-->
-          <!--OWNER-->{radar_html(name, d.get("ticker", ""))}{radar_admin_html() if name == LIVE_ASSETS[-1] else ""}<!--/OWNER-->
           {target_history_html(name, d)}
+          {('<!--OWNER-->' + radar_html(name, d.get("ticker", "")) + radar_admin_html() + '<!--/OWNER-->') if name == "BTC" else ""}
         </div>''')
 
     return "".join(parts) if parts else "<p>Waiting for first poll...</p>"
