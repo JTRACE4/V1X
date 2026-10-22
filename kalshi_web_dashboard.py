@@ -5969,11 +5969,11 @@ body { background:#15110f !important; }
 .fw-item { pointer-events:auto; display:inline-flex; align-items:center; gap:8px; max-width:min(560px, 100%);
   padding:5px 8px 5px 12px; border-radius:999px; font:800 12.5px 'Nunito', 'Inter', sans-serif; color:#efe6df; white-space:nowrap;
   background:rgba(30,46,50,0.42); -webkit-backdrop-filter:blur(12px) saturate(1.2); backdrop-filter:blur(12px) saturate(1.2);
-  border:1px solid rgba(182,157,149,0.35); box-shadow:0 0 14px rgba(169,207,193,0.18), 0 4px 14px rgba(0,0,0,0.25); }
+  border:1px solid rgba(255,255,255,0.28); box-shadow:0 0 14px rgba(255,255,255,0.28), 0 0 3px rgba(255,255,255,0.35), 0 4px 14px rgba(0,0,0,0.25); }
 .fw-item b { font-weight:900; letter-spacing:1px; color:#cdb6ad; }
 .fw-with .fw-dir, .fw-with .fw-rel { color:#a9cfc1; }
 .fw-st { color:#d6cac4; font-weight:700; }
-.fw-against { border-color:rgba(231,184,130,0.5); box-shadow:0 0 16px rgba(231,184,130,0.28), 0 4px 14px rgba(0,0,0,0.25); }
+.fw-against { border-color:rgba(231,184,130,0.6); }
 .fw-against .fw-dir, .fw-against .fw-rel, .fw-against .fw-st { color:#e7b882; }
 .fw-badge { margin-left:2px; padding:2px 9px; border-radius:999px; font-weight:900; letter-spacing:.6px; font-size:11px; }
 .fw-hold { background:rgba(47,74,79,0.75); color:#efe6df; border:1px solid rgba(111,154,142,0.7); } .fw-hold .ico { color:#a9cfc1; }
