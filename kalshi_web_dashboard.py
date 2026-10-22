@@ -4443,6 +4443,22 @@ def poll_loop():
                             hist[-1]["decided_correct"] = _lt["call"] == actual_side
                         del hist[:-HISTORY_CAP]
                         _save_history()
+                        try:     # 2026-10-22 (user: "make sure it's tracking the wins and losses"): one line per graded round
+                            _h = hist[-1]
+                            _parts = []
+                            for _sk in ("early", "sealed"):
+                                if _h.get(f"{_sk}_call"):
+                                    _parts.append(f"{_sk} {'UP' if _h[f'{_sk}_call'] == 'YES' else 'DOWN'}"
+                                                  f"{' (reversal ~' + format(_h.get(f'{_sk}_payout') or 0, '.1f') + 'x)' if _h.get(f'{_sk}_reversal') else ''}"
+                                                  f" {'W' if _h.get(f'{_sk}_correct') else 'L'}")
+                                else:
+                                    _parts.append(f"{_sk} skipped")
+                            if _h.get("decided_call"):
+                                _parts.append(f"late {'W' if _h.get('decided_correct') else 'L'}")
+                            print(f"[GRADED] {asset['name']} {_h.get('ticker')} ended {'UP' if actual_side == 'YES' else 'DOWN'} | "
+                                  + " | ".join(_parts) + f" | {len(hist)} rounds saved")
+                        except Exception as _ge:
+                            print(f"[GRADED] log failed: {_ge!r}")
                     # new window starts UNLOCKED - no call has formed yet
                     _locked[asset["name"]] = {
                         "ticker": ticker,
