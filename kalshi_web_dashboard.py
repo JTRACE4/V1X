@@ -6505,8 +6505,8 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .lw-tabs button.on { background:rgba(233,165,187,0.20); border-color:#e9a5bb; color:#fbf4ec; }
 .lw-zoom { margin-left:auto; font-size:11px; }
 .lw-tabs button.lw-ha { margin-left:6px; }
-.lw-chart { position:relative; height:380px; border-radius:12px; overflow:hidden; background:rgba(20,15,18,0.35); }
-@media (max-width:760px) { .lw-chart { height:320px; } }
+.lw-chart { position:relative; height:clamp(460px, 58vh, 640px); border-radius:12px; overflow:hidden; background:rgba(20,15,18,0.35); }
+@media (max-width:760px) { .lw-chart { height:380px; } }
 .lw-corner { position:absolute; top:8px; left:10px; z-index:5; max-width:70%; font-size:12px; line-height:1.35; pointer-events:none; }
 .lw-corner .lw-macd { margin-top:5px; font-size:11px; color:#e9ded8; }
 .lw-chips { display:flex; gap:6px; flex-wrap:wrap; }
@@ -11181,10 +11181,15 @@ def build_scoreboard(name, d):
             first_k = fk.astimezone(et).strftime("%b %d") if fk else "-"
         _mbt = ""
         if key == "mini":
+            _nbf = sum(1 for h in rows if h.get("mini_bf"))
+            if _nbf:
+                _mbt += (f'<div class="sc-stats hint">{"All" if _nbf == n else _nbf} {"" if _nbf == n else "of these "}{n} '
+                         f'{"were" if _nbf != 1 else "was"} worked out after the fact on the same tracked rounds as the other calls '
+                         f'(each only used rounds that had finished before it started){"" if _nbf == n else "; the rest were live"}.</div>')
             # the method's 30-day history (BTC), so the column isn't empty while the live record builds
             _mb = mini_backtest() if name == "BTC" else None
             if _mb and _mb.get("n"):
-                _mbt = (f'<div class="sc-stats hint">30-day test of this method (BTC): <b>{_mb["wins"] / _mb["n"]:.0%}</b> right '
+                _mbt += (f'<div class="sc-stats hint">30-day test of this method (BTC): <b>{_mb["wins"] / _mb["n"]:.0%}</b> right '
                         f'over {_mb["n"]:,} rounds</div>')
         if not n:
             cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">'
@@ -12528,10 +12533,10 @@ def render_html():
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}
           {build_top_strip(name, d)}
-          {build_scoreboard(name, d)}
           {stage_summary_row(name, d)}
           {pattern_window_html}
           {build_rounds_panel(name, d)}
+          {build_scoreboard(name, d)}
           <!--OWNER--><details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
           {tug_html}
           {pressure_html}
@@ -12964,6 +12969,82 @@ def _target_touches(name, line):
         if hit[2]:
             break                                         # exact touch found - no need to look further back
     return out
+
+
+def _mini_from_pool(line, pool):
+    """Instant mini call from a pool of settled rounds [(close_ts, strike, up_bool)], newest-first logic as on screen."""
+    near = sorted((x for x in pool if x[1] and abs(x[1] - line) / line <= TARGET_RECENT_PCT), key=lambda x: -x[0])[:MINI_CALL_N]
+    if len(near) < MINI_CALL_N:
+        used = {id(x) for x in near}
+        near += sorted((x for x in pool if x[1] and id(x) not in used), key=lambda x: (abs(x[1] - line), -x[0]))[:MINI_CALL_N - len(near)]
+        near.sort(key=lambda x: -x[0])
+    if len(near) < MINI_CALL_N:
+        return None
+    ups = sum(1 for x in near if x[2])
+    if ups * 2 == len(near):
+        u5 = sum(1 for x in near[:5] if x[2])
+        up = u5 * 2 > 5
+        pct = max(u5, 5 - u5) / 5
+    else:
+        up = ups * 2 > len(near)
+        pct = max(ups, len(near) - ups) / len(near)
+    return {"call": "YES" if up else "NO", "pct": round(pct, 3)}
+
+
+def backfill_mini_calls():
+    """2026-10-22 (user: "backtest the mini call on the actual rounds since everything else started tracking"): for every graded
+    round in the history that has no mini call yet, work out the INSTANT mini call it would have made - using only rounds that
+    had already settled before that round opened - and grade it against the real result. Marked mini_bf so it's honest."""
+    changed = 0
+    for name, hist in list(_history.items()):
+        pool = []
+        if name == "BTC":
+            try:
+                pool = [(m["close"], m["strike"], m["result"] == "yes") for m in _bt.settled_markets()
+                        if m.get("strike") and m.get("result") in ("yes", "no")]
+            except Exception:
+                pool = []
+        seen = {round(x[0]) for x in pool}
+        hpool = []
+        for h in hist:
+            t = _window_close_utc(h.get("ticker"))
+            if t and h.get("strike") and h.get("actual_side") in ("YES", "NO") and round(t.timestamp()) not in seen:
+                hpool.append((t.timestamp(), h["strike"], h["actual_side"] == "YES"))
+        allp = sorted(pool + hpool, key=lambda x: x[0])
+        for h in hist:
+            if h.get("mini_call") or h.get("actual_side") not in ("YES", "NO") or not h.get("strike"):
+                continue
+            t = _window_close_utc(h.get("ticker"))
+            if not t:
+                continue
+            opn = t.timestamp() - 900
+            prior = [x for x in allp if x[0] <= opn and opn - x[0] <= TARGET_LOOKBACK_S]
+            mc = _mini_from_pool(h["strike"], prior)
+            if not mc:
+                continue
+            h["mini_call"], h["mini_pct"], h["mini_bf"] = mc["call"], mc["pct"], True
+            h["mini_correct"] = mc["call"] == h["actual_side"]
+            changed += 1
+    if changed:
+        _save_history()
+        print(f"[mini call] backfilled {changed} tracked rounds")
+    for name, hist in list(_history.items()):
+        for k_ in ("mini", "sealed", "early"):
+            g = [h for h in hist if h.get(f"{k_}_correct") is not None and not h.get(f"{k_}_reversal")]
+            if g:
+                w = sum(1 for h in g if h[f"{k_}_correct"])
+                print(f"[mini call] RECORD {name} {k_}: {w}/{len(g)} right ({w / len(g):.1%})")
+    return changed
+
+
+def _mini_backfill_loop():
+    time.sleep(60)
+    while True:
+        try:
+            backfill_mini_calls()
+        except Exception as _e:
+            print(f"[mini call] backfill: {_e!r}")
+        time.sleep(1800)
 
 
 def mini_call_now(name, line, spot, elapsed, ticker, dec):
@@ -14427,6 +14508,7 @@ def main():
     threading.Thread(target=_stripe_setup, daemon=True).start()
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=_live_odds_loop, daemon=True, name="live-odds").start()
+    threading.Thread(target=_mini_backfill_loop, daemon=True, name="mini-backfill").start()
     try:
         _rsi_check.start()
     except Exception as _e:
