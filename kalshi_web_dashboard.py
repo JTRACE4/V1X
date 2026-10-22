@@ -7494,7 +7494,7 @@ async function fastChartTick() {
     finally { fastBusy[a] = false; }
   });
 }
-setInterval(fastChartTick, 350);
+setInterval(fastChartTick, 1000);   // 2026-10-22: was 350ms - once a second is plenty and cuts Railway data costs ~3x
 function toggleStreakPull(name) {
   const d = document.querySelector('details.streak-pull[data-pat="STREAK|' + name + '"]');
   if (d) { d.open = !d.open; syncStreakArrows(); }
@@ -7734,7 +7734,9 @@ let serverSkewMs = 0;
 async function refreshLoop() {
   const t0 = Date.now();
   try { await refresh(); } catch (e) { /* network blip - try again next tick */ }
-  setTimeout(refreshLoop, Math.max(250, 1000 - (Date.now() - t0)));
+  // background tab: every 3s instead of every second (alerts still play, a couple of seconds later at most)
+  const every = document.hidden ? 3000 : 1000;
+  setTimeout(refreshLoop, Math.max(250, every - (Date.now() - t0)));
 }
 // countdowns tick in the browser between server updates, so seconds never skip
 function tickClocks() {
@@ -11653,7 +11655,7 @@ def _strip_owner_only(html_, user):
 # Now one thread renders, everyone else reuses that result for up to RENDER_CACHE_S.
 import gzip as _gzip
 RENDER_CACHE_S = 0.8
-CHART_CACHE_S = 0.3
+CHART_CACHE_S = 0.9
 _render_cache = {"t": 0.0, "html": None, "wr": None, "pub": None}
 _render_cache_lock = threading.Lock()
 _chart_cache = {}

@@ -54,6 +54,12 @@ VENUES = {
     "deribit": ("Deribit perp", "perp"),
     "binance_perp": ("Binance futures", "perp"), "bitmex": ("BitMEX perp", "perp"), "bitget_perp": ("Bitget perp", "perp"),
 }
+# 2026-10-22: dropped the low-trust venues (offshore with US enforcement history and/or thin or inflated volume:
+# KuCoin, Gate.io, Bitget spot + perp, BitMEX, Binance.US). Their prints were never read aloud and they cost CPU to parse
+# plus REST polling every few seconds. Kalshi settles on CF Benchmarks indexes, which none of them feed.
+DISABLED_VENUES = {"kucoin", "gate", "bitget", "bitget_perp", "bitmex", "binanceus"}
+for _dv in DISABLED_VENUES:
+    VENUES.pop(_dv, None)
 _VENUE_LABELS.update({k: v[0] for k, v in VENUES.items()})
 DEDUP_KEEP = 60_000          # trade ids remembered per exchange (minutes of history even on the busiest venue)
 
@@ -835,6 +841,8 @@ def _v24_loop():
     time.sleep(15)
     while True:
         for v, fn in _v24_fetchers().items():
+            if v in DISABLED_VENUES:
+                continue
             try:
                 x = fn()
                 if x and x > 0:
@@ -1151,10 +1159,15 @@ def start():
     _started = True
     ENGINE.start()
     for feed in _feeds():
+        if feed.name in DISABLED_VENUES:
+            continue
         threading.Thread(target=feed.run_forever, daemon=True, name=f"flow-{feed.name}").start()
     for v, fn in BOOKS.items():
+        if v in DISABLED_VENUES:
+            continue
         threading.Thread(target=_book_loop, args=(v, fn), daemon=True, name=f"book-{v}").start()
-    threading.Thread(target=_binanceus_poll_loop, daemon=True, name="flow-binanceus").start()
+    if "binanceus" not in DISABLED_VENUES:
+        threading.Thread(target=_binanceus_poll_loop, daemon=True, name="flow-binanceus").start()
     threading.Thread(target=_deriv_loop, daemon=True, name="flow-deriv").start()
     threading.Thread(target=_v24_loop, daemon=True, name="flow-mathcheck").start()
     threading.Thread(target=_seed_history, daemon=True, name="flow-seed").start()
