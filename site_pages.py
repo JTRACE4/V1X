@@ -471,7 +471,8 @@ def pricing_page(user, plans, until_text=None, active=False):
             + '<div class="pr"><h1>Get BRAIN</h1><p class="lead">Live market intelligence for Kalshi\'s 15-minute BTC and XRP rounds.</p>'
             + status + f'<div class="grid">{cards}</div>'
             + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Passes are one-time payments and never '
-              'renew on their own - we email you 2 days before yours ends. <b>All sales are final, no refunds.</b> BRAIN is educational '
+              'renew on their own - we email you 2 days before yours ends. <b>All sales are final, no refunds.</b> Accounts that misuse '
+              'the service or put it at risk can be suspended or ended without a refund (see Terms). BRAIN is educational '
               'market analysis, not financial advice; calls can be wrong and trading can lose money. '
               '<a href="/terms" style="color:#e9a5bb">Terms</a> &middot; questions: support@brainswatch.com</p></div>')
     return page("Pricing - BRAIN", body, PRICING_CSS)
@@ -572,8 +573,13 @@ TERMS = [
     ("Passes and payments", "The live dashboard needs a pass: 7 days ($64.99), 30 days ($165) or 3.5 months ($379), paid "
      "once through Stripe. Passes never renew on their own - buying another adds its days on top of any time you have left. "
      "ALL SALES ARE FINAL: no refunds, including for unused time."),
-    ("Access", "Accounts can be paused or removed at any time, without a refund, for breaking these terms. Keep your login "
-     "private - don't share your account or copy and resell what you see here."),
+    ("Suspension and termination", "BRAIN can suspend or end any account or pass at any time, at the owner's discretion, "
+     "including for convenience. This covers, for example: misusing the site or the bot; sharing, reselling or copying what you "
+     "see here; scraping or automating access; harassing, threatening or disrespecting the owner, staff, the bot or other members; "
+     "anything that puts the service, its data or its systems at risk or could compromise them; or if BRAIN has to pause, change "
+     "or stop operating. When an account or pass is suspended or ended for any of these reasons, access stops right away and "
+     "NO REFUND is given, including for unused time, except where the law requires otherwise."),
+    ("Access", "Keep your login private - one account per person. Don't share your account or copy and resell what you see here."),
     ("Your data", "We store your username, email, a scrambled (hashed) password and which devices are signed in, only to run "
      "your account. Ask the owner any time to delete your account."),
     ("Changes", "These terms can change. Using the site after a change means you accept the new terms."),
@@ -584,6 +590,6 @@ def terms_page():
     items = "".join(f'<div class="it"><b>{E(t)}</b><span>{E(d)}</span></div>' for t, d in TERMS)
     body = ('<div class="guide"><div class="top" style="padding:10px 0"><a class="brand" href="/">' + brain_logo(34, "t")
             + '<b>BRAIN</b></a></div><h1 style="font-family:Fraunces,Georgia,serif;font-weight:700;color:#fbf4ec;margin:6px 0 2px">'
-            'Terms &amp; conditions</h1><p class="mute">Last updated October 20, 2026.</p>' + items
+            'Terms &amp; conditions</h1><p class="mute">Last updated October 22, 2026.</p>' + items
             + '<p style="margin-top:18px"><a class="btn cream" href="/">Back home</a></p></div>')
     return page("Terms - BRAIN", body, GUIDE_CSS)
