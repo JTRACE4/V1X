@@ -6364,6 +6364,10 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 .lw-learn-body .lwl-rsi, .lw-learn-body .lwl-macd { display:inline-block; min-width:18px; color:#ffd23f; }
 .lw-learn-body .lwl-macd svg { display:inline-block !important; margin:0 !important; width:13px; height:13px; vertical-align:-1px; }
 .lw-learn-body .lwl-rsi-t, .lw-learn-body .lwl-macd-t, .lw-learn-body .lwl-15 { color:#ffd23f; }
+/* 2026-10-22 (user): vector arrows everywhere instead of typed triangles - crisp at any size, take the text color */
+.va-u, .va-d { display:inline-block; width:.78em; height:.72em; background:currentColor; vertical-align:-.02em; margin-right:.12em; font-style:normal; }
+.va-u { clip-path:polygon(50% 0, 100% 100%, 0 100%); } .va-d { clip-path:polygon(0 0, 100% 0, 50% 100%); }
+.sb-dir .va-u, .sb-dir .va-d { width:.7em; height:.62em; vertical-align:.04em; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -7117,7 +7121,7 @@ function updateFlipWatch() {
     if (v.withCall === true) badge = '<span class="fw-badge fw-hold" title="the market is holding with the call"><i class=ico data-i=hold></i> HOLDING</span>';
     else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev" title="the market has turned 60%+ against the call"><i class=ico data-i=warn></i> TURNED</span>';
     return '<div class="fw-item ' + cls + '" title="' + n + ' flip watch: heading ' + (v.goingUp ? 'up' : 'down') + (rel ? ', ' + rel + ' (' + callWord + ')' : '')
-      + (st ? ', ' + _strengthWord(v.strength) + ' ' + st + ' on the market' : '') + '"><b>' + n + '</b><span class="fw-dir">' + (v.goingUp ? '&#9650; UP' : '&#9660; DOWN') + '</span>'
+      + (st ? ', ' + _strengthWord(v.strength) + ' ' + st + ' on the market' : '') + '"><b>' + n + '</b><span class="fw-dir">' + (v.goingUp ? '<i class=va-u></i> UP' : '<i class=va-d></i> DOWN') + '</span>'
       + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span class="fw-st">' + st + '</span>' : '') + badge + '</div>';
   }).join('');
 }
@@ -8079,8 +8083,8 @@ function fillPatternInfo(d) {
 }
 // which way the pattern points if it plays out - green up arrow (bullish), red down arrow (bearish), grey for neither
 function patDirection(bias) {
-  if (bias === 'bullish') return '<div class="pat-dir up" title="bullish: if it plays out, price is expected to go UP">&#9650; <small>expects price up</small></div>';
-  if (bias === 'bearish') return '<div class="pat-dir down" title="bearish: if it plays out, price is expected to go DOWN">&#9660; <small>expects price down</small></div>';
+  if (bias === 'bullish') return '<div class="pat-dir up" title="bullish: if it plays out, price is expected to go UP"><i class=va-u></i> <small>expects price up</small></div>';
+  if (bias === 'bearish') return '<div class="pat-dir down" title="bearish: if it plays out, price is expected to go DOWN"><i class=va-d></i> <small>expects price down</small></div>';
   return '<div class="pat-dir flat" title="neutral: on its own this does not point either way">&#8596; <small>no direction on its own</small></div>';
 }
 // the Kalshi arrow lives inside the 1-second re-rendered card, so it is re-created every refresh - start it at last
@@ -8615,7 +8619,7 @@ async function lwPatterns(o) {
   const row = (x, worked) => {
     const up = x.bias === 'bullish';
     const st = worked ? '<span class="up">worked</span>' : (x.status === 'formed' ? 'formed' : 'forming ' + Math.round(x.pct * 100) + '%');
-    return '<details class="lw-pat"><summary><span class="' + (up ? 'up' : 'down') + '">' + (up ? '&#9650;' : '&#9660;') + '</span> <b>' + esc(x.name) + '</b> &middot; '
+    return '<details class="lw-pat"><summary><span class="' + (up ? 'up' : 'down') + '">' + (up ? '<i class=va-u></i>' : '<i class=va-d></i>') + '</span> <b>' + esc(x.name) + '</b> &middot; '
       + st + ' <span class="hint">&middot; right ' + Math.round(x.rate * 100) + '% of ' + x.n + '</span></summary>'
       + (x.means ? '<div class="hint">' + esc(x.means) + (x.watch ? ' ' + esc(x.watch) : '') + '</div>' : '') + '</details>';
   };
@@ -8645,7 +8649,7 @@ async function lwPatterns(o) {
         if (mv !== null) story += (x.final != null ? 'It finished at ' : 'Price is now ') + f(x.final != null ? x.final : x.now) + ' ('
           + (mv >= 0 ? '+' : '') + mv.toFixed(2) + '%) - <b class="' + (goodWay ? 'up' : 'down') + '">' + (goodWay ? 'went the way it pointed' : 'went the other way') + '</b>.';
       }
-      return '<details class="lw-rec"><summary><span class="' + (up ? 'up' : 'down') + '">' + (up ? '&#9650;' : '&#9660;') + '</span> ' + esc(x.name.split(' - ')[0].split(' (')[0])
+      return '<details class="lw-rec"><summary><span class="' + (up ? 'up' : 'down') + '">' + (up ? '<i class=va-u></i>' : '<i class=va-d></i>') + '</span> ' + esc(x.name.split(' - ')[0].split(' (')[0])
         + ' <i>' + x.tf + '</i>' + (x.rate != null && x.n >= 20 ? ' <span class="hint">' + Math.round(x.rate * 100) + '%</span>' : '') + res + '</summary>'
         + '<div class="lw-rec-body">' + (x.what ? '<div>' + esc(x.what) + '</div>' : '') + (x.means ? '<div class="hint">' + esc(x.means) + '</div>' : '')
         + (story ? '<div class="lw-rec-story">' + story + '</div>' : '') + '</div></details>';
@@ -8761,7 +8765,7 @@ from pattern_diagrams import svg_for as _pat_svg
 _mtf = None   # MTFMonitor, started in main(); information only - never used for buying
 _MTF_NAMES = {"1m": "1 min", "5m": "5 min", "15m": "15 min", "1h": "1 hour", "3h": "3 hours", "6h": "6 hours",
               "12h": "12 hours", "1d": "1 day", "1w": "1 week", "1M": "1 month", "1Y": "1 year", "overall": "Overall"}
-_BIAS_UI = {"bullish": ("up", "&#9650; Bullish"), "bearish": ("down", "&#9660; Bearish"), "neutral": ("flat", "&#9679; Neutral")}
+_BIAS_UI = {"bullish": ("up", "<i class=va-u></i> Bullish"), "bearish": ("down", "<i class=va-d></i> Bearish"), "neutral": ("flat", "&#9679; Neutral")}
 
 
 def pattern_lib_json():
@@ -9282,7 +9286,7 @@ def _hist_event_html(e):
     ex = _pat_explain(e["name"])
     key = ex["key"] if ex else ""
     col = {"bullish": "up", "bearish": "down"}.get(e["bias"], "flat")
-    arrow = {"bullish": '<span class="up">&#9650;</span>', "bearish": '<span class="down">&#9660;</span>'}.get(e["bias"], "")
+    arrow = {"bullish": '<span class="up"><i class=va-u></i></span>', "bearish": '<span class="down"><i class=va-d></i></span>'}.get(e["bias"], "")
     if e["kind"] == "failed":
         out = '<span class="flat">fell apart before it finished</span>'
         stl = "failed"
@@ -9726,7 +9730,7 @@ def build_rsi_flip_widget(name, d):
     if fr:
         lv = fr["level"]
         lcls = {"LOW": "flat", "WATCH": "warn", "HIGH": "fr-high", "EXTREME": "fr-ext"}[lv]
-        arrow = "&#9660;" if fr["direction"] == "DOWN" else "&#9650;"
+        arrow = "<i class=va-d></i>" if fr["direction"] == "DOWN" else "<i class=va-u></i>"
         way = (f'<span class="{"down" if fr["direction"] == "DOWN" else "up"}">{arrow} could flip {fr["direction"]}</span>'
                if lv != "LOW" else '<span class="hint">nothing stretched</span>')
         bar = (f'<div class="fr-track"><i class="{lcls}" style="width:{max(fr["score"], 2):.0f}%"></i></div>'
@@ -9839,7 +9843,7 @@ def build_alert_box(name):
     for a in rows:
         void = a["kind"] == "pulled"          # canceled / never filled: shown in white, not green / red
         side_cls = "void" if void else ("up" if a["side"] == "buy" else ("down" if a["side"] == "sell" else "flat"))
-        arrow = "&#10005;" if void else "&#10227;" if a["kind"] == "moved" else ("&#9650;" if a["side"] == "buy" else ("&#9660;" if a["side"] == "sell" else "&#9679;"))
+        arrow = "&#10005;" if void else "&#10227;" if a["kind"] == "moved" else ("<i class=va-u></i>" if a["side"] == "buy" else ("<i class=va-d></i>" if a["side"] == "sell" else "&#9679;"))
         fresh = " fa-fresh" if time.time() - a["ts"] < 20 else ""
         head, where = _alert_line(a, dec)
         usd_big = _usd_short(a["usd"]) if a.get("usd") else ""
@@ -9949,7 +9953,7 @@ def build_stage_box(name, d, key):
                + '</div>' if c.get("zone80") else "")
         rev = z80 + (f'<div class="sb-rev"><i class=ico data-i=reversal></i> REVERSAL{(" &middot; ~" + format(c["rev_payout"], ".1f") + "x") if c.get("rev_payout") else ""}</div>'
                if c.get("reversal") else "")
-        body = (f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>{rev}'
+        body = (f'<div class="sb-dir {"up" if up else "down"}">{"<i class=va-u></i> UP" if up else "<i class=va-d></i> DOWN"}</div>{rev}'
                 f'<div class="sb-tier {_TIER_CLS.get(tier, "")}">{tier}</div>'
                 + _conf_lines(p_side, tier, _kalshi_at_lock(c),
                               f' &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
@@ -9975,7 +9979,7 @@ def build_stage_box(name, d, key):
                          f'&middot; <b>{holding:.0%}</b></span></div>')
         p_side = (lt.get("p_yes") or 0.5) if up else 1 - (lt.get("p_yes") or 0.5)
         body = (f'<div class="sb-late"><i class=ico data-i=clock></i> LATE CALL &middot; PRICE HAS DECIDED</div>'
-                f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>'
+                f'<div class="sb-dir {"up" if up else "down"}">{"<i class=va-u></i> UP" if up else "<i class=va-d></i> DOWN"}</div>'
                 f'<div class="sb-tier {_TIER_CLS.get(lt.get("tier") or "GOOD", "")}">{lt.get("tier") or "GOOD"}</div>'
                 + _conf_lines(p_side, lt.get("tier") or "GOOD", _kalshi_at_lock(lt), f' &middot; called at {el_ // 60}:{el_ % 60:02d}')
                 + hold_html +
@@ -10062,7 +10066,7 @@ def _sig_html(sig):
     bits = []
     for k, lab in SIGNAL_NAMES:
         v = sig.get(k, 0)
-        bits.append(f'<span class="{"up" if v > 0 else ("down" if v < 0 else "flat")}">{lab} {"&#9650;" if v > 0 else ("&#9660;" if v < 0 else "&#8211;")}</span>')
+        bits.append(f'<span class="{"up" if v > 0 else ("down" if v < 0 else "flat")}">{lab} {"<i class=va-u></i>" if v > 0 else ("<i class=va-d></i>" if v < 0 else "&#8211;")}</span>')
     cs, agree, oppose = signal_consensus(sig)
     tail = (f' &middot; <b>{agree} of {len(sig)} {"UP" if cs > 0 else "DOWN"}</b>' if cs else " &middot; <b>mixed</b>")
     return f'<!--OWNER--><div class="sb-sig">{" ".join(bits)}{tail}</div><!--/OWNER-->'
@@ -10210,7 +10214,7 @@ def build_kalshi_tile(name, d):
         ref = next((v for e, v in reversed(pts) if now_e - e >= 30), pts[0][1])
         c = round((pts[-1][1] - ref) * 100)
         if c:
-            chg = f'<span class="{"up" if c > 0 else "down"}">{"&#9650;" if c > 0 else "&#9660;"} UP {c:+d}&cent; in the last 30s</span>'
+            chg = f'<span class="{"up" if c > 0 else "down"}">{"<i class=va-u></i>" if c > 0 else "<i class=va-d></i>"} UP {c:+d}&cent; in the last 30s</span>'
         else:
             chg = '<span class="flat">steady over the last 30s</span>'
     mins, secs = divmod(max(0, int(d.get("seconds_left") or 0)), 60)
@@ -10373,7 +10377,7 @@ def build_twap_lock(name, d):
     up = t["side"] == "UP"
     cls = "up" if up else "down"
     head = (f'<div class="lbl" style="margin-top:4px;">PROJECTED SETTLEMENT (60s avg) &middot; {t["n"]}/{TWAP_WINDOW_S}s</div>'
-            f'<div class="twap-avg {cls}">{fmt_price(t["avg"], dec)} {"&#9650; UP" if up else "&#9660; DOWN"}</div>')
+            f'<div class="twap-avg {cls}">{fmt_price(t["avg"], dec)} {"<i class=va-u></i> UP" if up else "<i class=va-d></i> DOWN"}</div>')
     if t["final"]:
         sub = '<div class="twap-need hint">final average - settling now</div>'
     else:
@@ -10822,7 +10826,7 @@ def build_cross_box(name, d):
     except Exception:
         pass
     return (f'<div class="rs-tile lx-box {cls}"><div class="rs-title">LINE CROSSES</div><div class="lx-num">{n}</div>'
-            f'<div class="lx-zone">{zone}</div><div class="lx-sub">&#9650; {ls.get("up", 0)} up &middot; &#9660; {ls.get("down", 0)} down</div>{_chk}</div>')
+            f'<div class="lx-zone">{zone}</div><div class="lx-sub"><i class=va-u></i> {ls.get("up", 0)} up &middot; <i class=va-d></i> {ls.get("down", 0)} down</div>{_chk}</div>')
 
 
 @_never_break
@@ -11100,7 +11104,7 @@ def build_rounds_panel(name, d):
         tags = " ".join(_call_tag(sc.get(k), None, k) for k in ("early", "sealed"))
         cells.append(f'<div class="rc rc-live"><div class="rc-head"><b>THIS ROUND (live)</b> {_round_label(d.get("ticker"))} &middot; '
                      f'<b>{ls["crosses"]}</b> cross{"es" if ls["crosses"] != 1 else ""} '
-                     f'<span class="hint">&#9650;{ls["up"]} &#9660;{ls["down"]}</span> {tags}</div>'
+                     f'<span class="hint"><i class=va-u></i>{ls["up"]} <i class=va-d></i>{ls["down"]}</span> {tags}</div>'
                      f'{_round_svg({"ticker": d.get("ticker"), "path": ls["path"], "events": ls["events"]}, w=620, h=110, live=True)}</div>')
     past = (_rounds.get(name) or [])[-6:][::-1]
     for r in past:
@@ -11113,7 +11117,7 @@ def build_rounds_panel(name, d):
         n = r.get("crosses", 0)
         cells.append(f'<div class="rc"><div class="rc-head"><b>{_round_label(r.get("ticker"))}</b> &middot; '
                      f'<b class="{"down" if n >= CROSS_SKIP else ("warn" if n == 2 else "")}">{n}</b> cross{"es" if n != 1 else ""} '
-                     f'<span class="hint">&#9650;{r.get("up", 0)} &#9660;{r.get("down", 0)}</span> &middot; {res}<br>{tags}</div>{_round_svg(r)}</div>')
+                     f'<span class="hint"><i class=va-u></i>{r.get("up", 0)} <i class=va-d></i>{r.get("down", 0)}</span> &middot; {res}<br>{tags}</div>{_round_svg(r)}</div>')
     if len(cells) <= 1:
         cells.append('<div class="rc hint" style="padding:18px;">finished rounds show here</div>')
     tot = [r.get("crosses", 0) for r in past]
@@ -11229,7 +11233,7 @@ def build_pressure_bar(asset_name, d=None, part="all"):
         rows_ = []
         for p in bp:
             sc = "up" if p["side"] == "buy" else "down"
-            rows_.append(f'<tr><td class="{sc}"><b>{"&#9650; BUY" if p["side"] == "buy" else "&#9660; SELL"}</b></td><td><b>{_usd_short(p["usd"])}</b></td>'
+            rows_.append(f'<tr><td class="{sc}"><b>{"<i class=va-u></i> BUY" if p["side"] == "buy" else "<i class=va-d></i> SELL"}</b></td><td><b>{_usd_short(p["usd"])}</b></td>'
                          f'<td>{_coin_amt(coin, p["qty"])} {coin}</td><td>{_flow.VENUES.get(p["venue"], (p["venue"], ""))[0]}</td>'
                          f'<td>{p["n"]}</td><td>{p["bps"]:.1f}</td><td class="hint">{_ago(p["ts"])}</td></tr>')
         tape = ('<details class="press-more" data-pat="TAPE|' + asset_name + '" open><summary class="hint">biggest single orders in the last 3 minutes '
@@ -11321,10 +11325,10 @@ def build_pressure_bar(asset_name, d=None, part="all"):
         f'<div class="row press-row press-top" data-asset-press="{asset_name}">'
         f'<div class="press-head"><b>BUY PRESSURE</b> <span class="hint">{win_lbl}</span> '
         f'<span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
-        f'<div class="press-qty"><span class="up">&#9650; <b>{_coin_amt(coin, m["buy_qty"])} {coin}</b> bought <span class="hint">({_usd_short(m["buy"])})</span></span>'
+        f'<div class="press-qty"><span class="up"><i class=va-u></i> <b>{_coin_amt(coin, m["buy_qty"])} {coin}</b> bought <span class="hint">({_usd_short(m["buy"])})</span></span>'
         f'<span class="press-net {"up" if net_q >= 0 else "down"}">net {"+" if net_q >= 0 else ""}{_coin_amt(coin, net_q)} {coin} '
         f'({"+" if net_usd >= 0 else "-"}{_usd_short(net_usd)})</span>'
-        f'<span class="down"><b>{_coin_amt(coin, m["sell_qty"])} {coin}</b> sold <span class="hint">({_usd_short(m["sell"])})</span> &#9660;</span></div>'
+        f'<span class="down"><b>{_coin_amt(coin, m["sell_qty"])} {coin}</b> sold <span class="hint">({_usd_short(m["sell"])})</span> <i class=va-d></i></span></div>'
         f'<div class="press-bar"><div class="press-buy" style="width:{buy:.1f}%">{buy:.0f}% buy</div>'
         f'<div class="press-sell" style="width:{sell:.1f}%">{sell:.0f}% sell</div><span class="press-mid"></span></div>'
         f'<div class="press-chips">{"".join(chips)}{book}</div></div>')
@@ -11356,7 +11360,7 @@ def build_volume_bar(asset_name):
     normal = min(100.0, g["median"] / top * 100) if have_norm else -10
     buy_pct = g["buy"] / g["total"] * 100
     ratio = (g["total"] / g["median"]) if have_norm else None
-    trend = ("&#9650;" if g["total"] > g["prev"] * 1.15 else ("&#9660;" if g["total"] < g["prev"] * 0.85 else "&#9644;")) if g["prev"] > 0 else ""
+    trend = ("<i class=va-u></i>" if g["total"] > g["prev"] * 1.15 else ("<i class=va-d></i>" if g["total"] < g["prev"] * 0.85 else "&#9644;")) if g["prev"] > 0 else ""
     rtxt = f"x{ratio:.1f}" if ratio is not None else "learning"
     rcls = "up" if (ratio or 0) >= 1.5 else ("flat" if (ratio or 0) >= 0.7 else "down")
     coin = asset_name
@@ -11471,7 +11475,7 @@ def render_html():
             for _ts, _usd, _side, _ven in whale["recent"]:
                 _age = max(0, int(time.time() - _ts))
                 _tg = {"A": " &middot; index", "C": " &middot; low trust"}.get(venue_tier(name, _ven), "")
-                _items.append(f'<span class="{"up" if _side == "buy" else "down"}"><b>{"&#9650; BUY" if _side == "buy" else "&#9660; SELL"} {_m(_usd)}</b></span> '
+                _items.append(f'<span class="{"up" if _side == "buy" else "down"}"><b>{"<i class=va-u></i> BUY" if _side == "buy" else "<i class=va-d></i> SELL"} {_m(_usd)}</b></span> '
                               f'<span class="hint">{_vname(_ven)}{_tg}, {_age}s ago</span>')
             _big = whale.get("biggest_whale")
             _bigtxt = (f'<br><span class="hint">biggest in 5 min: {"BUY" if _big[2] == "buy" else "SELL"} {_m(_big[1])} on {_vname(_big[3])}</span>'
@@ -11981,7 +11985,7 @@ def render_html():
         if _sp is not None and _tp:
             _df = _sp - _tp
             line_diff_html = (f'<div class="line-diff {"up" if _df >= 0 else "down"}" title="live price minus the line (the strike the market settles against)">'
-                              f'{"&#9650;" if _df >= 0 else "&#9660;"} {fmt_price(abs(_df), decimals)} {"ABOVE" if _df >= 0 else "BELOW"} the line '
+                              f'{"<i class=va-u></i>" if _df >= 0 else "<i class=va-d></i>"} {fmt_price(abs(_df), decimals)} {"ABOVE" if _df >= 0 else "BELOW"} the line '
                               f'<span class="hint">({_df / _tp * 100:+.3f}%)</span></div>')
         _left = max(0, int(d["seconds_left"]))
         _frac = min(1.0, _left / 900.0)
@@ -12904,7 +12908,7 @@ def target_history_html(name, d):
                f'({"exact match" if off < 10 ** -dec else f"{r["diff"] * 100:.2f}% off"}) - ended {"UP" if r["up"] else "DOWN"}'
                + (f' - BRAIN called {"UP" if sc == "YES" else "DOWN"} ({"right" if ok else "wrong"})' if sc else ""))
         rows += (f'<span class="th-chip {"up" if r["up"] else "down"}" title="{_html_attr(tip)}">'
-                 f'{"&#9650;" if r["up"] else "&#9660;"} {when:%b %-d %-I:%M%p}'.replace("AM", "a").replace("PM", "p") + '</span>')
+                 f'{"<i class=va-u></i>" if r["up"] else "<i class=va-d></i>"} {when:%b %-d %-I:%M%p}'.replace("AM", "a").replace("PM", "p") + '</span>')
     rows += '</div>' if near else ""
     if not near:
         rows = ""
