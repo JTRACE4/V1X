@@ -6300,6 +6300,8 @@ try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VO
 function setNeuralVoice(v) {
   neuralVoice = v; neuralBroken = false;
   try { localStorage.setItem('neuralVoice', v); } catch (e) {}
+  if (v === 'tony') { speakRaw("Ay, it's Tony from the Bronx. I'm watchin' the market for ya, all day."); speakRaw('Bitcoin sealed call: up, 84 percent sure. Super confidence.'); return; }
+  if (v === 'sarge') { speakRaw('Sarge reporting for duty! I will watch this market so you do not have to!'); speakRaw('Bitcoin sealed call: up, 84 percent sure. Super confidence.'); return; }
   speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is ' + NEURAL_VOICES[v] + '. Bitcoin sealed call: up, 84 percent sure.');
 }
 // browser fallback: the most natural-sounding female voices first (premium / enhanced / natural before the old robotic ones)
@@ -6326,6 +6328,30 @@ let voiceBusy = false, neuralBroken = false, voiceEl = null;
 function _voiceEl() {
   if (!voiceEl) { voiceEl = new Audio(); voiceEl.preload = 'auto'; }
   return voiceEl;
+}
+// 2026-10-22 (user): Tony and Sarge should come through LOUD and clear. Their audio runs through a presence boost (clarity),
+// a hard compressor (every word at full punch) and extra gain. Other voices pass through untouched.
+let _vChain = null;
+function _voicePunch(a) {
+  try {
+    const ctx = ensureAudioCtx();
+    if (!ctx) return;
+    if (ctx.state !== 'running' && ctx.resume) ctx.resume();
+    if (!_vChain) {
+      const src = ctx.createMediaElementSource(a);
+      const eq = ctx.createBiquadFilter(); eq.type = 'peaking'; eq.frequency.value = 2800; eq.Q.value = 0.9;
+      const lo = ctx.createBiquadFilter(); lo.type = 'lowshelf'; lo.frequency.value = 160;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -26; comp.knee.value = 6; comp.ratio.value = 8; comp.attack.value = 0.003; comp.release.value = 0.12;
+      const g = ctx.createGain();
+      src.connect(lo); lo.connect(eq); eq.connect(comp); comp.connect(g); g.connect(ctx.destination);
+      _vChain = { eq: eq, lo: lo, g: g };
+    }
+    const hard = neuralVoice === 'tony' || neuralVoice === 'sarge';
+    _vChain.eq.gain.value = hard ? 5 : 0;          // presence: crisp consonants
+    _vChain.lo.gain.value = hard ? 3 : 0;          // chest: a bigger, manlier voice
+    _vChain.g.gain.value = hard ? 1.9 : 1.0;       // loud
+  } catch (e) { /* audio context not allowed yet - plays normally */ }
 }
 function _deviceSay(text, done) {
   if (!('speechSynthesis' in window)) { done(); return; }
@@ -6354,6 +6380,7 @@ function _voiceNext() {
   const fallback = () => { if (finished) return; try { a.onended = null; a.onerror = null; a.pause(); } catch (e) {} neuralBroken = true; _deviceSay(item.text, done); setTimeout(() => { neuralBroken = false; }, 120000); };
   a.onended = done; a.onerror = fallback;
   a.src = '/tts?v=' + neuralVoice + '&t=' + encodeURIComponent(item.text);
+  if (neuralVoice === 'tony' || neuralVoice === 'sarge' || _vChain) _voicePunch(a);
   a.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
   const pr = a.play();
   if (pr && pr.catch) pr.catch(fallback);
@@ -8006,7 +8033,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
         <select id="voice-pick" onchange="setNeuralVoice(this.value)" style="background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit;">
           <option value="ava">Ava (natural)</option><option value="jenny">Jenny (natural)</option><option value="aria">Aria (natural)</option>
           <option value="emma">Emma (natural)</option><option value="michelle">Michelle (natural)</option>
-          <option value="tony">Tony (guy, New York style)</option><option value="sarge">Sarge (drill sergeant)</option><option value="device">This device's voice</option>
+          <option value="tony">Tony (tough New York guy)</option><option value="sarge">Sarge (drill sergeant)</option><option value="device">This device's voice</option>
         </select></label>
       <br>
       <button onclick="speakRaw('Heads up: a flip might be happening on Bitcoin.')">Test flip warning</button>
@@ -11567,19 +11594,58 @@ def render_html():
 # sure." is generated once and then served instantly. If anything fails the page falls back to the browser's own voice.
 _TTS_VOICES = {"ava": "en-US-AvaNeural", "jenny": "en-US-JennyNeural", "aria": "en-US-AriaNeural",
                "emma": "en-US-EmmaNeural", "michelle": "en-US-MichelleNeural",
-               # 2026-10-22: male "New York style" option. Microsoft's neural voices have no real NYC accent, so this is a
-               # male voice read faster and a touch deeper, with a little New York phrasing (_NY_STYLE below).
-               "tony": "en-US-GuyNeural",
-               # 2026-10-22: drill-sergeant option - deep, clipped, a little faster, military call-outs (_SARGE_STYLE)
+               # 2026-10-22 (b, user: "didn't sound like a drill sergeant or a Bronx New York accent ... aggressive, loud,
+               # clear, quicker, manly, sometimes sounds angry but really kind"). Microsoft's free neural voices have no real
+               # NYC accent and no shouting style, so the character comes from: a gruffer voice, faster + deeper + louder
+               # delivery, every line rewritten in the persona's words (_persona below), and a compressor + boost in the page.
+               "tony": "en-US-RogerNeural",
                "sarge": "en-US-ChristopherNeural"}
-_TTS_STYLE = {"tony": {"rate": "+14%", "pitch": "-3Hz"}, "sarge": {"rate": "+8%", "pitch": "-8Hz"}}
-_NY_STYLE = ((r"^Heads up:", "Yo, heads up:"), (r"^A flip is happening", "Ay, a flip is happening"),
-             (r" flip update: ", " flip update, listen: "), (r" Super confidence\.$", " Super confidence. Fuggedaboutit."),
-             (r"^(Bitcoin|XRP) sealed call: ", r"Alright, \1 sealed call: "))
-_SARGE_STYLE = ((r"^Heads up: a", "Attention! A"), (r"^A flip is happening", "Incoming! A flip is happening"),
-                (r"^(Bitcoin|XRP) (early|sealed) call: ", r"\1 \2 call, listen up! Going "),
-                (r" Super confidence\.$", " Super confidence. Hooah!"), (r" Weak confidence\.$", " Weak confidence. Stay sharp."),
-                (r"whale buy on (Bitcoin|XRP)\.", r"whale buy on \1. Heavy artillery."), (r" flip update: ", " flip update, sitrep: "))
+_TTS_STYLE = {"tony": {"rate": "+22%", "pitch": "-4Hz", "volume": "+40%"},
+              "sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"}}
+_NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b", "'bout"), (r"\bAlright\b", "Awright"),
+             (r"\b(go|head|mov|flipp|hold|look|build|com|tell|buy|sell|runn|push|turn|hang|watch|bring|happen|mak|stay|get|tak|break)ing\b", r"\1in'"),
+             (r"\byour\b", "ya"), (r"\byou\b", "ya"), (r"\bsure\b", "shuah"), (r"\bhere\b", "heah"), (r"\bover\b", "ovah"),
+             (r"\bthere\b", "theah"), (r"\bListen\b", "Lissen"), (r"\btalk\b", "tawk"), (r"\bthem\b", "'em"))
+_NY_START = ((r"^Heads up: ", "Ay, heads up! "), (r"^A flip is happening", "Ay ay ay, a flip is happenin'"),
+             (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"Awright, lissen to me. \1 \2 call: "),
+             (r"^(Bitcoin|XRP) flip update: ", r"\1, check it out: "))
+_NY_END = ("I'm tellin' ya.", "Fuhgeddaboudit.", "Trust me on this one.", "Ya doin' great, kid.")
+_NY_CAUTION = ("Keep ya eyes open, awright?", "Don't sweat it, I got ya.", "Watch it, I'm lookin' out for ya.", "Easy now, stay with me.")
+_SARGE_START = ((r"^Heads up: a", "Attention! A"), (r"^A flip is happening", "Incoming! Incoming! A flip is happening"),
+                (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"Listen up! \1! \2 call! Going "),
+                (r"^(Bitcoin|XRP) flip update: ", r"Sitrep! \1! "), (r"whale (buy|sell) on (Bitcoin|XRP)", r"whale \1 on \2! Heavy artillery"))
+_SARGE_END = ("Outstanding! Keep it tight!", "You got this, soldier!", "Hooah! Proud of you!", "Move with purpose! Good work!")
+_SARGE_CAUTION = ("Stay sharp, I got your six!", "Eyes up! Stay frosty!", "Hold the line! I believe in you!", "Steady! We do this together!")
+_CAUTION = re.compile(r"(?i)flip|against|overbought|oversold|warning|lost|reversal|coin flip|careful|incoming")
+
+
+def _persona(text, key):
+    """Rewrite a plain alert line in Tony's or Sarge's words. Same line always gets the same sign-off (so it caches)."""
+    if key not in ("tony", "sarge"):
+        return text
+    pick = int(hashlib.md5(text.encode()).hexdigest(), 16)
+    t = text
+    if key == "sarge":
+        for pat, rep in _SARGE_START:
+            t = re.sub(pat, rep, t)
+        t = t.replace("Going up,", "Going UP!").replace("Going down,", "Going DOWN!")
+        t = re.sub(r",\s+", "! ", t)                     # barked, clipped fragments
+        t = re.sub(r"\.(\s|$)", r"!\1", t)              # every sentence ends hard
+        t = re.sub(r"!+", "!", t).strip()
+        ends = _SARGE_CAUTION if _CAUTION.search(text) else _SARGE_END
+        end = ends[pick % len(ends)]
+    else:
+        for pat, rep in _NY_START:
+            t = re.sub(pat, rep, t)
+        for pat, rep in _NY_WORDS:
+            t = re.sub(pat, rep, t)
+        t = re.sub(r"\bpercent shuah\b", "percent shuah, no joke", t)
+        ends = _NY_CAUTION if _CAUTION.search(text) else _NY_END
+        end = ends[pick % len(ends)]
+    out = (t + " " + end).strip()
+    return out if len(out) <= 220 else t[:220]
+
+
 _TTS_DIR = os.path.join(_DATA_ROOT, "tts_cache")
 _TTS_OK = re.compile(r"^[A-Za-z0-9 .,:;'!?%$&()\-]{1,220}$")
 _tts_locks = {}
@@ -11593,10 +11659,9 @@ def _tts_mp3(text, voice_key):
         return None
     voice = _TTS_VOICES.get(voice_key, _TTS_VOICES["ava"])
     style = _TTS_STYLE.get(voice_key, {})
-    for _pat, _rep in {"tony": _NY_STYLE, "sarge": _SARGE_STYLE}.get(voice_key, ()):
-        text = re.sub(_pat, _rep, text)
-    rate, pitch = style.get("rate", "+4%"), style.get("pitch", "+0Hz")
-    key = hashlib.sha1(f"{voice}|{rate}|{pitch}|{text}".encode()).hexdigest()
+    text = _persona(text, voice_key)
+    rate, pitch, volume = style.get("rate", "+4%"), style.get("pitch", "+0Hz"), style.get("volume", "+0%")
+    key = hashlib.sha1(f"{voice}|{rate}|{pitch}|{volume}|{text}".encode()).hexdigest()
     fp = os.path.join(_TTS_DIR, key + ".mp3")
     if os.path.isfile(fp):
         with open(fp, "rb") as f_:
@@ -11616,7 +11681,7 @@ def _tts_mp3(text, voice_key):
             tmp = fp + ".part"
 
             async def _gen():
-                await edge_tts.Communicate(text.replace("XRP", "X R P"), voice, rate=rate, pitch=pitch).save(tmp)
+                await edge_tts.Communicate(text.replace("XRP", "X R P"), voice, rate=rate, pitch=pitch, volume=volume).save(tmp)
             asyncio.run(asyncio.wait_for(_gen(), timeout=12))
             if os.path.getsize(tmp) < 500:
                 raise RuntimeError("empty audio")
