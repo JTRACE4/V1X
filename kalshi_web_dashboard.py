@@ -10086,6 +10086,7 @@ def flip_risk_sustained(name, call_sign, spot, line, seconds_left, elapsed=None,
 # flip score says the side price is on now is in trouble AND RSI + momentum point the other way, the early / sealed call
 # goes to the LOSING side (that is where the 3x+ Kalshi payouts are). Graded like every other call, and tracked
 # separately in the round history so you can see whether these actually pay.
+REVERSAL_MIN_DOG_PRICE = 0.30   # the underdog must cost 30c+ (pays ~3.3x at most) - long shots lost too often
 REVERSAL_MIN_SCORE = 55         # composite flip risk of the current favorite must be HIGH
 REVERSAL_MIN_VOTES = 3          # at least 3 of: RSI stretched, flow against, candles against, trend against, price moving at the line
 REVERSAL_RSI_HI, REVERSAL_RSI_LO = 68, 32
@@ -10168,6 +10169,8 @@ def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_mult
     if kalshi_yes is not None:
         kp = kalshi_yes if call == "YES" else 1 - kalshi_yes
     payout = (1 / kp) if kp and kp > 0 else None
+    if kp is not None and kp < REVERSAL_MIN_DOG_PRICE:
+        return None          # 2026-10-22 (user): no long shots - those 14x underdogs went 1-7; win rate over payout
     tier = "GOOD" if (len(votes) >= 4 and fr["score"] >= 65) else "WEAK"
     why = (f"REVERSAL - calling the losing side: flip risk {fr['score']:.0f}% + " + ", ".join(votes)
            + (f" &middot; pays ~{payout:.1f}x at {kp * 100:.0f}c" if payout else ""))

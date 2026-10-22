@@ -538,7 +538,10 @@ def loss_check(rs, mark):
 # indicators, keep calling them"): searched separately per PAYOUT BAND, because a 4x underdog only has to win ~1 in 4 to pay,
 # while a 2x one has to win ~1 in 2. A band's rule goes live only if it made money AND won clearly more often than its price
 # implied - on the training rounds and again on the newest rounds it never saw.
-REV_BANDS = (("4x+", 0.08, 0.27), ("3x", 0.27, 0.37), ("2-2.7x", 0.37, 0.50))     # underdog price range
+# 2026-10-22 (c, user: "I want the ones with good win rates - even if they only go up 100% that's fine"): no long shots.
+# Only underdogs priced 30c+ (pays at most ~3.3x), and each band needs a solid win rate, ranked by win rate first.
+REV_BANDS = (("3x", 0.30, 0.37), ("2-2.7x", 0.37, 0.50))     # underdog price range
+REV_MIN_WIN = {"3x": 0.42, "2-2.7x": 0.50}                   # win rate a band must reach (train and unseen rounds)
 REV_GRID = [{"d": d, "c": c, "v": v, "rsi": rsi, "tr": tr}
             for d in (0.0003, 0.0006, 0.0012, 1.0)                    # price within this far of the line
             for c in (0, 1, 2)                                        # at least this many line crosses so far
@@ -638,14 +641,15 @@ def evaluate(rounds):
                 if len(tt) < REV_MIN_TRAIN:
                     continue
                 s_ = _summ(tt)
-                if s_["roi"] > 0 and s_["win"] >= s_["avg_price"] + REV_MIN_EDGE and (best is None or s_["units"] > best[1]["units"]):
+                if (s_["roi"] > 0 and s_["win"] >= max(s_["avg_price"] + REV_MIN_EDGE, REV_MIN_WIN.get(lab, 0.5))
+                        and (best is None or (s_["win"], s_["units"]) > (best[1]["win"], best[1]["units"]))):
                     best = (rule, s_)
             if not best:
                 bands.append({"band": lab, "rule": None})
                 continue
             th = [trade(r, mark, c) for r in hs for c in [rev_rule_match(r["f"][mark], best[0])] if c]
             sh = _summ(th)
-            ok = bool(sh["n"] >= REV_MIN_HOLD and sh["roi"] is not None and sh["roi"] > 0
+            ok = bool(sh["n"] >= REV_MIN_HOLD and sh["roi"] is not None and sh["roi"] > 0 and sh["win"] >= REV_MIN_WIN.get(lab, 0.5) - 0.03
                       and sh["win"] >= sh["avg_price"] + REV_MIN_EDGE / 2)
             bands.append({"band": lab, "rule": best[0], "train": best[1], "holdout": sh, "validated": ok})
         st["reversal_bands"] = bands
