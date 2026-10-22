@@ -6054,6 +6054,8 @@ body.has-flip-watch { padding-top:0; }
 .sk-chips i.cu, .sc-chips i.cu { background:rgba(61,214,156,0.24) !important; color:#3dd69c !important; box-shadow:inset 0 0 0 1px rgba(61,214,156,0.55); border-radius:50% !important; }
 .sk-chips i.cd, .sc-chips i.cd { background:rgba(240,84,84,0.24) !important; color:#f05454 !important; box-shadow:inset 0 0 0 1px rgba(240,84,84,0.55); border-radius:50% !important; }
 .sc-chips.wr-chip { margin-top:0; flex:0 0 auto; }
+/* 2026-10-22 (user): a correct call's letter is white; a wrong call's letter keeps the circle's color */
+.sk-chips i.ok.cu, .sc-chips i.ok.cu, .sk-chips i.ok.cd, .sc-chips i.ok.cd, .sk-chips i.ok.w, .sc-chips i.ok.w { color:#ffffff !important; }
 .sc-legend { font-size:10px; margin-top:4px; }
 .rv-watch { margin-top:8px; padding:7px 9px; border-radius:10px; font-size:11.5px; line-height:1.35; border:1px solid rgba(255,255,255,0.10); background:rgba(154,90,68,0.10); }
 .rv-watch b { letter-spacing:.5px; }
@@ -9564,7 +9566,7 @@ def _result_chip(ok, actual):
     UP = green L; called UP but ended DOWN = red L."""
     col = "cu" if actual == "YES" else ("cd" if actual == "NO" else ("w" if ok else "l"))
     end = {"YES": "ended UP", "NO": "ended DOWN"}.get(actual, "")
-    return f'<i class="{col}" title="{"win" if ok else "loss"}{(" - " + end) if end else ""}">{"W" if ok else "L"}</i>'
+    return f'<i class="{col}{" ok" if ok else ""}" title="{"win" if ok else "loss"}{(" - " + end) if end else ""}">{"W" if ok else "L"}</i>'
 
 
 @_never_break
