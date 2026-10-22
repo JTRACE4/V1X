@@ -6495,6 +6495,18 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .lwk-macd.up, .lwk-macd.up b { color:#3dd69c !important; } .lwk-macd.dn, .lwk-macd.dn b { color:#f05454 !important; } .lwk-macd.nt, .lwk-macd.nt b { color:#b9b3b0 !important; }
 .lwk-macd .lw-arr { display:inline-block !important; width:10px; height:10px; margin:0 1px !important; vertical-align:-1px; }
 .lwk-macd small { font-size:10px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; }
+/* 2026-10-22 (user): MACD - gap number on top, colored arrow + word underneath; momentum sentence above the readings */
+.lw-chip b.mgap { font-size:14px !important; }
+.lw-chip .mk-sub { display:inline-flex; align-items:center; gap:3px; }
+.lw-chip .mk-sub .lw-arr { width:10px !important; height:10px !important; margin:0 !important; display:inline-block !important; }
+.lw-chip.c-up .mk-sub { color:#3dd69c !important; } .lw-chip.c-dn .mk-sub { color:#f05454 !important; } .lw-chip.c-nt .mk-sub { color:#b9b3b0 !important; }
+.lw-corner .lw-macd { margin:0 0 6px !important; font-size:12.5px !important; font-weight:700; color:#fbf4ec !important; text-transform:none !important;
+  text-shadow:0 1px 3px rgba(20,15,18,0.95); font-family:var(--br-sans) !important; }
+/* history check headline + smaller at-the-open line */
+.mini-call.hist-check .mc-dir { display:inline-flex; align-items:center; gap:6px; }
+.mini-call.mc-small { padding:5px 10px !important; opacity:.85; }
+.mini-call.mc-small .mc-dir { font-size:15px !important; } .mini-call.mc-small .mc-pct { font-size:13px !important; }
+.mini-call.mc-small .mc-lbl { font-size:11px !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8640,7 +8652,8 @@ function lwRead(a, o) {
     const sub = flat ? 'no push' : soon ? 'may flip' : fading ? 'slowing' : 'building';
     // 2026-10-22 (user): show the distance apart (MACD minus its signal line) with the arrow
     const dpM = o.a === 'XRP' ? 5 : 2, gapTxt = (h0 >= 0 ? '+' : '\u2212') + Math.abs(h0).toFixed(dpM);
-    chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w">' + lwArrow(flat ? 0 : (up ? 1 : -1)) + '</b><span class="lw-gap">' + gapTxt + '</span><span>' + sub + '</span></span>';
+    // 2026-10-22 (user): the colored arrow sits with the word (building / slowing / may flip / no push); the gap is the number
+    chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w mgap">' + gapTxt + '</b><span class="mk-sub">' + lwArrow(flat ? 0 : (up ? 1 : -1)) + ' ' + sub + '</span></span>';
     try {
       const K = o.corner.closest('.lw-box'), km = K && K.querySelector('.lwk-macd');
       if (km) {
@@ -8658,7 +8671,7 @@ function lwRead(a, o) {
     else if (fading) mc = 'Momentum is ' + word + ' but slowing down.';
     else mc = 'Momentum is ' + word + ' and getting stronger.';
   }
-  o.corner.innerHTML = '<div class="lw-chips">' + chips + '</div>' + (mc ? '<div class="lw-macd">' + mc + '</div>' : '');
+  o.corner.innerHTML = (mc ? '<div class="lw-macd">' + mc + '</div>' : '') + '<div class="lw-chips">' + chips + '</div>';
   try {
     const L = o.corner.closest('.lw-box'), q = c => L && L.querySelector(c);
     if (r !== null && q('.lwl-rsi')) {
@@ -11189,7 +11202,7 @@ def build_scoreboard(name, d):
     day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
     cols = []
     for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"),
-                               ("mini", "MINI CALL &middot; INSTANT", "mini_correct"))
+                               ("mini", "MINI CALL &middot; AT THE OPEN", "mini_correct"))
                               + ((("bot", "BOT CALL (auto-buy)", "correct"),) if SHOW_BOT_RECORD else ())):
         rows = [h for h in hist if h.get(field) is not None and not (key != "bot" and h.get(f"{key}_reversal"))]
         res = [bool(h[field]) for h in rows]
@@ -11202,6 +11215,14 @@ def build_scoreboard(name, d):
             first_k = fk.astimezone(et).strftime("%b %d") if fk else "-"
         _mbt = ""
         if key == "mini":
+            if n:
+                # 2026-10-22 (user): what following it would have made - the instant call is made at the open, when the market
+                # is ~50/50, so each $100 call wins about +$100 or loses -$100
+                _mp = 100 * (w - (n - w))
+                _mbt += (f'<div class="sc-stats">If you had followed it ($100 a call at ~50c): '
+                         f'<b class="{"up" if _mp >= 0 else "down"}">{"+" if _mp >= 0 else "-"}${abs(_mp):,.0f}</b> over {n} rounds</div>'
+                         f'<div class="sc-stats hint">At the open price sits right on the line, so this one is close to a coin flip &ndash; '
+                         f'shown for reference. The HISTORY CHECK in BEEN HERE BEFORE is the in-round read that actually predicts.</div>')
             _nbf = sum(1 for h in rows if h.get("mini_bf"))
             if _nbf:
                 _mbt += (f'<div class="sc-stats hint">{"All" if _nbf == n else _nbf} {"" if _nbf == n else "of these "}{n} '
@@ -13217,6 +13238,52 @@ def _mini_backfill_loop():
         time.sleep(1800)
 
 
+_hc_idx = {"ts": 0, "rows": None}
+
+
+def _history_check_index():
+    """[(minute 0-14, distance from the line, ended_up)] for every BTC round of the last 30 days, from 1-minute closes."""
+    if _hc_idx["rows"] is not None and time.time() - _hc_idx["ts"] < 900:
+        return _hc_idx["rows"]
+    rows = []
+    try:
+        m1 = _bt.minute_candles()
+        for m in _bt.settled_markets():
+            if not m.get("strike") or m.get("result") not in ("yes", "no"):
+                continue
+            o = int(m.get("open") or (m["close"] - 900)) // 60 * 60
+            up = m["result"] == "yes"
+            for k in range(15):
+                c = m1.get(o + k * 60)
+                if c:
+                    rows.append((k, (c[3] - m["strike"]) / m["strike"], up))
+    except Exception as _e:
+        print(f"[history check] {_e!r}")
+    _hc_idx.update(ts=time.time(), rows=rows)
+    return rows
+
+
+def history_check(name, spot, line, elapsed):
+    """2026-10-22: the in-round read - of all rounds in the last 30 days where price was this far from the line at this same
+    minute, how many ended UP. {"call", "pct", "n", "minute", "dist"} or None (BTC only - needs the 1-minute history)."""
+    if name != "BTC" or not spot or not line:
+        return None
+    rows = _history_check_index()
+    if not rows:
+        return None
+    k = max(0, min(14, int((elapsed or 0) // 60)))
+    d = (spot - line) / line
+    band = max(0.0002, abs(d) * 0.25)
+    sel = [r for r in rows if r[0] == k and abs(r[1] - d) <= band]
+    if len(sel) < 30:
+        sel = [r for r in rows if abs(r[0] - k) <= 1 and abs(r[1] - d) <= band * 1.5]
+    if len(sel) < 30:
+        return None
+    ups = sum(1 for r in sel if r[2])
+    up = ups * 2 >= len(sel)
+    return {"call": "YES" if up else "NO", "pct": max(ups, len(sel) - ups) / len(sel), "n": len(sel), "minute": k, "dist": d}
+
+
 def mini_call_now(name, line, spot, elapsed, ticker, dec):
     """The mini call for this round right now (computes the BEEN HERE BEFORE panel if needed)."""
     if not line:
@@ -13365,6 +13432,18 @@ def target_history_html(name, d):
             mini += (f'<div class="mc-same">Price is <b>{"ABOVE" if _side_now else "BELOW"}</b> the line {_el_min} min into the round - '
                      f'the last {len(same)} near rounds like that ended <b class="{"flat" if sw == "SPLIT" else sw.lower() if sw == "UP" else "down"}">'
                      f'{sw} {max(su, sd_)}/{len(same)} ({max(su, sd_) / len(same) * 100:.0f}%)</b></div>')
+    try:
+        _hc = history_check(name, _sp, line, d.get("elapsed_seconds"))
+    except Exception:
+        _hc = None
+    if _hc:
+        _w = "UP" if _hc["call"] == "YES" else "DOWN"
+        _hcl = (f'<div class="mini-call hist-check mc-{"up" if _hc["call"] == "YES" else "down"}"><span class="mc-lbl">HISTORY CHECK</span>'
+                f'<b class="mc-dir">{"<i class=va-u></i>" if _hc["call"] == "YES" else "<i class=va-d></i>"} {_w}</b><span class="mc-pct">{_hc["pct"] * 100:.0f}%</span>'
+                f'<span class="mc-sub">Price is {abs(_hc["dist"]) * 100:.3f}% {"above" if _hc["dist"] >= 0 else "below"} the line {_hc["minute"]} min into the round. '
+                f'Of {_hc["n"]:,} rounds in the last 30 days that were in this same spot, {_hc["pct"] * 100:.0f}% ended {_w}.</span></div>')
+        mini = re.sub(r'<div class="mc-same">.*?</div>', '', mini, flags=re.S)       # the history check replaces it
+        mini = _hcl + mini.replace('<span class="mc-lbl">MINI CALL</span>', '<span class="mc-lbl">AT THE OPEN</span>').replace('class="mini-call ', 'class="mini-call mc-small ', 1)
     _TGT_MINI[name] = mini
     rows = '<div class="th-chips">'
     for r in near:
