@@ -6113,9 +6113,13 @@ body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minma
 .lw-chip i { font-style:normal; color:#f2c46b; font-weight:800; letter-spacing:.5px; }
 .lw-chip b { color:#fbf0d9; font-size:13px; }
 .lw-rec-g { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:3px 0 6px; }
-.lw-rec-h { font-size:11px; font-weight:800; color:#f2c46b; min-width:86px; }
+.lw-rec-h { font-size:11px; font-weight:800; color:#e6ddd6; min-width:86px; }
 .lw-rec { padding:3px 8px; border-radius:999px; background:rgba(42,34,38,0.7); border:1px solid rgba(255,255,255,0.08); font-size:12px; }
 .lw-rec i { font-style:normal; font-size:10px; color:#bcaaa1; }
+.lw-rec summary { cursor:pointer; list-style:none; } .lw-rec summary::-webkit-details-marker { display:none; }
+details.lw-rec[open] { flex-basis:100%; border-radius:12px; }
+.lw-rec-body { margin-top:6px; font-size:12px; line-height:1.4; }
+.lw-rec-story { margin-top:4px; }
 .lw-key { margin:4px 2px 2px; font-size:11px; }
 .lw-pats { margin-top:6px; }
 .lw-pat-head { margin:8px 2px 4px; font-size:11px; letter-spacing:.3px; }
@@ -8288,14 +8292,30 @@ async function lwPatterns(o) {
     rec += '<div class="lw-rec-g"><span class="lw-rec-h">' + lab + '</span>' + xs.map(x => {
       const up = x.bias === 'bullish';
       const res = x.result === 'hit' ? ' <span class="up">worked</span>' : (x.result === 'miss' ? ' <span class="down">failed</span>' : '');
-      return '<span class="lw-rec"><span class="' + (up ? 'up' : 'down') + '">' + (up ? '&#9650;' : '&#9660;') + '</span> ' + esc(x.name.split(' - ')[0].split(' (')[0])
-        + ' <i>' + x.tf + '</i>' + (x.rate != null && x.n >= 20 ? ' <span class="hint">' + Math.round(x.rate * 100) + '%</span>' : '') + res + '</span>';
+      // what happened since it formed: price then -> best / final / now, in plain words
+      const pct = (a, b) => (a && b) ? ((b - a) / a * 100) : null, f = v => lwMoney(o.a, v);
+      const mv = pct(x.price, x.final != null ? x.final : x.now);
+      const goodWay = mv === null ? null : (up ? mv >= 0 : mv <= 0);
+      let story = '';
+      if (x.price) {
+        story += 'Formed at ' + esc(x.at) + ' with price at ' + f(x.price) + '. ';
+        if (x.target) story += 'It pointed ' + (up ? 'up' : 'down') + ' toward ' + f(x.target) + '. ';
+        if (x.best) story += 'Best move after: ' + f(x.best) + '. ';
+        if (mv !== null) story += (x.final != null ? 'It finished at ' : 'Price is now ') + f(x.final != null ? x.final : x.now) + ' ('
+          + (mv >= 0 ? '+' : '') + mv.toFixed(2) + '%) - <b class="' + (goodWay ? 'up' : 'down') + '">' + (goodWay ? 'went the way it pointed' : 'went the other way') + '</b>.';
+      }
+      return '<details class="lw-rec"><summary><span class="' + (up ? 'up' : 'down') + '">' + (up ? '&#9650;' : '&#9660;') + '</span> ' + esc(x.name.split(' - ')[0].split(' (')[0])
+        + ' <i>' + x.tf + '</i>' + (x.rate != null && x.n >= 20 ? ' <span class="hint">' + Math.round(x.rate * 100) + '%</span>' : '') + res + '</summary>'
+        + '<div class="lw-rec-body">' + (x.what ? '<div>' + esc(x.what) + '</div>' : '') + (x.means ? '<div class="hint">' + esc(x.means) + '</div>' : '')
+        + (story ? '<div class="lw-rec-story">' + story + '</div>' : '') + '</div></details>';
     }).join('') + '</div>';
   });
+  const openNow = new Set([...o.pats.querySelectorAll('details[open] > summary')].map(x => x.textContent));
   o.pats.innerHTML = '<div class="hint lw-pat-head">Formed in the last hour (double tops / bottoms, wedges, AMD, head and shoulders, hanging man and more)</div>'
     + (rec || '<div class="hint">Nothing important formed in the last hour.</div>')
     + '<div class="hint lw-pat-head">Forming now: 80%+ built, proven on this coin and timeframe</div>'
     + (items || '<div class="hint">Nothing reliable forming right now.</div>') + (worked ? '<div class="hint lw-pat-head">Recently worked</div>' + worked : '');
+  o.pats.querySelectorAll('details > summary').forEach(x => { if (openNow.has(x.textContent)) x.parentNode.open = true; });
 }
 function lwAttach() {
   if (typeof LightweightCharts === 'undefined') return;
@@ -8785,8 +8805,12 @@ def _recent_formations(asset_name):
             if st["decisive"] >= CHART_PAT_MIN_N and (st["rate"] or 0) < 0.5:
                 continue
             seen.add(key)
+            ex = _pat_explain(nm) or {}
             out.append({"name": nm, "bias": e["bias"], "tf": tf, "mins": max(0, int((now - e["ts"]) // 60)),
-                        "rate": round(st["rate"], 3) if st["rate"] is not None else None, "n": st["decisive"], "result": e.get("result")})
+                        "rate": round(st["rate"], 3) if st["rate"] is not None else None, "n": st["decisive"], "result": e.get("result"),
+                        "at": _tstr(e["ts"]), "price": e.get("price") or None, "target": e.get("target"), "best": e.get("best"),
+                        "final": e.get("final"), "now": (_state.get(asset_name) or {}).get("spot_price"),
+                        "what": ex.get("what", ""), "means": ex.get("means", "")})
     out.sort(key=lambda x: x["mins"])
     return out[:20]
 
@@ -11968,7 +11992,6 @@ def render_html():
               {_kalshi_line(d)}
             </div>
             {build_time_until_call(name, d)}
-            {build_streak_box(name, d)}
           </div>
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}
