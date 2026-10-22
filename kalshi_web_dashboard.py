@@ -6326,6 +6326,23 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 .bhb-sub { font-family:var(--br-label); font-weight:800; font-size:11.5px; letter-spacing:1.4px; text-transform:uppercase; color:var(--br-tan); margin:10px 0 6px; }
 .bhb-sub .hint { font-family:var(--br-sans); font-weight:400; letter-spacing:0; text-transform:none; }
 .rounds-panel .mini-call { margin-top:0; }
+/* 2026-10-22 (user): whale & liquidity alerts blend in like buy pressure - no boxed panel, title in the BRAIN pink gradient */
+.card .top-alerts, body[data-view] .card .top-alerts { border:0 !important; background:none !important; box-shadow:none !important; border-radius:0 !important;
+  padding:2px 2px 4px !important; margin:6px 0 10px !important; }
+.card .top-alerts::before { display:none !important; }
+.card .top-alerts > .top-w-title, body .card .top-alerts > .top-w-title, body[data-view] .card .top-alerts > .top-w-title {
+  position:static !important; display:inline-block !important; clip-path:none !important; filter:none !important; padding:0 0 6px !important; margin:0 !important;
+  background:linear-gradient(90deg, #e9a5bb 0%, #f3c6b4 50%, #dcbb91 100%) !important; -webkit-background-clip:text !important; background-clip:text !important;
+  color:transparent !important; font-family:var(--br-label) !important; font-weight:900 !important; font-size:15px !important; letter-spacing:2px !important;
+  max-width:100%; }
+/* 2026-10-22 (user): a SURGE is the net of all trades (not a new order) - so it gets its own look: white bar, colored writing */
+.fa-item[data-kind="burst"].fa-up, .fa-item[data-kind="burst"].fa-down { background:#f7f3ee !important; box-shadow:0 0 10px rgba(255,255,255,0.18) !important; }
+.fa-item[data-kind="burst"].fa-down { border:1px solid #f7f3ee !important; border-left:6px solid #e0283f !important; }
+.fa-item[data-kind="burst"].fa-up { border:1px solid #f7f3ee !important; border-left:6px solid #12a065 !important; }
+.fa-item[data-kind="burst"].fa-down, .fa-item[data-kind="burst"].fa-down .fa-head, .fa-item[data-kind="burst"].fa-down .fa-where,
+.fa-item[data-kind="burst"].fa-down .fa-age, .fa-item[data-kind="burst"].fa-down .fa-arrow, .fa-item[data-kind="burst"].fa-down .fa-usd { color:#d61f37 !important; text-shadow:none !important; }
+.fa-item[data-kind="burst"].fa-up, .fa-item[data-kind="burst"].fa-up .fa-head, .fa-item[data-kind="burst"].fa-up .fa-where,
+.fa-item[data-kind="burst"].fa-up .fa-age, .fa-item[data-kind="burst"].fa-up .fa-arrow, .fa-item[data-kind="burst"].fa-up .fa-usd { color:#0e8f58 !important; text-shadow:none !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
