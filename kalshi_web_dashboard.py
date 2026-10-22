@@ -2926,6 +2926,153 @@ WHALE_FLOW_SUMMARY_SECONDS = 300  # the "last 5min" summary row window - separat
                                     # widen this display's "5min" claim too.
 
 
+# ---- 2026-10-22: exchange trust tiers + whale impact scale ------------------------------------------------------------
+# Kalshi's BTC and XRP rounds settle on CF Benchmarks real-time indexes, built only from the exchanges below (CF's
+# constituent list v13.7, Aug 24 2026). A whale on one of THOSE moves the settlement price directly.
+#   A = settlement-index exchange for that coin (US-regulated, audited volume)
+#   B = large, legitimate global venue that leads price discovery but is not in the index (incl. the big perp markets)
+#   C = real exchange but lower-trust prints: offshore with US enforcement history and/or thin or inflated volume
+#       (KuCoin - pleaded guilty 2025 and barred from US users 2026; BitMEX; Gate.io; Bitget; Binance.US - thin)
+INDEX_VENUES = {"BTC": {"coinbase", "kraken", "bitstamp", "gemini", "cryptocom"},
+                "XRP": {"coinbase", "kraken", "bitstamp", "cryptocom"}}
+TIER_B_VENUES = {"binance", "okx", "bybit", "bitfinex", "gemini", "binance_perp", "okx_perp", "bybit_perp",
+                 "deribit", "hyperliquid"}
+TIER_WEIGHT = {"A": 1.0, "B": 0.6, "C": 0.25}
+TIER_TRUST = {"A": 95, "B": 75, "C": 35}          # 0-100 "how much to believe this print"
+WHALE_VOICE_TIERS = ("A", "B")                     # tier C prints stay on screen but are never read out loud
+WHALE_CHECK_AFTER_S = 60
+WHALE_IMPACT_LOG = os.path.join(_DATA_ROOT, "bot_state", "whale_impact_log.csv")
+_whale_pending = []                                # alerts waiting for their 60s follow-up
+_whale_scorecard = {}                              # (asset, tier) -> [n, moved_with_whale]
+
+
+def venue_tier(asset, venue):
+    v = (venue or "").lower()
+    if v in INDEX_VENUES.get(asset, set()):
+        return "A"
+    return "B" if v in TIER_B_VENUES else "C"
+
+
+def whale_impact(asset, side, usd, venue, spot, line, seconds_left, kalshi_yes, sigma_bps_min):
+    """How much one big print can matter for THIS round. Square-root price-impact rule of thumb: a trade moves price by
+    roughly one minute's volatility x sqrt(trade size / one minute's volume), scaled by how much that exchange's price
+    counts. Compared with how far price is from the line and how decided Kalshi's odds already are."""
+    tier = venue_tier(asset, venue)
+    try:
+        bu, se, _n = _flow.HUB.window_totals(asset, 300)
+        vol_min = max((bu + se) / 5.0, usd)
+    except Exception:
+        vol_min = usd * 20
+    sigma = sigma_bps_min if sigma_bps_min and sigma_bps_min > 0 else 5.0
+    move_bps = TIER_WEIGHT[tier] * sigma * math.sqrt(min(1.0, usd / max(vol_min, 1.0)))
+    up = side == "buy"
+    cushion_bps = abs(spot - line) / line * 1e4 if (spot and line) else None
+    above = (spot >= line) if (spot and line) else None
+    toward = (above is not None) and (up != above)          # pushes price back toward / across the line
+    p_up = kalshi_yes if (kalshi_yes is not None and 0 <= kalshi_yes <= 1) else None
+    p_push = (p_up if up else 1 - p_up) if p_up is not None else None   # Kalshi's odds for the side the whale pushes
+    if cushion_bps is None:
+        impact = 30
+    elif toward:
+        impact = min(100, 100 * move_bps / max(cushion_bps, 0.5))
+    else:
+        impact = min(40, 15 * move_bps / max(sigma, 0.5))   # pushing the way it's already winning = confirmation
+    if p_push is not None and (p_push >= 0.95 or p_push <= 0.05):
+        impact *= 0.4                                       # round is basically decided either way
+    if seconds_left is not None and seconds_left < 60:
+        impact *= 1.2                                       # late prints land inside the settlement average
+    impact = int(round(min(100, impact)))
+    level = "high" if impact >= 60 else ("medium" if impact >= 25 else "low")
+    move_usd = (spot or 0) * move_bps / 1e4
+    # words read after the whale line
+    if tier == "C":
+        say = "Low trust exchange, not counted."
+    else:
+        bits = []
+        if cushion_bps is not None and toward and impact >= 60:
+            bits.append("Big enough to flip the line")
+        elif cushion_bps is not None and toward and impact >= 25:
+            bits.append("Pushes toward the line, not enough alone")
+        elif cushion_bps is not None and not toward:
+            bits.append("Backs the side that's winning")
+        else:
+            bits.append("Small impact")
+        if p_push is not None:
+            if p_push >= 0.95 or p_push <= 0.05:
+                bits.append(f"round is decided, {round(max(p_push, 1 - p_push) * 100)} percent")
+            elif 0.40 <= p_push <= 0.60:
+                bits.append("toss-up, this could tip it")
+            else:
+                bits.append(f"Kalshi {round(p_push * 100)} percent this way")
+        if tier == "A":
+            bits.append("index exchange")
+        say = ". ".join(b[:1].upper() + b[1:] for b in bits) + "."
+    return {"tier": tier, "trust": TIER_TRUST[tier], "impact": impact, "level": level, "move_bps": round(move_bps, 2),
+            "move_usd": round(move_usd, 4), "cushion_bps": round(cushion_bps, 2) if cushion_bps is not None else None,
+            "toward": toward, "p_push": p_push, "say": say, "voice": tier in WHALE_VOICE_TIERS}
+
+
+def _whale_track(asset, side, usd, venue, imp, spot, ts):
+    """Remember the alert; 60s later check whether price moved the whale's way (builds the accuracy scale)."""
+    if spot:
+        _whale_pending.append({"asset": asset, "side": side, "usd": usd, "venue": venue, "imp": imp, "spot": spot, "ts": ts})
+        del _whale_pending[:-500]
+
+
+def _whale_followups(asset, spot_now):
+    if not spot_now:
+        return
+    now = time.time()
+    keep = []
+    for w in _whale_pending:
+        if w["asset"] != asset or now - w["ts"] < WHALE_CHECK_AFTER_S:
+            keep.append(w)
+            continue
+        moved = (spot_now - w["spot"]) * (1 if w["side"] == "buy" else -1)
+        ok = moved > 0
+        sc = _whale_scorecard.setdefault((asset, w["imp"]["tier"]), [0, 0])
+        sc[0] += 1
+        sc[1] += 1 if ok else 0
+        try:
+            os.makedirs(os.path.dirname(WHALE_IMPACT_LOG), exist_ok=True)
+            new = not os.path.exists(WHALE_IMPACT_LOG)
+            with open(WHALE_IMPACT_LOG, "a", newline="") as f:
+                wr = csv.writer(f)
+                if new:
+                    wr.writerow(["ts", "asset", "side", "usd", "venue", "tier", "impact", "level", "est_move_bps",
+                                 "cushion_bps", "toward_line", "p_push", "spot_at", "spot_60s", "moved_bps", "moved_with_whale"])
+                wr.writerow([dt.datetime.fromtimestamp(w["ts"], dt.timezone.utc).isoformat(), asset, w["side"], round(w["usd"]),
+                             w["venue"], w["imp"]["tier"], w["imp"]["impact"], w["imp"]["level"], w["imp"]["move_bps"],
+                             w["imp"]["cushion_bps"], w["imp"]["toward"], w["imp"]["p_push"], w["spot"], spot_now,
+                             round(moved / w["spot"] * 1e4, 2), ok])
+        except Exception as _we:
+            print(f"[whale impact] log failed: {_we!r}")
+    _whale_pending[:] = keep
+
+
+def _load_whale_scorecard():
+    """Rebuild the per-tier hit rates from the saved log so the scale survives restarts."""
+    try:
+        with open(WHALE_IMPACT_LOG, newline="") as f:
+            for r in csv.DictReader(f):
+                sc = _whale_scorecard.setdefault((r["asset"], r["tier"]), [0, 0])
+                sc[0] += 1
+                sc[1] += 1 if r["moved_with_whale"] == "True" else 0
+    except FileNotFoundError:
+        pass
+    except Exception as _e:
+        print(f"[whale impact] could not read log: {_e!r}")
+
+
+def whale_scorecard_html(asset):
+    rows = []
+    for tier in ("A", "B", "C"):
+        n, ok = _whale_scorecard.get((asset, tier), [0, 0])
+        lab = {"A": "Index exchanges", "B": "Big global venues", "C": "Low-trust venues"}[tier]
+        rows.append(f'{lab}: {f"{ok / n * 100:.0f}% moved the whale&#39;s way within 60s ({n})" if n else "no checked alerts yet"}')
+    return '<div class="hint">Whale accuracy so far &middot; ' + " &middot; ".join(rows) + '</div>'
+
+
 def get_whale_flow(symbol, window_seconds=WHALE_FLOW_SUMMARY_SECONDS):
     """Summary of whale trades in the window + whether a 'huge' one just
     landed (edge-triggered: alert_side is set once per big trade, then None
@@ -4831,6 +4978,17 @@ def poll_loop():
                                                                             # stop retrying
 
                 whale = get_whale_flow(asset["symbol"])
+                try:
+                    _whale_followups(asset["name"], live_price)
+                    if whale.get("alert_side"):
+                        whale["impact"] = whale_impact(asset["name"], whale["alert_side"], whale.get("alert_usd") or 0,
+                                                       whale.get("alert_venue") or "", live_price, target, seconds_left,
+                                                       kalshi_price, fair_sigma_bps_min)
+                        _whale_track(asset["name"], whale["alert_side"], whale.get("alert_usd") or 0,
+                                     whale.get("alert_venue") or "", whale["impact"], live_price,
+                                     whale.get("alert_ts") or time.time())
+                except Exception as _wie:
+                    print(f"[whale impact] {_wie!r}")
                 book_walls = get_book_walls(asset["symbol"], live_price)
                 incoming_ev = _flow.HUB.incoming(asset["name"]) if asset["name"] in _flow.ASSETS else None
                 try:
@@ -7073,7 +7231,9 @@ function checkWhaleAlerts() {
         if (wside === 'buy') playChaChingBig(); else playDenied();
         const wcoin = name === 'BTC' ? 'Bitcoin' : name;
         const amt = wusd >= 1e6 ? (wusd / 1e6).toFixed(1) + ' million dollar ' : (wusd >= 1e3 ? Math.round(wusd / 1e3) + ' thousand dollar ' : '');
-        speakDelayed(amt.charAt(0).toUpperCase() + amt.slice(1) + (amt ? 'whale ' : 'Whale ') + wside + ' on ' + wcoin + (withMove ? '.' : ', against the move.'), 1300);
+        // 2026-10-22: then how much it can matter for this round (size vs volume, distance to the line, Kalshi's odds)
+        const wsay = el.getAttribute('data-whale-say') || '';
+        speakDelayed(amt.charAt(0).toUpperCase() + amt.slice(1) + (amt ? 'whale ' : 'Whale ') + wside + ' on ' + wcoin + (withMove ? '.' : ', against the move.') + (wsay ? ' ' + wsay : ''), 1300);
       }
     }
   });
@@ -10179,12 +10339,14 @@ def render_html():
             _items = []
             for _ts, _usd, _side, _ven in whale["recent"]:
                 _age = max(0, int(time.time() - _ts))
+                _tg = {"A": " &middot; index", "C": " &middot; low trust"}.get(venue_tier(name, _ven), "")
                 _items.append(f'<span class="{"up" if _side == "buy" else "down"}"><b>{"&#9650; BUY" if _side == "buy" else "&#9660; SELL"} {_m(_usd)}</b></span> '
-                              f'<span class="hint">{_vname(_ven)}, {_age}s ago</span>')
+                              f'<span class="hint">{_vname(_ven)}{_tg}, {_age}s ago</span>')
             _big = whale.get("biggest_whale")
             _bigtxt = (f'<br><span class="hint">biggest in 5 min: {"BUY" if _big[2] == "buy" else "SELL"} {_m(_big[1])} on {_vname(_big[3])}</span>'
                        if _big else "")
-            whale_latest_html = f'<div class="whale-latest">{" &nbsp;|&nbsp; ".join(_items)}{_bigtxt}</div>'
+            whale_latest_html = (f'<div class="whale-latest">{" &nbsp;|&nbsp; ".join(_items)}{_bigtxt}</div>'
+                                 f'<!--OWNER-->{whale_scorecard_html(name)}<!--/OWNER-->')
         _inc = d.get("incoming")
         incoming_marker = (f'<span class="incoming-alert" data-name="{name}" data-side="{_inc["side"]}" data-usd="{_inc["usd"]:.0f}" '
                            f'data-venues="{_inc["venues"]}" data-top="{_inc["top"]}" data-key="{name}::{_inc["ts"]:.0f}" style="display:none;"></span>'
@@ -10195,8 +10357,12 @@ def render_html():
         _wt = d.get("micro_dir") if d.get("micro_dir") in ("up", "down") else None
         if _wt is None and d.get("spot_price") is not None and d.get("target_price"):
             _wt = "up" if d["spot_price"] >= d["target_price"] else "down"
+        _wimp = whale.get("impact") or {}
+        if _wimp and not _wimp.get("voice"):
+            whale_alert_side = None          # 2026-10-22: low-trust exchange prints are never announced
         whale_marker = (f'<span class="whale-alert" data-whale-name="{name}" data-whale-usd="{whale.get("alert_usd") or 0:.0f}" '
-                        f'data-whale-trend="{_wt or ""}" '
+                        f'data-whale-trend="{_wt or ""}" data-whale-say="{_html_attr(_wimp.get("say", ""))}" '
+                        f'data-whale-impact="{_wimp.get("impact", "")}" data-whale-tier="{_wimp.get("tier", "")}" '
                         f'data-whale-venue="{_vname(whale.get("alert_venue") or "")}" '
                         f'data-whale-side="{whale_alert_side}" data-whale-key="{name}::{whale.get("alert_ts")}" '
                         f'style="display:none;"></span>'
@@ -12419,6 +12585,7 @@ def main():
     total = sum(len(v) for v in _history.values())
     if total:
         print(f"Loaded {total} past graded windows from disk ({HISTORY_FILE}).")
+    _load_whale_scorecard()
     try:
         _ks = _kcreds.info()
         _env_key = bool(os.environ.get("KALSHI_API_KEY_ID"))
