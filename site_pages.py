@@ -344,11 +344,11 @@ def message_page(title, text, link="/", link_label="Back home", tone="ok"):
 # ------------------------------------------------------------------------------------------------ in-app tabs + admin
 TABS_CSS = r"""
 .app-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 10px;align-items:center}
-.app-tabs a{text-decoration:none;font:900 13px Nunito,sans-serif;color:#eee2d7;padding:7px 12px;border-radius:999px;
+.app-tabs a{text-decoration:none;font:800 12.5px Montserrat,Arial,sans-serif;color:#eee2d7;padding:7px 12px;border-radius:999px;
  border:1px solid rgba(240,214,200,.2);background:rgba(56,45,50,.7)}
 .app-tabs a.on{background:#e9a5bb;color:#1a1218;border-color:#e9a5bb}
 .app-tabs .nb{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:#ff6b81;color:#fff;font-size:11px;text-align:center}
-.app-tabs .who{margin-left:auto;font:700 12px Nunito,sans-serif;color:#bcaaa1}
+.app-tabs .who{margin-left:auto;font:700 12px Montserrat,Arial,sans-serif;color:#bcaaa1}
 """
 
 
@@ -549,8 +549,8 @@ GUIDE = [
 ]
 
 GUIDE_CSS = r"""
-.guide{max-width:820px;margin:0 auto;padding:12px 16px 50px;font-family:Nunito,sans-serif}
-.guide h2{font:600 12px Nunito,sans-serif;color:#dcbb91;letter-spacing:1.6px;margin:24px 0 8px}
+.guide{max-width:820px;margin:0 auto;padding:12px 16px 50px;font-family:Carlito,Calibri,'Segoe UI',sans-serif}
+.guide h2{font:700 12px Montserrat,Arial,sans-serif;color:#dcbb91;letter-spacing:1.6px;margin:24px 0 8px}
 .guide .it{background:rgba(56,45,50,.85);border:1px solid rgba(240,214,200,.14);border-radius:14px;padding:11px 13px;margin:8px 0}
 .guide .it b{display:block;color:#fbf4ec;font-size:15px;margin-bottom:2px}.guide .it span{color:#e2d4c9}
 """

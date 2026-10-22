@@ -5716,7 +5716,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .round-strip { display:grid; grid-template-columns:minmax(260px,1.3fr) minmax(200px,1fr) minmax(200px,1fr); gap:12px; margin-bottom:12px; }
 @media (max-width:760px) { .round-strip { grid-template-columns:1fr 1fr; } .rs-odds { grid-column:1 / -1; } }
 .rs-tile { background:#272024; border:1px solid #4a3c43; border-radius:14px; padding:12px 14px; min-width:0; }
-.rs-clock { float:right; color:#fbf4ec; letter-spacing:0; font-family:'JetBrains Mono', Consolas, monospace; }
+.rs-clock { float:right; color:#fbf4ec; letter-spacing:0; font-family:var(--br-bold); font-weight:800; }
 .rs-odds-nums { display:flex; justify-content:space-between; font-size:15px; }
 .rs-odds-nums b { font-size:30px; font-weight:800; }
 .rs-odds-bar { position:relative; height:10px; border-radius:5px; background:#cf3b3b; overflow:hidden; margin:6px 0 4px; }
@@ -5854,16 +5854,16 @@ h1 { display:none; }
 @keyframes bSpark { 0%,100% { opacity:0.4; } 50% { opacity:1; } }
 .g-logo { font-family:var(--br-serif); font-size:42px; line-height:1; letter-spacing:3px; color:#ffffff;
   text-shadow:0 2px 0 rgba(0,0,0,0.5), 0 0 18px rgba(255,255,255,0.12); }
-.g-tag { display:flex; align-items:center; gap:12px; font-family:'Bebas Neue', 'Inter', sans-serif; font-size:20px; letter-spacing:2px; color:#dcbb91; }
+.g-tag { display:flex; align-items:center; gap:12px; font-family:var(--br-label); font-weight:800; font-size:13px; letter-spacing:2px; text-transform:uppercase; color:#dcbb91; }
 .g-live { color:#f05454; font-size:16px; text-shadow:0 0 10px rgba(240,84,84,0.7); }
 .card { background:linear-gradient(180deg, rgba(44,35,39,0.92) 0%, rgba(36,29,32,0.94) 100%) !important;
   border:1px solid rgba(255,255,255,0.08) !important; border-radius:20px !important;
   box-shadow:0 18px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04) !important; backdrop-filter:blur(6px); }
 .rs-tile, .scoreboard, .top-w, .rounds-panel, .tug, .sc-col, .rc { background:rgba(48,39,43,0.90) !important; border-color:rgba(255,255,255,0.08) !important; }
-.rs-title, .top-w-title, .sc-title, .press-head b, .tug-title { font-family:'Bebas Neue', 'Inter', sans-serif !important; font-size:17px !important;
+.rs-title, .top-w-title, .sc-title, .press-head b, .tug-title { font-family:var(--br-label) !important; font-size:17px !important;
   letter-spacing:2px !important; color:#dcbb91 !important; font-weight:400 !important; }
 .press-head b { color:#e8c27c !important; font-size:20px !important; }
-.sb-title { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:17px !important; letter-spacing:2px; font-weight:400 !important; }
+.sb-title { font-family:var(--br-label); font-size:17px !important; letter-spacing:2px; font-weight:400 !important; }
 .sb-dir, .sc-pct, .rsi-num, .fr-big, .tuc-time { font-family:var(--br-serif); font-weight:400 !important; letter-spacing:1px; }
 .calls-row .sb-dir { font-size:24px; }
 .sc-pct { font-size:26px; } .rsi-num { font-size:30px; } .flip-radar .fr-big { font-size:24px; }
@@ -5880,13 +5880,13 @@ h1 { display:none; }
 .size-mode-active { background:rgba(233,165,187,0.16) !important; border-color:#e9a5bb !important; color:#f6d9e2 !important; }
 .tier-super { color:#e8c27c !important; border-color:#e8c27c !important; background:rgba(232,194,124,0.12) !important; }
 .tier-good { color:#3dd69c !important; border-color:#3dd69c !important; }
-.more-detail > summary b { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:18px; letter-spacing:2px; color:#dcbb91; font-weight:400; }
+.more-detail > summary b { font-family:var(--br-label); font-size:18px; letter-spacing:2px; color:#dcbb91; font-weight:400; }
 #top-banner { background:#2a2226 !important; }
 .sound-bar { background:rgba(48,39,43,0.9) !important; border-color:rgba(255,255,255,0.08) !important; border-radius:14px !important; }
 /* time-until-call box (top row) */
 .tuc { min-width:160px; text-align:center; border:1px solid rgba(255,255,255,0.10) !important; background:rgba(48,39,43,0.9) !important;
   border-radius:14px !important; padding:8px 12px !important; width:auto !important; flex:0 1 190px !important; }
-.tuc-lbl { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:15px; letter-spacing:2px; color:#dcbb91; }
+.tuc-lbl { font-family:var(--br-label); font-size:15px; letter-spacing:2px; color:#dcbb91; }
 .tuc-time { font-size:30px; line-height:1.1; color:#ffffff; }
 .tuc-what { font-size:12px; color:#eee2d7; margin-top:2px; }
 .tuc.tuc-early .tuc-what b { color:#e9a5bb; } .tuc.tuc-sealed .tuc-what b { color:#e8c27c; }
@@ -5900,7 +5900,7 @@ h1 { display:none; }
 .mkt-btns button.sel { outline:2px solid #ffffff; outline-offset:1px; }
 .mkt-pane { display:none; font-size:12px; margin-top:5px; } .mkt-pane.show { display:block; }
 .mkt-pane b { font-size:13px; }
-.stage-pend { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:22px; letter-spacing:2px; color:#bcaaa1; margin:4px 0; }
+.stage-pend { font-family:var(--br-label); font-size:22px; letter-spacing:2px; color:#bcaaa1; margin:4px 0; }
 .stage-cd { margin:2px 0 6px; } .stage-cd .hint { font-size:12px; letter-spacing:1px; text-transform:uppercase; }
 .stage-cd-t { font-family:var(--br-serif); font-size:30px; color:#ffffff; letter-spacing:1px; }
 .stage-cd-t.now { font-size:18px; color:#f2c46b; }
@@ -5922,7 +5922,7 @@ h1 { display:none; }
 /* ======================= BRAIN rose skin (2026-10-20 b): its own look - rosy grey, tan and cream, soft serifs ======================= */
 :root { --br-bg:#211b1e; --br-tile:rgba(56,45,50,0.88); --br-line:rgba(240,214,200,0.12);
   --br-cream:#fbf4ec; --br-text:#eee2d7; --br-mute:#bcaaa1; --br-tan:#dcbb91; --br-blush:#e9a5bb;
-  --br-win:#e5b85c; --br-loss:#a99be0; --br-serif:'Fraunces', Georgia, 'Times New Roman', serif; --br-sans:'Nunito', 'Inter', -apple-system, sans-serif; }
+  --br-win:#e5b85c; --br-loss:#a99be0; --br-serif:'Fraunces', Georgia, 'Times New Roman', serif; --br-sans:'Carlito', 'Calibri', 'Segoe UI', -apple-system, Arial, sans-serif; }
 html, body { font-family:var(--br-sans) !important; }
 body { color:var(--br-text) !important; background-color:var(--br-bg) !important;
   background-image:radial-gradient(1100px 520px at 100% -8%, rgba(233,165,187,0.16), transparent 62%),
@@ -6014,7 +6014,7 @@ body { background:#15110f !important; }
 .sk-loss { border-color:#f05454 !important; box-shadow:0 0 16px rgba(240,84,84,0.16) !important; }
 .sk-chips i.w, .sc-chips i.w { background:rgba(61,214,156,0.22) !important; color:#3dd69c !important; }
 .snd-toggle { margin-left:auto; padding:9px 16px; border-radius:999px; border:1.5px solid #f05454; background:rgba(240,84,84,0.14); color:#ffd9df;
-  font:800 14px 'Nunito', 'Inter', sans-serif; cursor:pointer; white-space:nowrap; min-height:40px; -webkit-tap-highlight-color:transparent; }
+  font:800 14px var(--br-bold); cursor:pointer; white-space:nowrap; min-height:40px; -webkit-tap-highlight-color:transparent; }
 .snd-toggle.on { border-color:#3dd69c; background:rgba(61,214,156,0.16); color:#c9f7e6; }
 .snd-toggle + .wr-badge { margin-left:8px; }
 .sb-conf b, .sb-klock b { font-size:1.08em; }
@@ -6059,7 +6059,7 @@ body { background:#15110f !important; }
 /* 2026-10-22 (c): slim translucent pills that float over the page with a soft glow - colours from the background art
    (slate-teal glass, charcoal-brown, dusty taupe). Against the call = sand-amber glow; REVERSAL = muted copper; HOLD = sage. */
 .fw-item { pointer-events:auto; display:inline-flex; align-items:center; gap:8px; max-width:min(560px, 100%);
-  padding:5px 8px 5px 12px; border-radius:999px; font:800 12.5px 'Nunito', 'Inter', sans-serif; color:#efe6df; white-space:nowrap;
+  padding:5px 8px 5px 12px; border-radius:999px; font:800 12.5px var(--br-bold); color:#efe6df; white-space:nowrap;
   background:rgba(30,46,50,0.42); -webkit-backdrop-filter:blur(12px) saturate(1.2); backdrop-filter:blur(12px) saturate(1.2);
   border:1px solid rgba(255,255,255,0.28); box-shadow:0 0 14px rgba(255,255,255,0.28), 0 0 3px rgba(255,255,255,0.35), 0 4px 14px rgba(0,0,0,0.25); }
 .fw-item b { font-weight:900; letter-spacing:1px; color:#cdb6ad; }
@@ -6134,7 +6134,7 @@ body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minma
 .rsi-lx { display:flex !important; flex-direction:column; justify-content:center; gap:8px; padding:10px 8px !important; }
 /* 2026-10-22 (user): market trend lives in the RSI + line-cross tile; all 4 tiles in one row on desktop */
 .lx-mkt { border-top:1px solid rgba(255,255,255,0.10); padding-top:8px; text-align:center; }
-.lx-mkt-lbl { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:13px; letter-spacing:2px; color:var(--br-tan, #dcbb91); }
+.lx-mkt-lbl { font-family:var(--br-label); font-size:13px; letter-spacing:2px; color:var(--br-tan, #dcbb91); }
 .lx-mkt .mkt { background:none !important; border:0 !important; padding:0 !important; margin:3px 0 0 !important; min-width:0 !important; box-shadow:none !important; }
 .lx-mkt .mkt-btns { display:flex; gap:3px; justify-content:center; flex-wrap:wrap; }
 .lx-mkt .mkt-btns button { font-size:10px !important; padding:3px 5px !important; min-width:0 !important; flex:1 1 0; }
@@ -6164,7 +6164,7 @@ body[data-view="both"] .stage-cd-t { font-size:24px; }
   position:absolute !important; top:0; left:0; margin:0 !important; padding:7px 38px 6px 14px !important;
   max-width:calc(100% - 36px); box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   background:linear-gradient(90deg, #e9a5bb 0%, #e3b39f 55%, #dcbb91 100%) !important; color:#2a1b21 !important;
-  font-family:'Bebas Neue', 'Inter', sans-serif !important; font-size:17px !important; font-weight:400 !important; letter-spacing:2.2px !important;
+  font-family:var(--br-label) !important; font-size:17px !important; font-weight:400 !important; letter-spacing:2.2px !important;
   line-height:1.15 !important; text-transform:uppercase; text-shadow:none !important;
   clip-path:polygon(0 0, 100% 0, calc(100% - 24px) 100%, 0 100%); border-top-left-radius:4px;
   filter:drop-shadow(0 0 8px rgba(233,165,187,0.25)); }
@@ -6192,7 +6192,7 @@ body[data-view="both"] .stage-cd-t { font-size:24px; }
    Bebas Neue = every title / label / eyebrow (uppercase, tracked, tan)        -> var(--br-label)
    Nunito    = everything you read (lines, hints, alerts)                      -> var(--br-sans)
    scale: 11 meta / 13 body / 16 label / 20 sub-value / 26 tile value / 34 hero */
-:root { --br-label:'Bebas Neue', 'Nunito', sans-serif; --fs-meta:11px; --fs-body:13px; --fs-label:16px; --fs-sub:20px; --fs-val:26px; --fs-hero:34px; }
+:root { --br-label:'Montserrat', 'Gotham', 'Helvetica Neue', Arial, sans-serif; --fs-meta:11px; --fs-body:13px; --fs-label:16px; --fs-sub:20px; --fs-val:26px; --fs-hero:34px; }
 .rs-title, .top-w-title, .sc-title, .sb-title, .tuc-lbl, .tug-title, .lx-mkt-lbl, .more-detail > summary b, .calls-row .sb-title,
 body[data-view="both"] .calls-row .sb-title, body[data-view="both"] .rs-title {
   font-family:var(--br-label) !important; font-weight:400 !important; font-style:normal !important; text-transform:uppercase !important;
@@ -6345,7 +6345,7 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 .lw-chip { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:0; min-width:54px;
   padding:3px 7px 4px; border-radius:7px; background:rgba(16,12,14,0.88); border:2px solid #b9b3b0;
   box-shadow:inset 0 0 0 2px rgba(16,12,14,0.88), inset 0 0 0 3px rgba(255,255,255,0.10); white-space:nowrap; line-height:1.05; }
-.lw-chip i { font-style:normal; font-family:'Bebas Neue', 'Inter', sans-serif; font-size:12px; font-weight:400; letter-spacing:1.6px; color:#b9b3b0; }
+.lw-chip i { font-style:normal; font-family:var(--br-label); font-size:12px; font-weight:400; letter-spacing:1.6px; color:#b9b3b0; }
 .lw-chip b { color:#ffffff !important; font-size:19px !important; line-height:1.05; margin:1px 0 0; }
 .lw-chip > span { font-size:9px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#b9b3b0; }
 .lw-chip.c-up { border-color:#3dd69c; box-shadow:0 0 8px rgba(61,214,156,0.30); } .lw-chip.c-up i, .lw-chip.c-up > span { color:#3dd69c; }
