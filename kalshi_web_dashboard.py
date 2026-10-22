@@ -6338,9 +6338,9 @@ try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VO
 function setNeuralVoice(v) {
   neuralVoice = v; neuralBroken = false;
   try { localStorage.setItem('neuralVoice', v); } catch (e) {}
-  if (v === 'tony') { speakRaw("Ay, it's Tony from the Bronx. I'm watchin' the market for ya, all day."); speakRaw('Bitcoin sealed call: up, 84 percent sure. Super confidence.'); return; }
-  if (v === 'sarge') { speakRaw('Sarge reporting for duty! I will watch this market so you do not have to!'); speakRaw('Bitcoin sealed call: up, 84 percent sure. Super confidence.'); return; }
-  speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is ' + NEURAL_VOICES[v] + '. Bitcoin sealed call: up, 84 percent sure.');
+  if (v === 'tony') { speakRaw("It's Tony. I got the market. You listen when I talk."); speakRaw('Bitcoin sealed call: up, 84 percent. Strong one.'); return; }
+  if (v === 'sarge') { speakRaw('Sarge here. I watch the market, you stay sharp.'); speakRaw('Bitcoin sealed call: up, 84 percent. Strong one.'); return; }
+  speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is ' + NEURAL_VOICES[v] + '. Bitcoin sealed call: up, 84 percent.');
 }
 // browser fallback: the most natural-sounding female voices first (premium / enhanced / natural before the old robotic ones)
 const VOICE_PREFS = ['Ava (Premium)', 'Zoe (Premium)', 'Ava (Enhanced)', 'Zoe (Enhanced)', 'Allison (Enhanced)', 'Samantha (Enhanced)',
@@ -6690,8 +6690,8 @@ function checkBuildingAlerts() {
     if (why === 'crit') flipFired.add(key + '::jump');
     if (!soundEnabled || assetSoundEnabled[name] === false) return;
     const coin = name === 'BTC' ? 'Bitcoin' : name;
-    if (why === 'crit') speakUrgent('A flip is happening on ' + coin + '.', 0);
-    else speak('Heads up: a flip might be happening on ' + coin + '.', false, 12000);      // budgeted (2026-10-22)
+    if (why === 'crit') speakUrgent(coin + ' is flipping.', 0);
+    else speak(coin + ' might flip.', false, 12000);      // budgeted (2026-10-22)
   });
 }
 
@@ -6731,16 +6731,17 @@ function updateFlipWatch() {
       const coin = name === 'BTC' ? 'Bitcoin' : name;
       const callWord = callName === 'sealed' ? 'the sealed call' : (callName === 'early' ? 'the early call' : 'the call');
       const state = (goingUp ? 'U' : 'D') + (withCall === null ? '' : (withCall ? 'w' : 'a'));
-      const rel = withCall === null ? '' : (withCall ? ', with ' + callWord : ', against ' + callWord);
+      // plain English (user, 2026-10-22): "looking good" / "going the other way", never "against the call"
+      const how = withCall === null ? 'heading ' + (goingUp ? 'up' : 'down') : (withCall ? 'looking good' : 'going the other way');
       if (!w.said10 && left <= 10) {
         w.said10 = true; w.lastSpoke = now; w.lastState = state;
-        speak(coin + ', ten seconds' + (withCall === true ? ', still with ' + callWord : rel) + '.', true, 8000);
+        speak(coin + ', ten seconds, ' + how + '.', true, 8000);
       } else if (!w.said90 && left <= 90 && left > 15) {
         w.said90 = true; w.lastSpoke = now; w.lastState = state;
-        speak(coin + ', ninety seconds, heading ' + (goingUp ? 'up' : 'down') + rel + '.', false, 15000);
-      } else if (state !== w.lastState && withCall !== true && now - w.lastSpoke >= WATCH_EVERY_MS) {
+        speak(coin + ', ninety seconds, ' + how + '.', false, 15000);
+      } else if (state !== w.lastState && w.lastState !== null && now - w.lastSpoke >= WATCH_EVERY_MS) {
         w.lastSpoke = now; w.lastState = state;
-        speak(coin + ' now heading ' + (goingUp ? 'up' : 'down') + rel + '.', false, 15000);
+        speak(coin + (withCall === null ? ' now ' + how : (withCall ? ' turned back our way' : ' turned the other way')) + '.', false, 15000);
       } else if (w.lastState === null) {
         w.lastState = state;                       // the flip alert itself already said this
       }
@@ -6817,8 +6818,7 @@ function updateMoneyMoments() {
       const k1 = roundKey + '::cashout';
       if (holding >= CASHOUT_AT && !moneySaid.has(k1)) {
         moneySaid.add(k1);
-        if (canTalk) speak(coin + ' ' + (callName === 'sealed' ? 'sealed' : 'early') + ' call is at ' + Math.round(holding * 100)
-          + ' percent on the market with ' + _leftWords(left) + '. Some traders cash out here.', true, 15000);
+        if (canTalk && voiceAlertsEnabled) _voicePush(coin + ' call at ' + Math.round(holding * 100) + ' percent, ' + _leftWords(left) + '. Cash-out level.', false, 15000, true);
       }
     }
     // 2) late coin flip (+ flipping)
@@ -6827,11 +6827,9 @@ function updateMoneyMoments() {
       moneySaid.add(k2);
       const flipping = (lastCrossAt[roundKey] && now - lastCrossAt[roundKey] < CROSS_RECENT_MS) || flipFired.has(key + '::crit');
       const lean = kup >= 0.5 ? 'up' : 'down';
-      let line = coin + ' is a real coin flip late in the round. Market ' + Math.round(Math.max(kup, 1 - kup) * 100)
-        + ' percent ' + lean + ', ' + _leftWords(left) + '.';
-      if (flipping) line += " And it's flipping, price just crossed the line.";
-      if (real && ((call === 'YES') !== (kup >= 0.5))) line += ' The market is leaning against the call.';
-      if (canTalk) speak(line, true, 15000);
+      let line = coin + ' is a coin flip, ' + _leftWords(left) + '.';
+      if (flipping) line += ' It just crossed the line.';
+      if (canTalk && soundEnabled && voiceAlertsEnabled) _voicePush(line, false, 15000, true);
     }
   });
   if (moneySaid.size > 400) moneySaid.clear();
@@ -7315,9 +7313,7 @@ function checkStageAlerts() {
       showLockToast(name, what + (sit ? ' - SIT THIS ONE OUT' : ' call SKIPPED'), why);
       if (soundEnabled && assetSoundEnabled[name] !== false) {
         playCallChime('early');
-        speakUrgent(sit && lean
-          ? coinName + ' ' + callName + ': leaning ' + (lean === 'YES' ? 'up' : 'down') + ', but sit this one out.'
-          : coinName + ' ' + callName + ': skipped this round.', 650);
+        setTimeout(() => speak(coinName + ' ' + callName + ': skipping this one.', false, 12000), 650);   // budgeted
       }
       return;
     }
@@ -7326,7 +7322,7 @@ function checkStageAlerts() {
       showLockToast(name, 'LATE CALL - price has decided: ' + dirL.toUpperCase(), '');
       if (soundEnabled && assetSoundEnabled[name] !== false) {
         playCallChime('sealed');
-        speakUrgent(coinName + ' late call: ' + dirL + '. The price has decided.', 650);
+        speakUrgent(coinName + ' late call: ' + dirL + '.', 650);
       }
       return;
     }
@@ -7339,10 +7335,10 @@ function checkStageAlerts() {
       playCallChime(stage);
       // e.g. "Bitcoin sealed call: up, 84 percent sure. Kalshi at 72 percent. Super confidence."
       const d2 = dir === 'UP' ? 'up' : 'down';
-      const conf = { SUPER: ' Super confidence.', GOOD: ' Good confidence.', WEAK: ' Weak confidence.' }[tier] || '';
-      const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent sure.' : '.')
-        + (kpAt ? ' Market at ' + kpAt + ' percent.' : '') + conf
-        + (rev ? ' This one is a reversal.' : '');
+      // plain + short (2026-10-22): "Bitcoin sealed call: up, 84 percent. Strong one." / "... Underdog pick."
+      const conf = tier === 'SUPER' ? ' Strong one.' : '';
+      const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent.' : '.') + conf
+        + (rev ? ' Underdog pick.' : '');
       speakUrgent(line, 650);
     }
   });
@@ -7522,7 +7518,7 @@ function checkWhaleAlerts() {
         const amt = wusd >= 1e6 ? (wusd / 1e6).toFixed(1) + ' million dollar ' : (wusd >= 1e3 ? Math.round(wusd / 1e3) + ' thousand dollar ' : '');
         // 2026-10-22: then how much it can matter for this round (size vs volume, distance to the line, Kalshi's odds)
         const wsay = el.getAttribute('data-whale-say') || '';
-        speakDelayed(amt.charAt(0).toUpperCase() + amt.slice(1) + (amt ? 'whale ' : 'Whale ') + wside + ' on ' + wcoin + (withMove ? '.' : ', against the move.') + (wsay ? ' ' + wsay : ''), 1300);
+        speakDelayed('Whale ' + wside + ' on ' + wcoin + (amt ? ', ' + amt.replace(' dollar ', '').trim() : '') + '.', 1300);     // plain + short (2026-10-22)
       }
     }
   });
@@ -8097,15 +8093,15 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
           <option value="tony">Tony (tough New York guy)</option><option value="sarge">Sarge (drill sergeant)</option><option value="device">This device's voice</option>
         </select></label>
       <br>
-      <button onclick="speakRaw('Heads up: a flip might be happening on Bitcoin.')">Test flip warning</button>
-      <button onclick="speakRaw('A flip is happening on XRP.')">Test flip alert</button>
-      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure. Good confidence.'),650)">Test early call</button>
-      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure. Super confidence.'),650)">Test sealed call</button>
-      <button onclick="speakRaw('Bitcoin flip update: heading down, against the sealed call. Solid, 78 percent on the market. 3 and a half minutes left.')">Test flip update</button>
-      <button onclick="speakRaw('Bitcoin sealed call is at 92 percent on the market with 6 minutes left. Some traders cash out here.')">Test cash-out level</button>
-      <button onclick="speakRaw('XRP is a real coin flip late in the round. Market 52 percent up, 2 minutes left. And it\'s flipping, price just crossed the line.')">Test late coin flip</button>
-      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('2.4 million dollar whale buy on Bitcoin.'),1300)">Test whale BUY (cha-ching)</button>
-      <button onclick="playDenied(); setTimeout(()=>speakRaw('850 thousand dollar whale sell on XRP, against the move.'),1300)">Test whale SELL (double beep)</button>
+      <button onclick="speakRaw('Bitcoin might flip.')">Test flip warning</button>
+      <button onclick="speakRaw('XRP is flipping.')">Test flip alert</button>
+      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent.'),650)">Test early call</button>
+      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent. Strong one.'),650)">Test sealed call</button>
+      <button onclick="speakRaw('Bitcoin, ninety seconds, looking good.')">Test 90-second check-in</button>
+      <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
+      <button onclick="speakRaw('XRP is a coin flip, 2 minutes left. It just crossed the line.')">Test late coin flip</button>
+      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Whale buy on Bitcoin, 2.4 million.'),1300)">Test whale BUY (cha-ching)</button>
+      <button onclick="playDenied(); setTimeout(()=>speakRaw('Whale sell on XRP, 850 thousand.'),1300)">Test whale SELL (double beep)</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
         the early (4:00) and sealed (8:00) calls, and whale trades - a cha-ching when the whale pushes price further the way it is
         already going, a "denied" buzz when it trades against the move.</div>
@@ -11761,16 +11757,16 @@ _NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b
              (r"\b(go|head|mov|flipp|hold|look|build|com|tell|buy|sell|runn|push|turn|hang|watch|bring|happen|mak|stay|get|tak|break)ing\b", r"\1in'"),
              (r"\byour\b", "ya"), (r"\byou\b", "ya"), (r"\bsure\b", "shuah"), (r"\bhere\b", "heah"), (r"\bover\b", "ovah"),
              (r"\bthere\b", "theah"), (r"\bListen\b", "Lissen"), (r"\btalk\b", "tawk"), (r"\bthem\b", "'em"))
-_NY_START = ((r"^Heads up: ", "Ay, heads up! "), (r"^A flip is happening", "Ay, a flip is happenin'"),
+_NY_START = ((r"^Heads up: ", "Ay, heads up! "), (r"^(Bitcoin|XRP) is flipping", r"Ay, \1 is flippin'"),
              (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"Awright. \1 \2 call: "),
              (r"^(Bitcoin|XRP) flip update: ", r"\1, check it out: "))
 _NY_END = ("I'm tellin' ya.", "Trust me.", "Fuhgeddaboudit.")
 _NY_CAUTION = ("Keep ya eyes open, awright?", "Don't sweat it, I got ya.", "Watch it, I'm lookin' out for ya.", "Easy now, stay with me.")
-_SARGE_START = ((r"^Heads up: a", "Attention! A"), (r"^A flip is happening", "Incoming! A flip is happening"),
+_SARGE_START = ((r"^Heads up: a", "Attention! A"), (r"^(Bitcoin|XRP) is flipping", r"Incoming! \1 is flipping"),
                 (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"\1! \2 call! Going "))
 _SARGE_END = ("Outstanding!", "Hooah!", "Good work!")
 _SARGE_CAUTION = ("Stay sharp, I got your six!", "Eyes up! Stay frosty!", "Hold the line! I believe in you!", "Steady! We do this together!")
-_CAUTION = re.compile(r"(?i)flip|against|overbought|oversold|warning|lost|reversal|coin flip|careful|incoming")
+_CAUTION = re.compile(r"(?i)flip|other way|overbought|oversold|warning|lost|coin flip|careful|incoming")
 
 
 # ---- 2026-10-22 (user: "make the New Yorker sound older, more serious, mean but friendly - a real strong New York accent").
