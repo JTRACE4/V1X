@@ -6488,6 +6488,9 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .lx-mkt .mkt-btns button, .card .lx-mkt .mkt-btns button { white-space:nowrap !important; overflow:hidden; font-family:var(--br-bold) !important;
   font-weight:800 !important; font-size:10px !important; letter-spacing:-.3px !important; padding:4px 3px !important; min-width:0 !important; flex:1 1 auto !important; line-height:1.2 !important; overflow:visible !important; }
 .lx-mkt .mkt-pane { font-size:11.5px !important; }
+.lw-chip .lw-gap { font-family:var(--br-bold) !important; font-weight:800 !important; font-size:11px !important; color:#ffffff !important; letter-spacing:0 !important;
+  text-transform:none !important; font-variant-numeric:tabular-nums; }
+.lwk-macd b { color:#fbf4ec; font-variant-numeric:tabular-nums; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8631,7 +8634,13 @@ function lwRead(a, o) {
     const mk = flat ? 'nt' : (up ? 'up' : 'dn');
     const word = flat ? 'FLAT' : (up ? 'UP' : 'DOWN');
     const sub = flat ? 'no push' : soon ? 'may flip' : fading ? 'slowing' : 'building';
-    chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w">' + lwArrow(flat ? 0 : (up ? 1 : -1)) + '</b><span>' + sub + '</span></span>';
+    // 2026-10-22 (user): show the distance apart (MACD minus its signal line) with the arrow
+    const dpM = o.a === 'XRP' ? 5 : 2, gapTxt = (h0 >= 0 ? '+' : '\u2212') + Math.abs(h0).toFixed(dpM);
+    chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w">' + lwArrow(flat ? 0 : (up ? 1 : -1)) + '</b><span class="lw-gap">' + gapTxt + '</span><span>' + sub + '</span></span>';
+    try {
+      const K = o.corner.closest('.lw-box'), km = K && K.querySelector('.lwk-macd');
+      if (km) km.innerHTML = 'MACD <b>' + (h.line >= 0 ? '+' : '\u2212') + Math.abs(h.line).toFixed(dpM) + '</b> <span class="hint">(gap to signal ' + gapTxt + ')</span>';
+    } catch (e) {}
     if (flat) mc = 'Momentum: no real push either way right now.';
     else if (soon) mc = 'Momentum is ' + word + ' but fading fast \u2013 it may turn ' + (up ? 'DOWN' : 'UP') + ' in about ' + bars + ' ' + unit + (bars > 1 ? 's' : '') + '.';
     else if (fading) mc = 'Momentum is ' + word + ' but slowing down.';
@@ -8675,7 +8684,7 @@ function lwCreate(a) {
     + '<button class="lw-ha" title="Heikin Ashi candles - smoother trend view">Heikin Ashi</button>'
     + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
-    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line</div>'
+    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line &middot; <span class="lwk-macd"></span></div>'
     // 2026-10-22 (user): tap to learn &ndash; EMA, the live RSI + MACD read, and why it matters in a 15-minute round
     + '<details class="lw-learn"><summary>What do these mean? <span>EMA &middot; RSI &middot; MACD &middot; 15-minute rounds</span></summary><div class="lw-learn-body">'
     + '<p><b>EMA lines</b> &ndash; the average price over the last 12, 25 and 50 candles, with the newest candles counting the most. '
