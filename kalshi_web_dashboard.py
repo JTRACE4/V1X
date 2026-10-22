@@ -586,14 +586,14 @@ def stage_strength(p_yes):
     return "toss-up" if edge < 0.05 else ("lean" if edge < 0.15 else ("strong" if edge < 0.3 else "very strong"))
 
 
-def stage_record(asset_history, key):
+def stage_record(asset_history, key, reversals=False):
     """Track record of one stage call over every graded round: wins, graded, and $100-a-call P&L at the Kalshi price of
     the called side at the moment it locked."""
     wins = n = 0
     pnl = 0.0
     for h in asset_history:
         c = h.get(f"{key}_correct")
-        if c is None:
+        if c is None or bool(h.get(f"{key}_reversal")) != reversals:      # 2026-10-22: reversals kept in their own record
             continue
         n += 1
         kp = h.get(f"{key}_kp")
@@ -6055,6 +6055,12 @@ body.has-flip-watch { padding-top:0; }
 .sk-chips i.cd, .sc-chips i.cd { background:rgba(240,84,84,0.24) !important; color:#f05454 !important; box-shadow:inset 0 0 0 1px rgba(240,84,84,0.55); border-radius:50% !important; }
 .sc-chips.wr-chip { margin-top:0; flex:0 0 auto; }
 .sc-legend { font-size:10px; margin-top:4px; }
+.rv-watch { margin-top:8px; padding:7px 9px; border-radius:10px; font-size:11.5px; line-height:1.35; border:1px solid rgba(255,255,255,0.10); background:rgba(154,90,68,0.10); }
+.rv-watch b { letter-spacing:.5px; }
+.rv-ready { border-color:#c98a6a; background:rgba(154,90,68,0.30); box-shadow:0 0 14px rgba(231,184,130,0.18); color:#f6ece5; }
+.rv-near { border-color:rgba(231,184,130,0.45); color:#e7b882; }
+.rv-far { color:#bcaaa1; }
+.sc-rev .sc-title { color:#e7b882; }
 .sc-legend .u { color:#3dd69c; font-weight:800; } .sc-legend .d { color:#f05454; font-weight:800; }
 .sc-streak.win { color:#3dd69c !important; background:rgba(61,214,156,0.12) !important; border-color:#3dd69c !important; }
 .sc-streak.loss { color:#f05454 !important; background:rgba(240,84,84,0.12) !important; border-color:#f05454 !important; }
@@ -9569,8 +9575,9 @@ def build_streak_box(name, d):
     runs = {}
     acts = {}
     for key, field in (("sealed", "sealed_correct"), ("early", "early_correct")):
-        res = [bool(h[field]) for h in hist if h.get(field) is not None]
-        acts[key] = [h.get("actual_side") for h in hist if h.get(field) is not None]
+        _ok = [h for h in hist if h.get(field) is not None and not h.get(f"{key}_reversal")]
+        res = [bool(h[field]) for h in _ok]
+        acts[key] = [h.get("actual_side") for h in _ok]
         runs[key] = (res, _streak_stats(res) if res else (None, 0, 0, 0))
     sres, (st, sn, sbw, sbl) = runs["sealed"]
     eres, (et_, en, ebw, _ebl) = runs["early"]
@@ -9904,8 +9911,12 @@ def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_mult
     fav = 1 if spot > line else -1                       # the side price is on now
     ls = line_stats or {}
     fr = flip_risk_core(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
-    if not fr or fr["score"] < (REVERSAL_MIN_SCORE if stage in (None, "sealed") else max(REVERSAL_MIN_SCORE, 65)):
-        return None                                       # sealed: the original bar the user likes; elsewhere a higher one
+    # 2026-10-22 (c, user: "don't be scared to call it for the sealed call"): at 8:00 the backtest sweep held up at flip
+    # risk 55+ with 2+ reads (75% right, ~2.7x) and at 45+ with 3+ reads (60% right), so the sealed bar is 45 with the
+    # vote count scaled to the score. Other marks keep a higher bar.
+    _sealed = stage in (None, "sealed")
+    if not fr or fr["score"] < (45 if _sealed else max(REVERSAL_MIN_SCORE, 65)):
+        return None
     rm = rsi_multi or {}
     r1, r5 = rm.get("rsi1"), rm.get("rsi5")
     votes = []
@@ -9921,7 +9932,8 @@ def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_mult
     if fr["toward"]:
         votes.append("price moving at the line")
     rsi_ok = bool(votes) and votes[0].startswith("RSI")
-    if len(votes) < REVERSAL_MIN_VOTES or not (rsi_ok or len(votes) >= 4):
+    _need = (2 if fr["score"] >= 55 else 3) if _sealed else REVERSAL_MIN_VOTES
+    if len(votes) < _need or not (rsi_ok or len(votes) >= 4):
         return None
     call = "NO" if fav > 0 else "YES"
     kp = None
@@ -9933,6 +9945,38 @@ def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_mult
            + (f" &middot; pays ~{payout:.1f}x at {kp * 100:.0f}c" if payout else ""))
     return {"call": call, "tier": tier, "why": why, "score": round(fr["score"], 1), "votes": votes,
             "payout": round(payout, 2) if payout else None, "kp": kp}
+
+
+def _reversal_watch_html(name, d):
+    """2026-10-22 (user: "make the reversal and flip radar together"): a strip inside the Flip Radar tile - how close the
+    round is to a REVERSAL (underdog) call: the favorite's flip risk, how many momentum reads have turned, and READY when
+    the 8:00 reversal rule would fire right now."""
+    try:
+        spot, line, kp = d.get("spot_price"), d.get("target_price"), d.get("kalshi_price")
+        if not (spot and line) or abs(spot - line) / line < CROSS_BAND_PCT:
+            return ""
+        fav = 1 if spot > line else -1
+        ls = d.get("line_stats") or {}
+        fr = flip_risk_core(name, fav, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"), ls.get("crosses") or 0,
+                            ls.get("events"), d.get("ticker"))
+        if not fr:
+            return ""
+        rm = d.get("rsi_multi") or {}
+        n_turn, _rs = _bt.rev_votes({"r1_tv": rm.get("rsi1"), "sig": d.get("stage_sig") or {}}, fav)
+        rv = reversal_check(name, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"), ls, rm, d.get("stage_sig"), kp,
+                            d.get("ticker"), stage="sealed")
+        dog = "DOWN" if fav > 0 else "UP"
+        sc = fr["score"]
+        if rv:
+            pay = f' &middot; pays ~{rv["payout"]:.1f}x' if rv.get("payout") else ""
+            return (f'<div class="rv-watch rv-ready"><b><i class=ico data-i=reversal></i> REVERSAL READY</b> - underdog {dog}{pay}'
+                    f'<br><span class="hint">flip risk {sc:.0f}% &middot; {n_turn} of 4 reads turned against {"UP" if fav > 0 else "DOWN"}</span></div>')
+        cls = "rv-near" if (sc >= 40 and n_turn >= 2) else "rv-far"
+        return (f'<div class="rv-watch {cls}"><b><i class=ico data-i=reversal></i> REVERSAL WATCH</b> - underdog {dog}: '
+                f'flip risk {sc:.0f}% &middot; {n_turn} of 4 reads turning'
+                f'<br><span class="hint">{"getting close" if cls == "rv-near" else "not yet"} - a reversal fires on a big flip risk with momentum turning</span></div>')
+    except Exception:
+        return ""
 
 
 @_never_break
@@ -9968,6 +10012,8 @@ def build_flip_radar(name, d):
                     f'<div class="fr-track2"><i class="{cls_}" style="width:{min(100, pc):.0f}%"></i></div>'
                     f'<div class="fr-txt">Chance price crosses back to {"UP" if call == "YES" else "DOWN"} - the cross this reversal needs</div>'
                     + (f'<!--OWNER--><div class="fr-txt hint">{" &middot; ".join(fv["drivers"][:3])}</div><!--/OWNER-->' if fv["drivers"] else "")
+                    + f'<div class="rv-watch rv-ready"><b><i class=ico data-i=reversal></i> REVERSAL CALLED</b> - '
+                      f'{"UP" if call == "YES" else "DOWN"}{(" &middot; pays ~" + format(sc_["rev_payout"], ".1f") + "x") if sc_.get("rev_payout") else ""}</div>'
                     + '</div>')
     fr = flip_risk_sustained(name, csign, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"),
                              ls.get("crosses") or 0, ls.get("events"), d.get("ticker"))
@@ -10002,14 +10048,14 @@ def build_flip_radar(name, d):
               f'data-call="{call}" data-call-name="{_cname}" '
               f'data-kup="{kp if kp is not None else -1:.3f}" data-left="{int(d.get("seconds_left") or 0)}" '
               f'data-above="{1 if spot >= line else 0}" style="display:none;"></span>')
-    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
+    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR &middot; REVERSAL WATCH</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
             f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
             f'<div class="fr-txt">Chance {which} ({"UP" if call == "YES" else "DOWN"}) flips</div>'
             + '<!--OWNER-->' + (f'<div class="fr-txt"><i class=ico data-i=warn></i> {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
             + f'<div class="fr-txt hint">{_html_attr(tip).replace("&amp;middot;", "&middot;")}</div><!--/OWNER-->'
-            + f'{spike}{kal}{marker}</div>')
+            + f'{spike}{kal}{_reversal_watch_html(name, d)}{marker}</div>')
 
 
 def _mmss_words(sec):
@@ -10162,9 +10208,9 @@ def _wr_stats(rows):
 def winrate_badge_html(name):
     """The small top-right badge: current sealed-call streak (falls back to the early call), all-time win %, today."""
     call = "sealed"
-    rows = _wr_rows(name, call)
+    rows = [r for r in _wr_rows(name, call) if not r["rev"]]
     if not rows:
-        call, rows = "early", _wr_rows(name, "early")
+        call, rows = "early", [r for r in _wr_rows(name, "early") if not r["rev"]]
     st = _wr_stats(rows)
     if not st["n"]:
         return (f'<div class="wr-streak flat">--</div><div class="wr-sub">{name} &middot; no graded rounds</div>')
@@ -10191,8 +10237,8 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
     week0 = day0 - dt.timedelta(days=day0.weekday())
     since = {"today": day0, "week": week0}.get(rng)
     sel = [r for r in rows if since is None or (r["t"] and r["t"] > since)]
-    st = _wr_stats(sel)
-    allst = _wr_stats(rows)
+    st = _wr_stats([r for r in sel if not r["rev"]])            # main record: reversals have their own line below
+    allst = _wr_stats([r for r in rows if not r["rev"]])
 
     def pct(x):
         return "-" if x is None else f'<span class="{"up" if x >= 60 else ("down" if x < 50 else "flat")}">{x:.1f}%</span>'
@@ -10288,7 +10334,7 @@ def build_scoreboard(name, d):
     cols = []
     for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"))
                               + ((("bot", "BOT CALL (auto-buy)", "correct"),) if SHOW_BOT_RECORD else ())):
-        rows = [h for h in hist if h.get(field) is not None]
+        rows = [h for h in hist if h.get(field) is not None and not (key != "bot" and h.get(f"{key}_reversal"))]
         res = [bool(h[field]) for h in rows]
         n, w = len(res), sum(res)
         today = [bool(h[field]) for h in rows if (_window_close_utc(h.get("ticker")) or day0) > day0]
@@ -10318,6 +10364,27 @@ def build_scoreboard(name, d):
             f'<div class="sc-cur">{streak}</div>'
             f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; today: <b>{td}</b>'
             + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div></div>')
+    # 2026-10-22 (user): reversals in their own column so the main win rate stays clean
+    rv = [(bool(h[f"{k}_correct"]), h.get("actual_side"), h.get(f"{k}_payout"), k) for h in hist for k in ("early", "sealed")
+          if h.get(f"{k}_reversal") and h.get(f"{k}_correct") is not None]
+    if rv:
+        rw = sum(1 for x in rv if x[0])
+        pays = [x[2] for x in rv if x[2]]
+        rpnl = sum((100 * (x[2] - 1) if x[0] else -100) for x in rv if x[2])
+        rres = [x[0] for x in rv]
+        rct, rcn, rbw, rbl = _streak_stats(rres)
+        cols.append(
+            f'<div class="sc-col sc-rev"><div class="sc-title"><i class=ico data-i=reversal></i> REVERSALS &middot; underdog calls</div>'
+            f'<div class="sc-main"><span class="sc-pct">{rw / len(rv):.0%}</span><span class="sc-wl"><b class="skw">{rw}W</b> &middot; '
+            f'<b class="skl">{len(rv) - rw}L</b><br><span class="hint">avg payout {sum(pays) / len(pays):.1f}x</span></span></div>'
+            if pays else
+            f'<div class="sc-col sc-rev"><div class="sc-title"><i class=ico data-i=reversal></i> REVERSALS &middot; underdog calls</div>'
+            f'<div class="sc-main"><span class="sc-pct">{rw / len(rv):.0%}</span><span class="sc-wl"><b class="skw">{rw}W</b> &middot; '
+            f'<b class="skl">{len(rv) - rw}L</b></span></div>')
+        cols[-1] += (f'<div class="sc-stats">Best run: <b class="skw">{rbw}W</b> &middot; '
+                     + (f'<span class="{"up" if rpnl >= 0 else "down"}">{rpnl:+,.0f}</span> on $100/call &middot; ' if pays else "")
+                     + f'a win pays several times the stake, so fewer wins can still come out ahead</div>'
+                     f'<div class="sc-chips">{"".join(_result_chip(x[0], x[1]) for x in rv[-15:])}</div></div>')
     no_call = sum(1 for h in hist if h.get("correct") is None)
     try:
         pull = streak_windows_html(hist, name)
