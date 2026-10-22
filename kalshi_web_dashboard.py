@@ -4733,7 +4733,8 @@ def poll_loop():
                     # sit the round out instead of calling into it. (Flipping to the trend side would win LESS - against-trend
                     # calls still win just over half - so the round is skipped, not reversed.) A skipped sealed call can still
                     # get a LATE call if price clearly decides afterwards.
-                    if SKIP_AGAINST_TREND and _call and stage_sig.get("trend") and (stage_sig["trend"] > 0) != (_call == "YES"):
+                    if (SKIP_AGAINST_TREND and _call and not _rev and stage_sig.get("trend")
+                            and (stage_sig["trend"] > 0) != (_call == "YES")):     # reversal calls are never skipped
                         _aw = None
                         try:
                             _aw = (((_bt.load_saved() or {}).get("stages") or {}).get(_sk, {}).get("regime", {})
@@ -9872,8 +9873,9 @@ def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_mult
         _f = {"kp": kalshi_yes, "dist": (spot - line) / line, "crosses": (line_stats or {}).get("crosses") or 0,
               "r1_tv": (rsi_multi or {}).get("rsi1"), "sig": sig or {}}
         _c = _bt.rev_rule_match(_f, _rule)
-        if not _c:
+        if not _c and stage != "sealed":
             return None
+    if _rule and _c:
         _ho = {}
         try:
             _ho = ((_bt.load_saved() or {}).get("stages") or {}).get(stage, {}).get("reversal_rule", {}).get("holdout") or {}
@@ -9888,13 +9890,15 @@ def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_mult
                 + (f" &middot; pays ~{_pay:.1f}x" if _pay else ""))
         return {"call": _c, "tier": "GOOD" if (_ho.get("win") or 0) >= 0.5 else "WEAK", "why": _why, "score": None,
                 "votes": [], "payout": round(_pay, 2) if _pay else None, "kp": _kp}
-    if stage and not (_dec.get("reversal_enabled") or {}).get(stage):
-        return None                                       # not proven for this mark -> no reversal
+    # 2026-10-22 (user: "I liked those 2.7x reversal calls, make sure those stay"): the original SEALED (8:00) reversal stays
+    # on exactly as it was. Other marks only get it when the backtest has proven it there (it was losing at 4:00).
+    if stage and stage != "sealed" and not (_dec.get("reversal_enabled") or {}).get(stage):
+        return None
     fav = 1 if spot > line else -1                       # the side price is on now
     ls = line_stats or {}
     fr = flip_risk_core(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
-    if not fr or fr["score"] < max(REVERSAL_MIN_SCORE, 65):    # 2026-10-22: higher bar (65+ held up best in the sweep)
-        return None
+    if not fr or fr["score"] < (REVERSAL_MIN_SCORE if stage in (None, "sealed") else max(REVERSAL_MIN_SCORE, 65)):
+        return None                                       # sealed: the original bar the user likes; elsewhere a higher one
     rm = rsi_multi or {}
     r1, r5 = rm.get("rsi1"), rm.get("rsi5")
     votes = []
