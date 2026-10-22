@@ -8797,14 +8797,12 @@ def streak_windows_html(records, name):
             except Exception:
                 pass
         rows.append(f'<tr><td>{label}</td><td>{total}</td><td>{rec}</td><td>{pct_html}</td>'
-                    f'<td>{no_call or "-"}</td><td>{("<span class=warn>" + str(offline) + "</span>") if offline else "-"}</td>'
-                    f'<td>{best_w or "-"}</td><td>{best_l or "-"}</td><td>{pnl_html}</td></tr>')
+                    f'<!--OWNER--><td>{no_call or "-"}</td><td>{("<span class=warn>" + str(offline) + "</span>") if offline else "-"}</td><!--/OWNER-->'
+                    f'<td>{best_w or "-"}</td><td>{best_l or "-"}</td><!--OWNER--><td>{pnl_html}</td><!--/OWNER--></tr>')
     return (f'<details class="streak-pull" data-pat="STREAK|{name}" open><summary style="display:none;"></summary>'
-            f'<table class="press-table"><tr><th>Window</th><th title="15-minute windows that have closed in this range">Windows</th>'
-            f'<th title="calls the bot made that won - lost">Won - lost</th><th>Win %</th>'
-            f'<th title="windows the bot ran but did not lock a call">No call</th>'
-            f'<th title="windows with no record at all - the bot / computer was off">Bot off</th><th>Win run</th><th>Loss run</th>'
-            f'<th title="real-money profit / loss (number of trades)">Real $</th></tr>{"".join(rows)}</table></details>')
+            f'<table class="press-table"><tr><th>Window</th><th>Rounds</th><th>W - L</th><th>Win %</th>'
+            f'<!--OWNER--><th>No call</th><th>Bot off</th><!--/OWNER--><th>Best run</th><th>Worst run</th>'
+            f'<!--OWNER--><th>Real $</th><!--/OWNER--></tr>{"".join(rows)}</table></details>')
 
 
 KNIGHT_FX_PCT = 0.94   # at or above this Kalshi confidence: sparkles on the raised blade (YES) / blood dripping from the lowered one (NO)
@@ -9068,7 +9066,7 @@ def build_rsi_flip_widget(name, d):
         bar += f'<div class="fr-why hint">{why}</div>'
     else:
         bar = '<div class="fr-line hint">flip risk: warming up</div>'
-    return (f'<div class="top-w top-rsi"><div class="top-w-title">RSI FLIP METER <span class="hint">overbought / oversold &middot; all exchanges</span></div>'
+    return (f'<div class="top-w top-rsi"><div class="top-w-title">RSI FLIP METER</div>'
             f'<div class="top-rsi-body">{_rsi_gauge_svg(r1, r5)}<div class="top-rsi-txt">'
             f'<div class="{zcls}" style="font-weight:800;font-size:14px;">{zone.upper() if r1 is not None and (r1 >= 70 or r1 <= 30) else zone}</div>'
             f'<div class="hint">1-min RSI <b>{"%.0f" % r1 if r1 is not None else "--"}</b> &middot; 5-min RSI <b>{"%.0f" % r5 if r5 is not None else "--"}</b> '
@@ -9170,7 +9168,7 @@ def build_alert_box(name):
             + (f' <span class="fa-where">{where}</span>' if where else "")
             + f'<span class="fa-age hint">{_ago(a["ts"])}</span><div class="fa-detail">{a["detail"]}</div></div>')
     if not items:
-        items.append('<div class="hint fa-empty">Quiet - no whales, big orders, fake breakouts or forced sales in the last 20 minutes.</div>')
+        items.append('<div class="hint fa-empty">Quiet - nothing big in the last 20 min.</div>')
     h = _flow.HUB.feed_health()
     lt = _ENG.liq_totals(name, 300)
     liq_txt = ""
@@ -9180,7 +9178,7 @@ def build_alert_box(name):
     return (f'<div class="top-w top-alerts"><div class="top-w-title">WHALE &amp; LIQUIDITY ALERTS <span class="hint">whales &middot; big orders &middot; '
             f'fake breakouts &middot; forced sales</span></div>'
             f'<div class="fa-list">{"".join(items)}</div>'
-            f'<div class="hint fa-foot">{h["n_live"]} exchange feed{"s" if h["n_live"] != 1 else ""} live{liq_txt}</div></div>')
+            f'<!--OWNER--><div class="hint fa-foot">{h["n_live"]} feed{"s" if h["n_live"] != 1 else ""} live{liq_txt}</div><!--/OWNER--></div>')
 
 
 def _html_attr(s):
@@ -9231,8 +9229,7 @@ def _conf_lines(p_side, tier, kp, extra=""):
     """2026-10-22: BRAIN's own confidence + tier, and the Kalshi % the call locked at, on their own lines."""
     k = (f'<div class="sb-line sb-klock">Market at lock: <b>{kp:.0%}</b>{extra}</div>' if kp is not None
          else (f'<div class="sb-line sb-klock">{extra.lstrip(" &middot;")}</div>' if extra else ""))
-    return (f'<div class="sb-line sb-conf">BRAIN confidence: <b>{p_side:.0%}</b> &middot; '
-            f'<span class="{_TIER_CLS.get(tier, "")}">{tier}</span></div>{k}')
+    return f'<div class="sb-line sb-conf">BRAIN confidence: <b>{p_side:.0%}</b></div>{k}'
 
 
 @_never_break
@@ -9345,7 +9342,7 @@ def build_stage_box(name, d, key):
         tip = "locks automatically at the mark and is graded at settlement"
     rec = stage_record(_history.get(name, []), key)
     rec_html = (f'<div class="sb-rec">{rec["wins"]}/{rec["n"]} right ({rec["wins"] / rec["n"]:.0%})</div>' if rec["n"]
-                else '<div class="sb-rec">no graded rounds yet</div>')
+                else "")
     alert = ""
     if (c.get("call") or c.get("skipped")) and (d.get("stage_just") == key or time.time() - (c.get("ts") or 0) < 25):
         alert = (f'<span class="stage-alert" data-name="{name}" data-stage="{key}" data-call="{c.get("call") or ""}" '
@@ -9398,11 +9395,9 @@ def stage_summary_row(name, d):
     cr = ""
     if ls:
         n = ls.get("crosses", 0)
-        cr = (f'<div class="row cross-row"><span class="label">Line crosses this round</span><span class="value">'
+        cr = (f'<!--OWNER--><div class="row cross-row"><span class="label">Line crosses this round</span><span class="value">'
               f'<b class="{"down" if n >= CROSS_SKIP else ("warn" if n == 2 else "up")}" style="font-size:18px;">{n}</b> '
-              f'<span class="hint">(&#9650; {ls.get("up", 0)} up &middot; &#9660; {ls.get("down", 0)} down) - '
-              f'{"choppy - lowers the call one confidence level" if n >= 3 else "clean so far"}'
-              f' &middot; a cross only counts 15+ seconds after the last one</span></span></div>')
+              f'<span class="hint">{"choppy" if n >= 3 else "clean"}</span></span></div><!--/OWNER-->')
     return cr      # the per-call track record now lives in the SCOREBOARD at the top
 
 
@@ -9553,10 +9548,10 @@ def build_rsi_box(name, d):
                f'<div class="rc-row{" rc-pick" if _pick == "tradingview" else ""}"><span>{_star_tv}TradingView</span><b>{_n(ck.get("tv1"))}</b></div>'
                f'<div class="rc-row{" rc-pick" if _pick == "webull" else ""}"><span>{_star_wb}Webull</span><b>{_n(ck.get("wb1"))}</b></div>'
                f'<div class="rc-row"><span>Avg of both</span><b>{_n(_avg)}</b></div>'
-               f'<div class="rc-verdict">{verdict} &middot; {_bt_line}</div></div>')
+               f'<div class="rc-verdict">{verdict}</div></div>')
     src = ("TradingView method" if _pick == "tradingview" else "Webull method") if ck else "all exchanges"
     return (f'<div class="rs-tile rsi-box {c}"><div class="rs-title">RSI (14)</div><div class="rsi-num">{r:.0f}</div>'
-            f'<div class="rsi-zone">{z}</div><div class="rsi-sub">1-min{f" &middot; 5-min {r5:.0f}" if r5 is not None else ""} &middot; {src}</div>{chk}'
+            f'<div class="rsi-zone">{z}</div><div class="rsi-sub">{f"5-min {r5:.0f}" if r5 is not None else "1-min"}</div>{chk}'
             f'<span class="rsi-marker" data-rsi-name="{name}" data-rsi="{r:.1f}" style="display:none;"></span></div>')
 
 
@@ -9585,7 +9580,7 @@ def build_streak_box(name, d):
     eres, (et_, en, ebw, _ebl) = runs["early"]
     if not sres and not eres:
         return ('<div class="rs-tile sk-box"><div class="rs-title">STREAK</div><div class="sk-num flat">--</div>'
-                '<div class="sk-zone flat">no graded rounds yet</div><div class="sk-sub">first grade when this round settles</div></div>')
+                '<div class="sk-zone flat">no results yet</div></div>')
     if sres:
         cls, big, zone = ("sk-win", f"{sn}W", "SEALED &middot; WINS") if st else ("sk-loss", f"{sn}L", "SEALED &middot; LOSSES")
         if sn == 1:
@@ -9971,12 +9966,10 @@ def _reversal_watch_html(name, d):
         sc = fr["score"]
         if rv:
             pay = f' &middot; pays ~{rv["payout"]:.1f}x' if rv.get("payout") else ""
-            return (f'<div class="rv-watch rv-ready"><b><i class=ico data-i=reversal></i> REVERSAL READY</b> - underdog {dog}{pay}'
-                    f'<br><span class="hint">flip risk {sc:.0f}% &middot; {n_turn} of 4 reads turned against {"UP" if fav > 0 else "DOWN"}</span></div>')
+            return f'<div class="rv-watch rv-ready"><b><i class=ico data-i=reversal></i> REVERSAL READY</b> &middot; {dog}{pay}</div>'
         cls = "rv-near" if (sc >= 40 and n_turn >= 2) else "rv-far"
-        return (f'<div class="rv-watch {cls}"><b><i class=ico data-i=reversal></i> REVERSAL WATCH</b> - underdog {dog}: '
-                f'flip risk {sc:.0f}% &middot; {n_turn} of 4 reads turning'
-                f'<br><span class="hint">{"getting close" if cls == "rv-near" else "not yet"} - a reversal fires on a big flip risk with momentum turning</span></div>')
+        return (f'<div class="rv-watch {cls}"><b><i class=ico data-i=reversal></i> UNDERDOG</b> {dog} '
+                f'&middot; {"close" if cls == "rv-near" else "not yet"} <span class="hint">({n_turn}/4 turning)</span></div>')
     except Exception:
         return ""
 
@@ -10036,11 +10029,10 @@ def build_flip_radar(name, d):
     kal = ""
     if kp is not None:
         k_opp = (1 - kp) if call == "YES" else kp
-        kal = f'<div class="fr-txt hint">The market still prices the other side at {k_opp * 100:.0f}% - reference only, it lags the tape</div>'
+        kal = f'<div class="fr-txt hint">market: other side {k_opp * 100:.0f}%</div>'
     spike = ""
     if fr.get("raw") is not None and fr["raw"] - pct >= 10:
-        spike = (f'<div class="fr-txt hint">burst to {fr["raw"]:.0f}% right now - counts only if it holds '
-                 f'{FLIP_SUSTAIN_S}s</div>')
+        spike = f'<div class="fr-txt hint">spiking to {fr["raw"]:.0f}%</div>'
     p = fr["parts"]
     tip = (f'momentum {p["momentum"]:+.0f} &middot; cushion {p["cushion"]:+.0f} &middot; crosses {p["crosses"]:+.0f} &middot; '
            f'book walls {p["book"]:+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
@@ -10085,7 +10077,7 @@ def build_time_until_call(name, d):
             t = f'<span data-to="{_to}">{wait // 60}:{wait % 60:02d}</span>'
             what = f'<b>{lab.upper()}</b> coming in <span data-to="{_to}" data-to-fmt="words">{_mmss_words(wait)}</span>'
         else:
-            t, what = "NOW", f"<b>{lab.upper()}</b> - waiting for a clear lean (up to 60 sec)"
+            t, what = "NOW", f"<b>{lab.upper()}</b> - waiting for a clear lean"
         cls = "tuc-early" if key == "early" else "tuc-sealed"
     else:
         _to = f' data-to="{d["close_epoch"]:.0f}"' if d.get("close_epoch") else ""
@@ -10346,8 +10338,7 @@ def build_scoreboard(name, d):
             fk = next((_window_close_utc(h.get("ticker")) for h in rows if _window_close_utc(h.get("ticker"))), None)
             first_k = fk.astimezone(et).strftime("%b %d") if fk else "-"
         if not n:
-            cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">No graded rounds yet. '
-                        f'The first one is graded when this round settles.</div></div>')
+            cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">No results yet.</div></div>')
             continue
         ct, cn, bw, bl = _streak_stats(res)
         streak = (f'<span class="sc-streak {"win" if ct else "loss"}">{cn} {("WIN" if cn == 1 else "WINS") if ct else ("LOSS" if cn == 1 else "LOSSES")} IN A ROW</span>')
@@ -10385,7 +10376,7 @@ def build_scoreboard(name, d):
             f'<b class="skl">{len(rv) - rw}L</b></span></div>')
         cols[-1] += (f'<div class="sc-stats">Best run: <b class="skw">{rbw}W</b> &middot; '
                      + (f'<span class="{"up" if rpnl >= 0 else "down"}">{rpnl:+,.0f}</span> on $100/call &middot; ' if pays else "")
-                     + f'a win pays several times the stake, so fewer wins can still come out ahead</div>'
+                     + '</div>'
                      f'<div class="sc-chips">{"".join(_result_chip(x[0], x[1]) for x in rv[-15:])}</div></div>')
     no_call = sum(1 for h in hist if h.get("correct") is None)
     try:
@@ -10395,9 +10386,8 @@ def build_scoreboard(name, d):
     return (f'<div class="scoreboard"><div class="rs-title">SCOREBOARD &middot; since launch ({since}) &middot; '
             f'<b>{len(hist):,}</b> round{"s" if len(hist) != 1 else ""} tracked{f' <span class="hint">(the bot made no call in {no_call:,} of them)</span>' if (no_call and SHOW_BOT_RECORD) else ''}</div>'
             f'<div class="sc-grid">{"".join(cols)}</div>'
-            f'<div class="sc-legend hint">circle color = how the round ended (<span class="u">green = UP</span>, '
-            f'<span class="d">red = DOWN</span>) &middot; letter = BRAIN\'s call was a W or an L</div>'
-            + (f'<details class="sc-more" data-pat="SCORE|{name}"><summary class="hint">Hour-by-hour and today breakdown</summary>{pull}</details>' if pull else "")
+            f'<div class="sc-legend hint"><span class="u">green</span> ended UP &middot; <span class="d">red</span> ended DOWN &middot; white letter = right call</div>'
+            + (f'<details class="sc-more" data-pat="SCORE|{name}"><summary class="hint">By hour</summary>{pull}</details>' if pull else "")
             + '</div>')
 
 
@@ -10428,7 +10418,7 @@ def build_rounds_panel(name, d):
                      f'<b class="{"down" if n >= CROSS_SKIP else ("warn" if n == 2 else "")}">{n}</b> cross{"es" if n != 1 else ""} '
                      f'<span class="hint">&#9650;{r.get("up", 0)} &#9660;{r.get("down", 0)}</span> &middot; {res}<br>{tags}</div>{_round_svg(r)}</div>')
     if len(cells) <= 1:
-        cells.append('<div class="rc hint" style="padding:18px;">finished rounds will appear here as they close (kept across restarts)</div>')
+        cells.append('<div class="rc hint" style="padding:18px;">finished rounds show here</div>')
     tot = [r.get("crosses", 0) for r in past]
     avg = f' &middot; average {sum(tot) / len(tot):.1f} crosses per round over the last {len(tot)}' if tot else ""
     return (f'<div class="rounds-panel"><div class="top-w-title">PRICE vs THE LINE - THIS ROUND + LAST 6 ROUNDS '
@@ -10483,8 +10473,8 @@ def build_pressure_bar(asset_name, d=None, part="all"):
     s = _flow.HUB.summary(asset_name)
     w = s["wins"]
     if w[60]["pct"] is None and w[10]["pct"] is None:
-        return ('<div class="row press-row"><span class="label">Bought / sold pressure - all exchanges</span> '
-                '<span class="hint">collecting trades from the exchanges...</span></div>')
+        return ('<div class="row press-row"><span class="label">Buy pressure</span> '
+                '<span class="hint">loading...</span></div>')
     open_ts = d.get("line_for_round_open_ts")
     rnd = _flow.HUB.window_detail(asset_name, 900, since_ts=open_ts) if open_ts else None
     # 2026-10-20: the big bar is THIS ROUND (what decides the Kalshi market), the chips are the short windows - before, the
@@ -10624,7 +10614,7 @@ def build_pressure_bar(asset_name, d=None, part="all"):
         mc_html = '<div class="press-health hint">Math check: fetching each exchange&#39;s own 24h numbers (first check about 30 seconds after start)...</div>'
     top_html = (
         f'<div class="row press-row press-top" data-asset-press="{asset_name}">'
-        f'<div class="press-head"><b>BUY PRESSURE</b> <span class="hint">{coin} bought vs sold, {win_lbl}, {s["live_n"]} exchanges</span> '
+        f'<div class="press-head"><b>BUY PRESSURE</b> <span class="hint">{win_lbl}</span> '
         f'<span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
         f'<div class="press-qty"><span class="up">&#9650; <b>{_coin_amt(coin, m["buy_qty"])} {coin}</b> bought <span class="hint">({_usd_short(m["buy"])})</span></span>'
         f'<span class="press-net {"up" if net_q >= 0 else "down"}">net {"+" if net_q >= 0 else ""}{_coin_amt(coin, net_q)} {coin} '
@@ -10632,11 +10622,11 @@ def build_pressure_bar(asset_name, d=None, part="all"):
         f'<span class="down"><b>{_coin_amt(coin, m["sell_qty"])} {coin}</b> sold <span class="hint">({_usd_short(m["sell"])})</span> &#9660;</span></div>'
         f'<div class="press-bar"><div class="press-buy" style="width:{buy:.1f}%">{buy:.0f}% buy</div>'
         f'<div class="press-sell" style="width:{sell:.1f}%">{sell:.0f}% sell</div><span class="press-mid"></span></div>'
-        f'<div class="press-chips">{"".join(chips)}{book}</div><!--OWNER-->{mc_html.split("<details")[0] if mc_html else ""}<!--/OWNER--></div>')
+        f'<div class="press-chips">{"".join(chips)}{book}</div></div>')
     detail_html = (
         f'<div class="row press-row" data-asset-press="{asset_name}"><div class="press-head"><b>{coin} ORDER FLOW DETAIL</b></div>'
-        f'{"".join(split)}{cvd_html}{deriv_html}{tape}{health}{("<!--OWNER--><details" + mc_html.split("<details", 1)[1] + "<!--/OWNER-->") if "<details" in mc_html else ""}'
-        f'<details class="press-more" data-pat="PRESS|{asset_name}"><summary class="hint">by exchange (information only - never used for buying)</summary>'
+        f'{"".join(split)}{cvd_html}{deriv_html}{tape}{health}<!--OWNER-->{mc_html}<!--/OWNER-->'
+        f'<details class="press-more" data-pat="PRESS|{asset_name}"><summary class="hint">by venue</summary>'
         f'{table}</details></div>')
     if part == "top":
         return top_html
@@ -12032,7 +12022,7 @@ def target_history_html(name, d):
             cands.append((0 if abs(st - line) < 10 ** -dec else 1, diff, -(t.timestamp() if t else 0), h, t))
     if not cands:
         return (f'<div class="tgt-hist"><div class="th-h">Last times the target was near {fmt_price(line, dec)}</div>'
-                f'<div class="hint">No settled rounds within 5% of this target on record yet.</div></div>')
+                f'<div class="hint">No past rounds near this target yet.</div></div>')
     cands.sort(key=lambda x: (x[0], x[1], x[2]))
     rows = ""
     for exact, diff, _t, h, t in cands[:3]:
