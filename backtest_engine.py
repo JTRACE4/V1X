@@ -578,6 +578,86 @@ def rev_rule_match(f, rule):
     return "NO" if fav_yes else "YES"
 
 
+# ============================================================================ FLIP HISTORY (2026-10-22, user)
+# "The reversal/underdog doesn't have to call a reversal every round - use a way more effective system based on the
+# history of all the flips in the last month." Every round of the last 30 days, at 4:00 and 8:00, is filed into a cell:
+#   underdog price band x how close price is to the line x line crosses so far x how many reads turned on the favorite
+# and the cell remembers how often the UNDERDOG actually won from there (recent days count more, and small cells are
+# pulled toward the price the market charged). A reversal fires only when the cell's real history says the underdog wins
+# at least FLIP_MIN_WIN and clearly beats its own price - so most rounds get no reversal at all.
+FLIP_DOG_BANDS = ((0.30, 0.37), (0.37, 0.44), (0.44, 0.50))   # no long shots: 30c+ only (pays ~3.3x at most)
+FLIP_DIST = (0.0003, 0.0006, 0.0012, 1.0)                     # price within this far of the line
+FLIP_HALF_LIFE_D = 10                                         # a 10-day-old flip counts half as much as today's
+FLIP_PRIOR = 6                                                # pseudo-rounds at the market's price for thin cells
+FLIP_MIN_N = 12                                               # cells need this many real rounds behind them
+FLIP_MIN_WIN = 0.50                                           # win rate first: the underdog must win at least half
+FLIP_MIN_EDGE = 0.08                                          # and beat its own price by 8+ points
+
+
+def flip_cell(f):
+    """("b-d-c-v" cell key, underdog price, underdog side) for a round's features at a mark, or None (no underdog worth it)."""
+    if not f or f.get("kp") is None or f.get("dist") is None:
+        return None
+    fav_yes = f["kp"] >= 0.5
+    dog = price_of(not fav_yes, f["kp"])
+    b = next((i for i, (lo, hi) in enumerate(FLIP_DOG_BANDS) if lo <= dog < hi), None)
+    if b is None:
+        return None
+    d = next(i for i, x in enumerate(FLIP_DIST) if abs(f["dist"]) <= x)
+    c = min(2, int(f.get("crosses") or 0))
+    v, _rs = rev_votes(f, 1 if fav_yes else -1)
+    v = 0 if v <= 1 else (1 if v == 2 else 2)
+    return f"{b}-{d}-{c}-{v}", dog, ("NO" if fav_yes else "YES")
+
+
+def build_flip_table(rounds, mark, now_t=None):
+    now_t = now_t or (max((r["m"]["close"] for r in rounds), default=time.time()))
+    cells = {}
+    for r in rounds:
+        cc = flip_cell(r["f"].get(mark))
+        if not cc:
+            continue
+        key, dog, call = cc
+        win = (call == "YES") == (r["m"]["result"] == "yes")
+        w = 0.5 ** (max(0.0, now_t - r["m"]["close"]) / (FLIP_HALF_LIFE_D * 86400))
+        c = cells.setdefault(key, {"w": 0.0, "ww": 0.0, "n": 0, "wins": 0, "p": 0.0})
+        c["w"] += w
+        c["ww"] += w * win
+        c["n"] += 1
+        c["wins"] += int(win)
+        c["p"] += dog
+    out = {}
+    for k, c in cells.items():
+        avg_p = c["p"] / c["n"]
+        out[k] = {"n": c["n"], "wins": c["wins"], "avg_price": round(avg_p, 4),
+                  "rate": round((c["ww"] + FLIP_PRIOR * avg_p) / (c["w"] + FLIP_PRIOR), 4)}
+    return out
+
+
+def flip_call(table, f):
+    """{"call", "rate", "n", "wins", "dog"} when this round's cell has a proven underdog edge, else None."""
+    cc = flip_cell(f)
+    if not cc or not table:
+        return None
+    key, dog, call = cc
+    c = table.get(key)
+    if not c or c["n"] < FLIP_MIN_N or c["rate"] < max(FLIP_MIN_WIN, dog + FLIP_MIN_EDGE):
+        return None
+    return {"call": call, "rate": c["rate"], "n": c["n"], "wins": c["wins"], "dog": dog, "cell": key}
+
+
+def flip_cell_info(table, f):
+    """The cell's history for display even when it does NOT fire: {"rate", "n", "wins", "dog", "call"} or None."""
+    cc = flip_cell(f)
+    if not cc or not table:
+        return None
+    key, dog, call = cc
+    c = table.get(key)
+    if not c:
+        return None
+    return {"call": call, "rate": c["rate"], "n": c["n"], "wins": c["wins"], "dog": dog}
+
+
 def evaluate(rounds):
     """rounds: [{"m": market, "f": {mark: features}}] oldest first."""
     n_hold = max(1, int(len(rounds) * HOLDOUT_FRAC))
@@ -653,6 +733,17 @@ def evaluate(rounds):
                       and sh["win"] >= sh["avg_price"] + REV_MIN_EDGE / 2)
             bands.append({"band": lab, "rule": best[0], "train": best[1], "holdout": sh, "validated": ok})
         st["reversal_bands"] = bands
+        # flip history table: built on the older rounds, graded on the newest unseen ones, then rebuilt on everything for live
+        _ft = build_flip_table(trn, mark)
+        _fh = [trade(r, mark, fc["call"]) for r in hs for fc in [flip_call(_ft, r["f"][mark])] if fc]
+        _fs = _summ(_fh)
+        _ftr = [trade(r, mark, fc["call"]) for r in trn for fc in [flip_call(_ft, r["f"][mark])] if fc]
+        st["flip_hist"] = {"train": _summ(_ftr), "holdout": _fs,
+                           "live": bool(_fs["n"] >= 8 and _fs["win"] is not None and _fs["win"] >= FLIP_MIN_WIN and (_fs["roi"] or 0) > 0),
+                           "table": build_flip_table(rs, mark),
+                           "rounds_with_underdog": sum(1 for r in rs if flip_cell(r["f"][mark])),
+                           "underdog_wins": sum(1 for r in rs for cc in [flip_cell(r["f"][mark])] if cc
+                                                and (cc[2] == "YES") == (r["m"]["result"] == "yes"))}
         # 80% rule search: pick on train only, then check on the holdout
         tr = [r for r in train if r["f"].get(mark)]
         best_cov, best_ev = None, None
@@ -805,6 +896,9 @@ def evaluate(rounds):
         "rsi_pick": out["rsi_check"]["sealed"]["pick"],
         "reversal_rules": {k: [b["rule"] for b in out["stages"][k].get("reversal_bands") or [] if b.get("validated")]
                            for k in ("early", "sealed")},
+        "flip_tables": {k: ((out["stages"][k].get("flip_hist") or {}).get("table") if (out["stages"][k].get("flip_hist") or {}).get("live") else None)
+                        for k in ("early", "sealed")},
+        "flip_tables_all": {k: (out["stages"][k].get("flip_hist") or {}).get("table") for k in ("early", "sealed")},
         "flip_guard": (out["flip_check"]["threshold"] if out["flip_check"]["enabled"] else None),
         "regime": {k: (out["stages"][k]["regime"]["table"] if out["stages"][k]["regime"]["enabled"] else None)
                    for k in ("early", "sealed")},
@@ -963,6 +1057,12 @@ def summary_text(r=None):
             L.append(f"  {lab:17s} n={x['n']:5d} win={pct(x['win'])} roi={roi(x['roi'])} avg price={ap}")
         for t, x in sorted(s["current_by_tier"].items(), key=lambda z: str(z[0])):
             L.append(f"    tier {t:6s} n={x['n']:5d} win={pct(x['win'])} roi={roi(x['roi'])}")
+        _fhh = s.get("flip_hist")
+        if _fhh:
+            _t, _h = _fhh["train"], _fhh["holdout"]
+            L.append(f"  FLIP HISTORY: {_fhh['rounds_with_underdog']} rounds had a 30c+ underdog, it won {_fhh['underdog_wins']} "
+                     f"({_fhh['underdog_wins'] / max(1, _fhh['rounds_with_underdog']) * 100:.0f}%) | reversal calls: train n={_t['n']} win={pct(_t['win'])} "
+                     f"roi={roi(_t['roi'])} | newest unseen n={_h['n']} win={pct(_h['win'])} roi={roi(_h['roi'])} -> {'LIVE' if _fhh['live'] else 'off'}")
         for bd in s.get("reversal_bands") or []:
             ru = bd.get("rule")
             if not ru:

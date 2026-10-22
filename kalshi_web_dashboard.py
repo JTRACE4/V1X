@@ -5264,7 +5264,7 @@ PAGE_TEMPLATE = r"""<!doctype html>
 </script><meta charset="utf-8"><title>Brain</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#211b1e">
 <link rel="icon" type="image/png" href="/static/logo-64.png"><link rel="apple-touch-icon" href="/static/logo-180.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&family=Bungee&family=Bebas+Neue&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..900,0..100;1,9..144,400..900,0..100&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&family=Bungee&family=Bebas+Neue&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..900,0..100;1,9..144,400..900,0..100&family=Nunito:wght@400;600;700;800;900&family=Montserrat:wght@500;600;700;800;900&family=Carlito:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background:#211b1e; color:#fbf4ec; margin:0; padding:12px 24px 24px; }
 h1 { font-size: 15px; color:#9d9d9d; margin:0 0 8px; }
@@ -6233,11 +6233,11 @@ body .top-alerts > .top-w-title, body[data-view] .top-alerts > .top-w-title, bod
 /* 2026-10-22 (user): serif ONLY on the scoreboard's big win % and the chart's speed-sign numbers - everything else sans */
 .big, .sb-dir, .rsi-num, .fr-big, .tuc-time, .lx-num, .sk-num, .asset-label, .stage-pend, .stage-cd-t, .fa-usd, .clock, .clock *,
 .sc-wl, .sc-cur, .sc-streak b, .sb-rec, .press-qty b, .press-net, .press-buy, .press-sell, .line-diff b, .th-row b, .lw-chip b.w {
-  font-family:var(--br-sans) !important; font-weight:900 !important; font-style:normal !important; font-variation-settings:normal !important;
+  font-family:var(--br-bold) !important; font-weight:800 !important; font-style:normal !important; font-variation-settings:normal !important;
   letter-spacing:.2px !important; font-variant-numeric:tabular-nums; }
-.sc-pct, .lw-chip b:not(.w) { font-family:var(--br-serif) !important; font-weight:800 !important; font-variant-numeric:lining-nums tabular-nums; }
+.sc-pct, .lw-chip b:not(.w), .live-price-inline .big { font-family:var(--br-serif) !important; font-weight:800 !important; font-variant-numeric:lining-nums tabular-nums; }
 .lw-chip b.w { font-size:16px !important; letter-spacing:1px !important; }
-.live-price-inline .big { font-size:32px !important; }
+.live-price-inline .big { font-size:34px !important; font-variation-settings:"opsz" 72, "SOFT" 50 !important; letter-spacing:0 !important; }
 .sb-dir, .stage-pend { font-size:24px !important; }
 .rsi-num, .lx-num, .fr-big { font-size:26px !important; }
 /* coin names: brain icon + coin logo + bold white name */
@@ -6260,6 +6260,60 @@ body .top-alerts > .top-w-title, body[data-view] .top-alerts > .top-w-title, bod
 .th-chip { font-size:11.5px; font-weight:800; padding:3px 8px; border-radius:999px; border:1px solid; white-space:nowrap; cursor:default; }
 .th-chip.up { color:#3dd69c; border-color:rgba(61,214,156,0.5); background:rgba(61,214,156,0.08); }
 .th-chip.down { color:#f05454; border-color:rgba(240,84,84,0.5); background:rgba(240,84,84,0.08); }
+/* 2026-10-22 (user): order in the tile = market trend, RSI, line crosses */
+.lx-mkt.lx-mkt-top { border-top:0 !important; padding-top:0 !important; border-bottom:1px solid rgba(255,255,255,0.10); padding-bottom:7px; }
+/* 2026-10-22 (user): buy pressure is part of the live-price area - no panel box, no tab, no extra space */
+.card .press-top, body[data-view] .card .press-top { padding:0 2px 4px !important; margin:2px 0 10px !important; border:0 !important; border-radius:0 !important;
+  background:none !important; box-shadow:none !important; }
+.card .press-top::before { display:none !important; }
+.card .press-top > .press-head > b { position:static !important; display:inline !important; padding:0 !important; background:none !important; clip-path:none !important;
+  filter:none !important; color:var(--br-tan) !important; font-family:var(--br-label) !important; font-size:15px !important; letter-spacing:2px !important; }
+.card .press-top > .press-head { margin-bottom:2px !important; }
+/* 2026-10-22 (user): flip radar redesign - one big readable gauge, clear status, calm details */
+.flip-radar { display:flex !important; flex-direction:column; align-items:center; text-align:center; gap:4px; padding:10px 10px !important; }
+.flip-radar .fr-big { display:flex; flex-direction:column; align-items:center; line-height:1 !important; margin:4px 0 2px; font-size:34px !important; }
+.flip-radar .fr-big span { font-family:var(--br-label) !important; font-size:14px !important; letter-spacing:2.5px; margin-top:5px; padding:2px 10px; border-radius:999px;
+  border:1px solid currentColor; }
+.flip-radar .fr-track2 { width:88%; height:7px !important; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; margin:4px auto 6px !important; }
+.flip-radar .fr-track2 i { display:block; height:100%; border-radius:999px; }
+.flip-radar .fr-txt { font-size:12.5px !important; line-height:1.35; color:var(--br-text); }
+.flip-radar .fr-txt.hint { font-size:11.5px !important; color:var(--br-mute); }
+.flip-radar .rv-watch { width:100%; box-sizing:border-box; margin-top:6px; padding:6px 8px; border-radius:10px; font-size:12px; text-align:center; }
+.flip-radar .rv-watch.rv-ready { background:rgba(229,184,92,0.16); border:1px solid #e5b85c; color:#fbf4ec; }
+.flip-radar .rv-watch.rv-near { background:rgba(255,255,255,0.04); border:1px dashed rgba(220,187,145,0.45); color:var(--br-text); }
+/* ==== 2026-10-22 (user: "get rid of this comic-sans stuff, bring back strong professional fonts like Gotham, bold use
+   Calibri, but keep the style + theme"): Montserrat (Gotham-style) for titles, labels, numbers and anything bold;
+   Carlito (metric twin of Calibri) for reading text. Serif kept ONLY on the live price, scoreboard win % and speed signs. */
+:root { --br-sans:'Carlito', 'Calibri', 'Segoe UI', -apple-system, Arial, sans-serif !important;
+  --br-bold:'Montserrat', 'Gotham', 'Helvetica Neue', Arial, sans-serif; --br-label:'Montserrat', 'Gotham', 'Helvetica Neue', Arial, sans-serif; }
+html, body { font-family:var(--br-sans) !important; font-size:14.5px; }
+b, strong { font-weight:700; }
+.rs-title, .top-w-title, .sc-title, .sb-title, .tuc-lbl, .tug-title, .lx-mkt-lbl, .more-detail > summary b, .calls-row .sb-title,
+body[data-view="both"] .calls-row .sb-title, body[data-view="both"] .rs-title, .mini-call .mc-lbl,
+.card .press-top > .press-head > b, .live-price-inline .lbl, .stage-cd .hint, .round-left .hint, .lw-chip i {
+  font-family:var(--br-label) !important; font-weight:800 !important; font-size:11.5px !important; letter-spacing:1.6px !important; }
+.press-top > .press-head > b, .top-alerts > .top-w-title, .scoreboard > .rs-title, .rounds-panel > .top-w-title, .lw-win > .pat-win-head > b, .tgt-hist > .th-h,
+body .scoreboard > .rs-title, body[data-view] .scoreboard > .rs-title, body .top-alerts > .top-w-title, body[data-view] .top-alerts > .top-w-title,
+body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title {
+  font-family:var(--br-label) !important; font-weight:800 !important; font-size:13px !important; letter-spacing:1.8px !important; padding-top:8px !important; padding-bottom:7px !important; }
+.card .press-top > .press-head > b { font-size:12px !important; padding:0 !important; }
+.lw-chip i { font-size:9.5px !important; letter-spacing:1.2px !important; }
+.sb-dir, .stage-pend, .rsi-num, .lx-num, .fr-big, .stage-cd-t, .fa-usd, .tuc-time, .sk-num, .mini-call .mc-dir, .mini-call .mc-pct {
+  font-family:var(--br-bold) !important; font-weight:800 !important; letter-spacing:-.2px !important; }
+.sb-tier, .rsi-zone, .lx-zone, .fr-big span, .th-chip, .press-buy, .press-sell, .sc-legend b, .k-nums, .mkt-btns button {
+  font-family:var(--br-bold) !important; font-weight:700 !important; }
+.asset-label, .asset-label .coin-txt { font-family:var(--br-bold) !important; font-weight:900 !important; letter-spacing:.5px !important; }
+.fa-item .fa-head { font-family:var(--br-bold) !important; font-weight:700 !important; font-size:12.5px; letter-spacing:.2px; }
+.fa-item, .fa-where, .sb-line, .fr-txt, .sc-empty, .th-row, .mc-sub, .mc-same, .hint { font-family:var(--br-sans) !important; }
+.sb-line, .fr-txt { font-size:13.5px !important; }
+/* 2026-10-22 (user: "that serif was good, just don't overuse it - rule it by hierarchy of importance")
+   TIER 1 serif  : live price + market target, the call direction (UP/DOWN), scoreboard win %, speed-sign numbers
+   TIER 2 Montserrat: labels, tile numbers, coin names, alert headlines
+   TIER 3 Carlito : everything you read */
+.live-price-inline .big, .sb-dir, .sc-pct, .lw-chip b:not(.w) {
+  font-family:var(--br-serif) !important; font-weight:800 !important; letter-spacing:0 !important;
+  font-variation-settings:"opsz" 72, "SOFT" 50 !important; font-variant-numeric:lining-nums tabular-nums; }
+.sb-dir { font-size:28px !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8422,7 +8476,7 @@ function lwCreate(a) {
     + '<div class="lw-key hint"><span style="color:#fbf0d9">EMA 12</span> &middot; <span style="color:#f2c46b">EMA 25</span> &middot; <span style="color:#c8963e">EMA 50</span> &middot; dashed = round line</div>'
     + '<div class="lw-pats"></div>';
   const el = box.querySelector('.lw-chart');
-  const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: 'Nunito'},
+  const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: 'Montserrat'},
     grid: {vertLines: {color: 'rgba(242,196,107,.05)'}, horzLines: {color: 'rgba(242,196,107,.05)'}},
     rightPriceScale: {borderColor: 'rgba(242,196,107,.18)'},
     timeScale: {borderColor: 'rgba(242,196,107,.18)', timeVisible: true, secondsVisible: false,
@@ -10436,6 +10490,7 @@ def flip_risk_sustained(name, call_sign, spot, line, seconds_left, elapsed=None,
 # flip score says the side price is on now is in trouble AND RSI + momentum point the other way, the early / sealed call
 # goes to the LOSING side (that is where the 3x+ Kalshi payouts are). Graded like every other call, and tracked
 # separately in the round history so you can see whether these actually pay.
+REV_RECORD_SINCE = 1792708800      # 2026-10-22 22:40 UTC: reversal W/L reset when the flip-history system went live
 REVERSAL_MIN_DOG_PRICE = 0.30   # the underdog must cost 30c+ (pays ~3.3x at most) - long shots lost too often
 REVERSAL_MIN_SCORE = 55         # composite flip risk of the current favorite must be HIGH
 REVERSAL_MIN_VOTES = 3          # at least 3 of: RSI stretched, flow against, candles against, trend against, price moving at the line
@@ -10443,117 +10498,58 @@ REVERSAL_RSI_HI, REVERSAL_RSI_LO = 68, 32
 
 
 def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_multi, sig, kalshi_yes, ticker=None, stage=None):
-    """None, or {"call", "tier", "why", "score", "votes", "payout"} - call the side that is LOSING right now.
-    2026-10-22 (user: "reversal calls need to be better - run a test and make the fixes"): the backtest showed the old
-    always-on version LOSING at 4:00 (25-40% right) and too rare at 8:00 to trust. Now a reversal only fires when the
-    backtest's profit-tested underdog rule for that mark matches (checked on rounds it never saw); otherwise the old
-    flip-score version runs only if the backtest has it enabled for that mark, and then only at a higher bar."""
-    if not spot or not line or abs(spot - line) / line < CROSS_BAND_PCT:
+    """None, or {"call", "tier", "why", "score", "votes", "payout"} - call the UNDERDOG.
+    2026-10-22 (d, user: "the reversal/underdog doesn't have to call a reversal every round - use a way more effective
+    system based on the history of all the flips in the last month"): ONE system now - the backtest's flip-history table.
+    Every 4:00 / 8:00 moment of the last 30 days is filed by underdog price, distance to the line, crosses so far and how
+    many reads turned; a reversal fires only when that exact situation's real history says the underdog wins 50%+ AND
+    beats its own price by 8+ points, and only at a mark where the table also won on the newest rounds it never saw."""
+    if not spot or not line or kalshi_yes is None:
         return None
     try:
         _dec = _bt.decisions()
     except Exception:
-        _dec = {}
-    # 2026-10-22 (b): one tested rule per payout band (4x+, ~3x, ~2-2.7x). The first band whose rule matches wins.
-    _rules = (_dec.get("reversal_rules") or {}).get(stage) or [] if stage else []
-    _f = {"kp": kalshi_yes, "dist": (spot - line) / line, "crosses": (line_stats or {}).get("crosses") or 0,
-          "r1_tv": (rsi_multi or {}).get("rsi1"), "sig": sig or {}}
-    _rule = _c = None
-    if kalshi_yes is not None:
-        for _r in _rules:
-            _c = _bt.rev_rule_match(_f, _r)
-            if _c:
-                _rule = _r
-                break
-    if _rule and _c:
-        _ho = {}
-        try:
-            for _bd in ((_bt.load_saved() or {}).get("stages") or {}).get(stage, {}).get("reversal_bands") or []:
-                if _bd.get("band") == _rule.get("band"):
-                    _ho = _bd.get("holdout") or {}
-        except Exception:
-            pass
-        _kp = kalshi_yes if _c == "YES" else 1 - kalshi_yes
-        _pay = (1 / _kp) if _kp else None
-        _v, _ = _bt.rev_votes(_f, 1 if kalshi_yes >= 0.5 else -1)
-        _why = (f"REVERSAL ({_rule.get('band')}) - calling the underdog: {_v} reads turning against the favorite"
-                + (f" &middot; setups like this won {_ho['win']:.0%} at ~{_ho['avg_price'] * 100:.0f}c on unseen rounds"
-                   if _ho.get("win") is not None and _ho.get("avg_price") else "")
-                + (f" &middot; pays ~{_pay:.1f}x" if _pay else ""))
-        _edge = (_ho.get("win") or 0) - (_ho.get("avg_price") or 1)
-        return {"call": _c, "tier": "GOOD" if _edge >= 0.15 else "WEAK", "why": _why, "score": None,
-                "votes": [], "payout": round(_pay, 2) if _pay else None, "kp": _kp}
-    # 2026-10-22 (user: "I liked those 2.7x reversal calls, make sure those stay"): the original SEALED (8:00) reversal stays
-    # on exactly as it was. Other marks only get it when the backtest has proven it there (it was losing at 4:00).
-    if stage and stage != "sealed" and not (_dec.get("reversal_enabled") or {}).get(stage):
         return None
-    fav = 1 if spot > line else -1                       # the side price is on now
-    ls = line_stats or {}
-    fr = flip_risk_core(name, fav, spot, line, seconds_left, elapsed, ls.get("crosses") or 0, ls.get("events"), ticker)
-    # 2026-10-22 (c, user: "don't be scared to call it for the sealed call"): at 8:00 the backtest sweep held up at flip
-    # risk 55+ with 2+ reads (75% right, ~2.7x) and at 45+ with 3+ reads (60% right), so the sealed bar is 45 with the
-    # vote count scaled to the score. Other marks keep a higher bar.
-    _sealed = stage in (None, "sealed")
-    if not fr or fr["score"] < (45 if _sealed else max(REVERSAL_MIN_SCORE, 65)):
+    tab = (_dec.get("flip_tables") or {}).get(stage or "sealed")
+    if not tab:
         return None
-    rm = rsi_multi or {}
-    r1, r5 = rm.get("rsi1"), rm.get("rsi5")
-    votes = []
-    if r1 is not None and ((fav > 0 and r1 >= REVERSAL_RSI_HI) or (fav < 0 and r1 <= REVERSAL_RSI_LO)):
-        votes.append(f"RSI {r1:.0f} {'overbought' if fav > 0 else 'oversold'}" + (f" (5m {r5:.0f})" if r5 is not None else ""))
-    if fr["opp_share"] is not None and fr["opp_share"] >= 0.58:
-        votes.append(f"{fr['opp_share']:.0%} of 10s-1m flow against")
-    sig = sig or {}
-    if sig.get("candles") == -fav:
-        votes.append("candles turning")
-    if sig.get("trend") == -fav:
-        votes.append("trend (EMA / SuperTrend / DMI) against")
-    if fr["toward"]:
-        votes.append("price moving at the line")
-    rsi_ok = bool(votes) and votes[0].startswith("RSI")
-    _need = (2 if fr["score"] >= 55 else 3) if _sealed else REVERSAL_MIN_VOTES
-    if len(votes) < _need or not (rsi_ok or len(votes) >= 4):
+    f = {"kp": kalshi_yes, "dist": (spot - line) / line, "crosses": (line_stats or {}).get("crosses") or 0,
+         "r1_tv": (rsi_multi or {}).get("rsi1"), "sig": sig or {}}
+    fc = _bt.flip_call(tab, f)
+    if not fc or fc["dog"] < REVERSAL_MIN_DOG_PRICE:
         return None
-    call = "NO" if fav > 0 else "YES"
-    kp = None
-    if kalshi_yes is not None:
-        kp = kalshi_yes if call == "YES" else 1 - kalshi_yes
-    payout = (1 / kp) if kp and kp > 0 else None
-    if kp is not None and kp < REVERSAL_MIN_DOG_PRICE:
-        return None          # 2026-10-22 (user): no long shots - those 14x underdogs went 1-7; win rate over payout
-    tier = "GOOD" if (len(votes) >= 4 and fr["score"] >= 65) else "WEAK"
-    why = (f"REVERSAL - calling the losing side: flip risk {fr['score']:.0f}% + " + ", ".join(votes)
-           + (f" &middot; pays ~{payout:.1f}x at {kp * 100:.0f}c" if payout else ""))
-    return {"call": call, "tier": tier, "why": why, "score": round(fr["score"], 1), "votes": votes,
-            "payout": round(payout, 2) if payout else None, "kp": kp}
+    pay = 1 / fc["dog"]
+    why = (f"REVERSAL - flip history: the underdog won {fc['wins']} of {fc['n']} setups like this in the last 30 days "
+           f"({fc['rate']:.0%} with recent days weighted) &middot; pays ~{pay:.1f}x")
+    tier = "GOOD" if fc["rate"] - fc["dog"] >= 0.15 else "WEAK"
+    return {"call": fc["call"], "tier": tier, "why": why, "score": None, "votes": [], "payout": round(pay, 2), "kp": fc["dog"],
+            "hist": fc}
 
 
 def _reversal_watch_html(name, d):
-    """2026-10-22 (user: "make the reversal and flip radar together"): a strip inside the Flip Radar tile - how close the
-    round is to a REVERSAL (underdog) call: the favorite's flip risk, how many momentum reads have turned, and READY when
-    the 8:00 reversal rule would fire right now."""
+    """Inside the Flip Radar: shows ONLY when the flip history makes this round interesting - REVERSAL READY when the
+    history rule fires, or a quiet 'underdog setup' note when similar rounds flipped 40%+ of the time. Most rounds: nothing."""
     try:
-        spot, line, kp = d.get("spot_price"), d.get("target_price"), d.get("kalshi_price")
-        if not (spot and line) or abs(spot - line) / line < CROSS_BAND_PCT:
+        spot, line, kp = d.get("spot_price"), d.get("target_price"), _live_kp(d)
+        if not (spot and line) or kp is None:
             return ""
-        fav = 1 if spot > line else -1
         ls = d.get("line_stats") or {}
-        fr = flip_risk_core(name, fav, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"), ls.get("crosses") or 0,
-                            ls.get("events"), d.get("ticker"))
-        if not fr:
-            return ""
         rm = d.get("rsi_multi") or {}
-        n_turn, _rs = _bt.rev_votes({"r1_tv": rm.get("rsi1"), "sig": d.get("stage_sig") or {}}, fav)
+        stage = "sealed" if ((d.get("stage_calls") or {}).get("early") or {}).get("call") else "early"
         rv = reversal_check(name, spot, line, d.get("seconds_left"), d.get("elapsed_seconds"), ls, rm, d.get("stage_sig"), kp,
-                            d.get("ticker"), stage="sealed")
-        dog = "DOWN" if fav > 0 else "UP"
-        sc = fr["score"]
+                            d.get("ticker"), stage=stage)
         if rv:
-            pay = f' &middot; pays ~{rv["payout"]:.1f}x' if rv.get("payout") else ""
-            return f'<div class="rv-watch rv-ready"><b><i class=ico data-i=reversal></i> REVERSAL READY</b> &middot; {dog}{pay}</div>'
-        cls = "rv-near" if (sc >= 40 and n_turn >= 2) else "rv-far"
-        return (f'<div class="rv-watch {cls}"><b><i class=ico data-i=reversal></i> UNDERDOG</b> {dog} '
-                f'&middot; {"close" if cls == "rv-near" else "not yet"} <span class="hint">({n_turn}/4 turning)</span></div>')
+            h = rv["hist"]
+            return (f'<div class="rv-watch rv-ready"><b><i class=ico data-i=reversal></i> REVERSAL READY</b> &middot; '
+                    f'{"UP" if rv["call"] == "YES" else "DOWN"} &middot; won {h["wins"]}/{h["n"]} like this &middot; pays ~{rv["payout"]:.1f}x</div>')
+        tab = ((_bt.decisions().get("flip_tables_all") or {}).get(stage)) or {}
+        f = {"kp": kp, "dist": (spot - line) / line, "crosses": ls.get("crosses") or 0, "r1_tv": rm.get("rsi1"), "sig": d.get("stage_sig") or {}}
+        info = _bt.flip_cell_info(tab, f)
+        if info and info["n"] >= _bt.FLIP_MIN_N and info["rate"] >= 0.40:
+            return (f'<div class="rv-watch rv-near"><b><i class=ico data-i=reversal></i> UNDERDOG SETUP</b> '
+                    f'{"UP" if info["call"] == "YES" else "DOWN"} &middot; flipped {info["rate"]:.0%} of {info["n"]} like this '
+                    f'<span class="hint">(not enough to call)</span></div>')
+        return ""
     except Exception:
         return ""
 
@@ -10627,10 +10623,10 @@ def build_flip_radar(name, d):
               f'data-kup="{kp if kp is not None else -1:.3f}" data-left="{int(d.get("seconds_left") or 0)}" '
               f'data-above="{1 if spot >= line else 0}" style="display:none;"></span>')
     _early_in = bool(((d.get("stage_calls") or {}).get("early") or {}).get("call"))     # 2026-10-22 (user)
-    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR{" &middot; REVERSAL WATCH" if _early_in else ""}</div>'
+    return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
             f'<div class="fr-track2"><i class="{cls}" style="width:{min(100, pct):.0f}%"></i></div>'
-            f'<div class="fr-txt">Chance {which} ({"UP" if call == "YES" else "DOWN"}) flips</div>'
+            f'<div class="fr-txt">chance <b>{"UP" if call == "YES" else "DOWN"}</b> flips <span class="hint">({which.replace("the ", "")})</span></div>'
             + '<!--OWNER-->' + (f'<div class="fr-txt"><i class=ico data-i=warn></i> {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
             + f'<div class="fr-txt hint">{_html_attr(tip).replace("&amp;middot;", "&middot;")}</div><!--/OWNER-->'
@@ -10740,7 +10736,7 @@ def build_cross_box(name, d):
 def build_round_strip(name, d):
     # 2026-10-22 (user): RSI + line crosses share one square; the streak tile moved up next to "time until call"
     return (f'<div class="round-strip calls-row">{build_stage_box(name, d, "early")}{build_stage_box(name, d, "sealed")}'
-            f'{build_flip_radar(name, d)}<div class="rs-tile rsi-lx">{build_rsi_box(name, d)}{build_cross_box(name, d)}<div class="lx-mkt"><div class="lx-mkt-lbl">MARKET TREND</div>{build_market_box(name)}</div></div></div>')
+            f'{build_flip_radar(name, d)}<div class="rs-tile rsi-lx"><div class="lx-mkt lx-mkt-top"><div class="lx-mkt-lbl">MARKET TREND</div>{build_market_box(name)}</div>{build_rsi_box(name, d)}{build_cross_box(name, d)}</div></div>')
 
 
 def _streak_stats(results):
@@ -10958,8 +10954,16 @@ def build_scoreboard(name, d):
             f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; today: <b>{td}</b>'
             + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div></div>')
     # 2026-10-22 (user): reversals in their own column so the main win rate stays clean
+    # 2026-10-22 (d, user: "reset the win to lose rate"): the reversal record restarts with the flip-history system
+    def _after_reset(h):
+        _t = _window_close_utc(h.get("ticker"))
+        return bool(_t) and _t.timestamp() >= REV_RECORD_SINCE
     rv = [(bool(h[f"{k}_correct"]), h.get("actual_side"), h.get(f"{k}_payout"), k) for h in hist for k in ("early", "sealed")
-          if h.get(f"{k}_reversal") and h.get(f"{k}_correct") is not None]
+          if h.get(f"{k}_reversal") and h.get(f"{k}_correct") is not None and _after_reset(h)]
+    if not rv:
+        cols.append('<div class="sc-col sc-rev"><div class="sc-title"><i class=ico data-i=reversal></i> REVERSALS &middot; underdog calls</div>'
+                    '<div class="sc-empty">Fresh start Oct 22 - the new flip-history system only calls an underdog when the last '
+                    '30 days back it. None yet.</div></div>')
     if rv:
         rw = sum(1 for x in rv if x[0])
         pays = [x[2] for x in rv if x[2]]

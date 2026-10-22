@@ -7,7 +7,7 @@ import time
 E = _html.escape
 
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-         '<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..900,0..100;1,9..144,400..900,0..100&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">')
+         '<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..900,0..100;1,9..144,400..900,0..100&family=Nunito:wght@400;600;700;800;900&family=Montserrat:wght@500;600;700;800;900&family=Carlito:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">')
 
 
 def brain_logo(size=44, p="l"):
@@ -27,7 +27,7 @@ def hero_img(cls="scene"):
 BASE_CSS = r"""
 :root{--bg:#211b1e;--tile:rgba(48,38,43,.82);--line:rgba(240,214,200,.13);--cream:#fbf4ec;--text:#eee2d7;--mute:#bcaaa1;
 --tan:#dcbb91;--rose:#e9a5bb;--gold:#e5b85c;--up:#43cdb7;--down:#e8798f;--ink:#1a1416;
---serif:'Fraunces',Georgia,'Times New Roman',serif;--sans:'Nunito',-apple-system,'Segoe UI',sans-serif;color-scheme:dark}
+--serif:'Fraunces',Georgia,'Times New Roman',serif;--sans:'Carlito','Calibri',-apple-system,'Segoe UI',sans-serif;color-scheme:dark}
 *{box-sizing:border-box}html,body{margin:0}
 body{background:var(--bg);color:var(--text);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
 a{color:var(--rose)}
@@ -146,7 +146,7 @@ setInterval(clock,1000);clock();
 let chart,series,avgSeries,lineRef,last=null,secsLeft=null;
 function makeChart(){
   const el=$('#chart');el.innerHTML='';
-  chart=LightweightCharts.createChart(el,{autoSize:true,layout:{background:{type:'solid',color:'rgba(20,15,18,0)'},textColor:'#bcaaa1',fontFamily:'Nunito'},
+  chart=LightweightCharts.createChart(el,{autoSize:true,layout:{background:{type:'solid',color:'rgba(20,15,18,0)'},textColor:'#bcaaa1',fontFamily:'Montserrat'},
     grid:{vertLines:{color:'rgba(240,214,200,.06)'},horzLines:{color:'rgba(240,214,200,.06)'}},
     rightPriceScale:{borderColor:'rgba(240,214,200,.13)'},timeScale:{borderColor:'rgba(240,214,200,.13)',timeVisible:true,secondsVisible:mode==='round',
       tickMarkFormatter:(t)=>mode==='1d'?fmtDay.format(new Date(t*1000)):fmtET.format(new Date(t*1000))},
