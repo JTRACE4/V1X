@@ -6491,6 +6491,10 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .lw-chip .lw-gap { font-family:var(--br-bold) !important; font-weight:800 !important; font-size:11px !important; color:#ffffff !important; letter-spacing:0 !important;
   text-transform:none !important; font-variant-numeric:tabular-nums; }
 .lwk-macd b { color:#fbf4ec; font-variant-numeric:tabular-nums; }
+.lwk-macd { font-weight:800; font-family:var(--br-bold); }
+.lwk-macd.up, .lwk-macd.up b { color:#3dd69c !important; } .lwk-macd.dn, .lwk-macd.dn b { color:#f05454 !important; } .lwk-macd.nt, .lwk-macd.nt b { color:#b9b3b0 !important; }
+.lwk-macd .lw-arr { display:inline-block !important; width:10px; height:10px; margin:0 1px !important; vertical-align:-1px; }
+.lwk-macd small { font-size:10px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8639,7 +8643,15 @@ function lwRead(a, o) {
     chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w">' + lwArrow(flat ? 0 : (up ? 1 : -1)) + '</b><span class="lw-gap">' + gapTxt + '</span><span>' + sub + '</span></span>';
     try {
       const K = o.corner.closest('.lw-box'), km = K && K.querySelector('.lwk-macd');
-      if (km) km.innerHTML = 'MACD <b>' + (h.line >= 0 ? '+' : '\u2212') + Math.abs(h.line).toFixed(dpM) + '</b> <span class="hint">(gap to signal ' + gapTxt + ')</span>';
+      if (km) {
+        // 2026-10-22 (user): color-coded in real time - green bullish, red bearish, grey neutral
+        // gap first (MACD above / below its signal); if the gap is ~0, the MACD's own side of zero decides; both ~0 = neutral
+        const lflat = Math.abs(h.line) < px * 0.00002;
+        const kd = !flat ? (up ? 1 : -1) : (lflat ? 0 : (h.line > 0 ? 1 : -1));
+        km.className = 'lwk-macd ' + (kd > 0 ? 'up' : kd < 0 ? 'dn' : 'nt');
+        km.innerHTML = 'MACD ' + lwArrow(kd) + ' <b>' + (h.line >= 0 ? '+' : '\u2212') + Math.abs(h.line).toFixed(dpM) + '</b> '
+          + '<small>' + (kd > 0 ? 'bullish' : kd < 0 ? 'bearish' : 'neutral') + '</small> <span class="hint">(gap to signal ' + gapTxt + ')</span>';
+      }
     } catch (e) {}
     if (flat) mc = 'Momentum: no real push either way right now.';
     else if (soon) mc = 'Momentum is ' + word + ' but fading fast \u2013 it may turn ' + (up ? 'DOWN' : 'UP') + ' in about ' + bars + ' ' + unit + (bars > 1 ? 's' : '') + '.';
