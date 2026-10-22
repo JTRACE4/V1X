@@ -6343,6 +6343,9 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 .fa-item[data-kind="burst"].fa-down .fa-age, .fa-item[data-kind="burst"].fa-down .fa-arrow, .fa-item[data-kind="burst"].fa-down .fa-usd { color:#d61f37 !important; text-shadow:none !important; }
 .fa-item[data-kind="burst"].fa-up, .fa-item[data-kind="burst"].fa-up .fa-head, .fa-item[data-kind="burst"].fa-up .fa-where,
 .fa-item[data-kind="burst"].fa-up .fa-age, .fa-item[data-kind="burst"].fa-up .fa-arrow, .fa-item[data-kind="burst"].fa-up .fa-usd { color:#0e8f58 !important; text-shadow:none !important; }
+/* 2026-10-22 (user): alert dollar values in the same bold face as the buy-pressure numbers */
+.card .fa-item .fa-usd, .card .top-alerts .fa-item .fa-usd { font-family:var(--br-bold) !important; font-weight:800 !important; font-size:17px !important;
+  letter-spacing:-.2px !important; font-variant-numeric:tabular-nums; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
