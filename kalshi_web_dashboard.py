@@ -8476,7 +8476,7 @@ function lwCreate(a) {
     + '<button class="lw-ha" title="Heikin Ashi candles - smoother trend view">Heikin Ashi</button>'
     + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
-    + '<div class="lw-key hint"><span style="color:#fbf0d9">EMA 12</span> &middot; <span style="color:#f2c46b">EMA 25</span> &middot; <span style="color:#c8963e">EMA 50</span> &middot; dashed = round line</div>'
+    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line</div>'
     + '<div class="lw-pats"></div>';
   const el = box.querySelector('.lw-chart');
   const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: 'Montserrat'},
@@ -8490,7 +8490,7 @@ function lwCreate(a) {
     ha: (() => { try { return localStorage.getItem('lwHA') !== '0'; } catch (e) { return true; } })()};
   o.candle = chart.addCandlestickSeries({upColor: '#3dd69c', downColor: '#f05454', borderVisible: false, wickUpColor: 'rgba(61,214,156,0.85)', wickDownColor: 'rgba(240,84,84,0.85)'});
   const ln = c => chart.addLineSeries({color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
-  o.e1 = ln('#fbf0d9'); o.e2 = ln('#f2c46b'); o.e3 = ln('#c8963e');      // cream white / yellow / deep gold
+  o.e1 = ln('#f8f6f2'); o.e2 = ln('#e9d3a4'); o.e3 = ln('#ffd23f');      // 2026-10-22 (user): EMA 12 near-white / 25 cream / 50 yellow
   box.querySelectorAll('.lw-tabs button[data-tf]').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
   const hb = box.querySelector('.lw-ha');
   hb.classList.toggle('on', o.ha);
