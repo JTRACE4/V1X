@@ -13058,6 +13058,149 @@ def backfill_mini_calls():
     return changed
 
 
+# ---------------------------------------------------------------- MINI CALL FORMULA SEARCH (2026-10-22, user)
+# "Analyze the mini call to find the real best way to read it - is there a higher % with a better formula, 10 rounds vs 5?"
+# Every variant makes the INSTANT call at the round's open from rounds that had already settled. Chosen on the older 70% of
+# rounds, graded on the newest 30% it never saw. Results go to the log and to mini_grid.json.
+MINI_GRID_FILE = os.path.join(_DATA_ROOT, "data_cache", "mini_grid.json")
+
+
+def mini_grid_search():
+    out = {"ts": time.time(), "assets": {}}
+    for name in ("BTC", "XRP"):
+        rows = []
+        if name == "BTC":
+            try:
+                rows = [(m["close"], m["strike"], m["result"] == "yes") for m in _bt.settled_markets()
+                        if m.get("strike") and m.get("result") in ("yes", "no")]
+            except Exception:
+                rows = []
+        seen = {round(r[0]) for r in rows}
+        for h in _history.get(name, []):
+            t = _window_close_utc(h.get("ticker"))
+            if t and h.get("strike") and h.get("actual_side") in ("YES", "NO") and round(t.timestamp()) not in seen:
+                rows.append((t.timestamp(), h["strike"], h["actual_side"] == "YES"))
+        rows.sort(key=lambda r: r[0])
+        if len(rows) < 120:
+            continue
+        RADII = (0.001, 0.0025, 0.005, 0.01, 0.02)
+        NS = (3, 5, 7, 10, 15, 20)
+        # per round: newest-first near lists per radius (up to 20), plus context features
+        feats = []
+        for i, (ts, line, up) in enumerate(rows):
+            if i < 30:
+                continue
+            opn = ts - 900
+            near = {r: [] for r in RADII}
+            j = i - 1
+            while j >= 0 and opn - rows[j][0] <= TARGET_LOOKBACK_S and min(len(v) for v in near.values()) < 20:
+                pj = rows[j]
+                if pj[0] <= opn:
+                    d = abs(pj[1] - line) / line
+                    for r in RADII:
+                        if d <= r and len(near[r]) < 20:
+                            near[r].append((pj[2], d, opn - pj[0]))
+                j -= 1
+            last = [rows[k][2] for k in range(i - 1, max(-1, i - 21), -1)]          # newest-first, any target
+            drift = line - rows[i - 4][1] if i >= 4 else 0.0                       # strike change over the last hour
+            feats.append({"up": up, "near": near, "last": last, "drift": drift, "prev": rows[i - 1][2]})
+            if i % 300 == 0:
+                time.sleep(0.01)
+        split = int(len(feats) * 0.7)
+
+        def score(fn):
+            res = []
+            for f in feats:
+                c = fn(f)
+                res.append(None if c is None else (c == f["up"]))
+            def summ(xs):
+                g = [x for x in xs if x is not None]
+                return {"n": len(g), "win": (sum(g) / len(g)) if g else None, "cov": len(g) / max(1, len(xs))}
+            return summ(res[:split]), summ(res[split:]), summ(res)
+
+        def maj(votes, w=None, thr=0.5, tie5=False):
+            if not votes:
+                return None
+            w = w or [1.0] * len(votes)
+            tot = sum(w)
+            upw = sum(wi for v, wi in zip(votes, w) if v)
+            sh = upw / tot
+            if abs(sh - 0.5) < 1e-9:
+                if tie5:
+                    v5 = votes[:5]
+                    u5 = sum(v5)
+                    return None if u5 * 2 == len(v5) else (u5 * 2 > len(v5))
+                return None
+            if max(sh, 1 - sh) < thr:
+                return None
+            return sh > 0.5
+
+        variants = []
+        for r in RADII:
+            for n in NS:
+                for wmode in ("plain", "recent", "close"):
+                    for thr in (0.5, 0.6, 0.7, 0.8):
+                        def fn(f, r=r, n=n, wmode=wmode, thr=thr):
+                            nr = f["near"][r][:n]
+                            if len(nr) < n:
+                                return None
+                            votes = [x[0] for x in nr]
+                            w = None
+                            if wmode == "recent":
+                                w = [0.85 ** k for k in range(len(nr))]
+                            elif wmode == "close":
+                                w = [1.0 / (1.0 + x[1] / 0.001) for x in nr]
+                            return maj(votes, w, thr, tie5=(thr == 0.5))
+                        variants.append((f"near{r * 100:g}% last{n} {wmode} {'all' if thr == 0.5 else f'only {thr:.0%}+ agree'}", fn))
+        variants.append(("CURRENT: near1% last10, tie -> newest 5", lambda f: maj([x[0] for x in f["near"][0.01][:10]], None, 0.5, True)
+                         if len(f["near"][0.01]) >= 10 else None))
+        for n in (3, 5, 10, 20):
+            variants.append((f"last{n} rounds any target (momentum)", lambda f, n=n: maj(f["last"][:n], None, 0.5, False)))
+            variants.append((f"fade last{n} rounds any target", lambda f, n=n: (lambda m: None if m is None else (not m))(maj(f["last"][:n], None, 0.5, False))))
+        variants.append(("previous round repeats", lambda f: f["prev"]))
+        variants.append(("previous round flips", lambda f: not f["prev"]))
+        variants.append(("1h drift (strike rising -> UP)", lambda f: None if f["drift"] == 0 else f["drift"] > 0))
+        variants.append(("1h drift fade", lambda f: None if f["drift"] == 0 else f["drift"] < 0))
+        for r in (0.005, 0.01):
+            for n in (5, 10):
+                variants.append((f"near{r * 100:g}% last{n} + 1h drift must agree",
+                                 lambda f, r=r, n=n: (lambda m: None if (m is None or f["drift"] == 0 or (f["drift"] > 0) != m) else m)(
+                                     maj([x[0] for x in f["near"][r][:n]], None, 0.5, True) if len(f["near"][r]) >= n else None)))
+        results = []
+        for k_, (lab, fn) in enumerate(variants):
+            tr, ho, al = score(fn)
+            results.append({"name": lab, "train": tr, "hold": ho, "all": al})
+            if k_ % 50 == 0:
+                time.sleep(0.01)
+        base = next(x for x in results if x["name"].startswith("CURRENT"))
+        # pick on TRAIN only: best win rate with >= 60% coverage, and best with >= 25% coverage
+        def pick(mincov):
+            ok = [x for x in results if x["train"]["win"] is not None and x["train"]["cov"] >= mincov and x["train"]["n"] >= 80]
+            return max(ok, key=lambda x: x["train"]["win"]) if ok else None
+        picks = {"every_round": pick(0.95), "most_rounds": pick(0.6), "selective": pick(0.25)}
+        out["assets"][name] = {"rounds": len(feats), "current": base, "picks": picks,
+                               "top_hold": sorted((x for x in results if x["hold"]["n"] >= 40 and x["train"]["n"] >= 80),
+                                                  key=lambda x: -(x["hold"]["win"] or 0))[:8]}
+        f_ = lambda x: (f'{x["hold"]["win"] * 100:.1f}% of {x["hold"]["n"]} unseen ({x["hold"]["cov"] * 100:.0f}% of rounds called) '
+                        f'| train {x["train"]["win"] * 100:.1f}% of {x["train"]["n"]}') if x and x["hold"]["win"] is not None else "-"
+        print(f"[mini grid] {name}: {len(feats)} rounds, newest {len(feats) - split} unseen")
+        print(f"[mini grid] {name} CURRENT method: {f_(base)}")
+        for k_, v in picks.items():
+            print(f"[mini grid] {name} BEST ({k_}) = {v['name'] if v else '-'}: {f_(v)}")
+        for x in out["assets"][name]["top_hold"][:5]:
+            print(f"[mini grid] {name} top unseen: {x['name']}: {f_(x)}")
+    try:
+        os.makedirs(os.path.dirname(MINI_GRID_FILE), exist_ok=True)
+        with open(MINI_GRID_FILE, "w") as fh:
+            json.dump(out, fh)
+    except Exception:
+        pass
+    return out
+
+
+_mini_grid_ts = [0.0]
+
+
 def _mini_backfill_loop():
     time.sleep(60)
     while True:
@@ -13065,6 +13208,12 @@ def _mini_backfill_loop():
             backfill_mini_calls()
         except Exception as _e:
             print(f"[mini call] backfill: {_e!r}")
+        try:
+            if time.time() - _mini_grid_ts[0] > 6 * 3600:
+                _mini_grid_ts[0] = time.time()
+                mini_grid_search()
+        except Exception as _e:
+            print(f"[mini grid] {_e!r}")
         time.sleep(1800)
 
 
