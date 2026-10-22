@@ -6743,7 +6743,7 @@ function updateFlipWatch() {
       } else if (state !== w.lastState && w.lastState !== null && now - w.lastSpoke >= WATCH_EVERY_MS) {
         w.lastSpoke = now; w.lastState = state;
         // the market really switched sides -> THIS is the only spoken "flip"
-        if (withCall === false) speakUrgent(coin + ' is flipping.', 0);
+        if (withCall === false) speakUrgent(coin + ' is flipping ' + (goingUp ? 'up' : 'down') + '.', 0);
         else speak(coin + (withCall === null ? ' now ' + how : ' is back on our side') + '.', false, 15000);
       } else if (w.lastState === null) {
         w.lastState = state;                       // the flip alert itself already said this
@@ -7521,8 +7521,17 @@ function checkWhaleAlerts() {
         const amt = wusd >= 1e6 ? (wusd / 1e6).toFixed(1) + ' million dollar ' : (wusd >= 1e3 ? Math.round(wusd / 1e3) + ' thousand dollar ' : '');
         // 2026-10-22: then how much it can matter for this round (size vs volume, distance to the line, Kalshi's odds)
         const wsay = el.getAttribute('data-whale-say') || '';
-        if (wusd >= (HUGE_PRINT_USD[name] || 1e9))       // 2026-10-22 (user): talks less - only the really big whales are spoken
-          setTimeout(() => speak('Whale ' + wside + ' on ' + wcoin + (amt ? ', ' + amt.replace(' dollar ', '').trim() : '') + '.', false, 12000), 1300);
+        // 2026-10-22 (user): only speak a whale that is SIGNIFICANT for this round (impact score 60+ of 100, or a huge print),
+        // and say plainly whether it is with or against BRAIN's call
+        const wimp = parseFloat(el.getAttribute('data-whale-impact') || '0') || 0;
+        if (wimp >= 60 || wusd >= (HUGE_PRINT_USD[name] || 1e9)) {
+          const cm = document.querySelector('.flip-chance-value[data-flip-chance-key^="' + name + '::"]');
+          const cc = cm ? cm.getAttribute('data-call') : null, ccn = cm ? cm.getAttribute('data-call-name') : '';
+          const hasCall = (ccn === 'early' || ccn === 'sealed') && (cc === 'YES' || cc === 'NO');
+          const withC = hasCall ? ((wside === 'buy') === (cc === 'YES')) : null;
+          setTimeout(() => speak('Big whale ' + wside + ' on ' + wcoin + (amt ? ', ' + amt.replace(' dollar ', '').trim() : '')
+            + (withC === null ? '.' : (withC ? ', with the call.' : ', against the call.')), false, 12000), 1300);
+        }
       }
     }
   });
@@ -8098,14 +8107,14 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
         </select></label>
       <br>
       <button onclick="speakRaw('Bitcoin call update: under pressure.')">Test call update</button>
-      <button onclick="speakRaw('XRP is flipping.')">Test flip alert</button>
+      <button onclick="speakRaw('XRP is flipping down.')">Test flip alert</button>
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent.'),650)">Test sealed call</button>
       <button onclick="speakRaw('Bitcoin, ninety seconds, looking good.')">Test 90-second check-in</button>
       <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
       <button onclick="speakRaw('XRP is a toss-up, 2 minutes left. It just crossed the line.')">Test late toss-up</button>
-      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Whale buy on Bitcoin, 2.4 million.'),1300)">Test whale BUY (cha-ching)</button>
-      <button onclick="playDenied(); setTimeout(()=>speakRaw('Whale sell on XRP, 850 thousand.'),1300)">Test whale SELL (double beep)</button>
+      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Big whale buy on Bitcoin, 2.4 million, with the call.'),1300)">Test whale BUY (cha-ching)</button>
+      <button onclick="playDenied(); setTimeout(()=>speakRaw('Big whale sell on XRP, 850 thousand, against the call.'),1300)">Test whale SELL (double beep)</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
         the early (4:00) and sealed (8:00) calls, and whale trades - a cha-ching when the whale pushes price further the way it is
         already going, a "denied" buzz when it trades against the move.</div>
