@@ -889,6 +889,11 @@ def summary_text(r=None):
                 L.append("    WHERE THE CURRENT RULES LOSE: " + " | ".join(
                     f"{k.replace('_', ' ')}: win {pct(v['win'])} of {v['n']}, {v['loss_share'] * 100:.0f}% of all losses"
                     for k, v in lc.items()))
+                kept = [lc[k] for k in ("with_trend", "no_trend") if k in lc]
+                if kept and "against_trend" in lc:
+                    kn = sum(v["n"] for v in kept)
+                    kw = sum(v["win"] * v["n"] for v in kept)
+                    L.append(f"    SKIPPING AGAINST-TREND CALLS: win {pct(kw / kn)} on {kn} calls ({lc['against_trend']['n']} rounds sat out)")
             edges = ["<-0.15%"] + [f"{REG_DIST[i] * 100:+.3f}..{REG_DIST[i + 1] * 100:+.3f}%" for i in range(len(REG_DIST) - 1)] + [">+0.15%"]
             L.append("    UP won from each spot vs the line: " + " | ".join(
                 f"{edges[int(k)]}: {x['up'] / x['n'] * 100:.0f}% of {x['n']}" for k, x in rg["dist_map"].items() if x["n"]))

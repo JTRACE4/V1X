@@ -359,6 +359,7 @@ def sitout_reason(name, elapsed, line_stats, spot, line):
     return None
 
 
+SKIP_AGAINST_TREND = True     # 2026-10-22 (user): no calls against the 1-minute trend - sit those rounds out
 STAGE_WAIT_S = 60             # a toss-up at the mark: keep watching up to 60s for it to clear 55%, then decide anyway
 STAGE_CALL_MIN = 0.55          # call right away once the blended chance of one side reaches 55%
 STAGE_FORCE_MIN = 0.52         # after the 60s wait: still call (WEAK) if the minute's average leans 52%+ one way
@@ -4728,6 +4729,18 @@ def poll_loop():
                     # 2026-10-20 (user): the 22-for-22 system decides. The only extra sit-out is a true coin flip - the
                     # call's own chance within 3 points of 50/50. No sit-outs for line crosses or low volume.
                     _sitout = None      # 2026-10-20 (user): no sit-outs at all - the 22-for-22 system calls every round
+                    # 2026-10-22 (user: "stop doing calls against the trend"): if the 1-minute trend clearly runs the other way,
+                    # sit the round out instead of calling into it. (Flipping to the trend side would win LESS - against-trend
+                    # calls still win just over half - so the round is skipped, not reversed.) A skipped sealed call can still
+                    # get a LATE call if price clearly decides afterwards.
+                    if SKIP_AGAINST_TREND and _call and stage_sig.get("trend") and (stage_sig["trend"] > 0) != (_call == "YES"):
+                        _aw = None
+                        try:
+                            _aw = (((_bt.load_saved() or {}).get("stages") or {}).get(_sk, {}).get("regime", {})
+                                   .get("loss_check", {}).get("against_trend", {}).get("win"))
+                        except Exception:
+                            pass
+                        _sitout = ("the call goes against the trend" + (f" (calls like that have won only {_aw:.0%})" if _aw else ""))
                     _lean = _call
                     if _sitout:
                         _why = f"leaning {'UP' if _call == 'YES' else 'DOWN'}, but {_sitout} - sit this one out"
