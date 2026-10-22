@@ -1,9 +1,9 @@
 """BRAIN passes - one-time Stripe payments that unlock the live dashboard for a set number of days (added 2026-10-22).
 
-  * passes: 7 days $64.99, 30 days $179.99, 4 months (120 days) $479.99 - one-time, never auto-renew
+  * passes: 7 days $64.99, 30 days $165, 3.5 months (105 days) $379 - one-time, never auto-renew
   * a member's access is a single date: user["access_until"] (epoch seconds). Buying adds the pass's days on top of
     whatever time is left. The owner always has access and can give anyone free days from /admin.
-  * checkout = Stripe Payment Links (env STRIPE_LINK_7D / STRIPE_LINK_30D / STRIPE_LINK_120D). The site adds
+  * checkout = Stripe Payment Links (env STRIPE_LINK_7D / STRIPE_LINK_30D / STRIPE_LINK_105D). The site adds
     ?client_reference_id=<username>&prefilled_email=<email> so the payment lands on the right account.
   * Stripe tells the site about each payment at POST /stripe/webhook. Every call is checked against
     STRIPE_WEBHOOK_SECRET (Stripe's signature) - a request without a valid signature changes nothing.
@@ -22,8 +22,8 @@ import auth as _auth
 
 PASSES = {                      # key -> (days, price in cents, label)
     "7d": (7, 6499, "7 days"),
-    "30d": (30, 17999, "30 days"),
-    "120d": (120, 47999, "4 months"),
+    "30d": (30, 16500, "30 days"),
+    "105d": (105, 37900, "3.5 months"),
 }
 _BY_AMOUNT = {cents: k for k, (_d, cents, _l) in PASSES.items()}
 REMIND_BEFORE_S = 2 * 86400
@@ -32,7 +32,7 @@ ET = ZoneInfo("America/New_York")
 
 
 def link_for(key):
-    return os.environ.get({"7d": "STRIPE_LINK_7D", "30d": "STRIPE_LINK_30D", "120d": "STRIPE_LINK_120D"}[key], "")
+    return os.environ.get({"7d": "STRIPE_LINK_7D", "30d": "STRIPE_LINK_30D", "105d": "STRIPE_LINK_105D"}[key], "")
 
 
 def checkout_url(key, user):

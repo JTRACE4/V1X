@@ -456,7 +456,7 @@ def pricing_page(user, plans, until_text=None, active=False):
         status = '<div class="status none">Create a free account first, then pick a pass.</div>'
     cards = ""
     for key, label, price, per, url in plans:
-        best = key == "120d"
+        best = key == "105d"
         if not user:
             btn = '<a class="go" href="/signup">Create account</a>'
         elif url:
@@ -569,7 +569,7 @@ TERMS = [
      "predict future results, data can be late or wrong, and the service can go down without warning."),
     ("Your decisions, your risk", "Trading and investing can lose money, including everything you put in. You're responsible for "
      "your own decisions. Talk to a licensed professional before making financial decisions."),
-    ("Passes and payments", "The live dashboard needs a pass: 7 days ($64.99), 30 days ($179.99) or 4 months ($479.99), paid "
+    ("Passes and payments", "The live dashboard needs a pass: 7 days ($64.99), 30 days ($165) or 3.5 months ($379), paid "
      "once through Stripe. Passes never renew on their own - buying another adds its days on top of any time you have left. "
      "ALL SALES ARE FINAL: no refunds, including for unused time."),
     ("Access", "Accounts can be paused or removed at any time, without a refund, for breaking these terms. Keep your login "

@@ -12144,7 +12144,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/terms":
             return self._send(200, _site.terms_page())
         if path == "/pricing":
-            plans = [(k, lab, f"${c / 100:,.2f}", f"${c / 100 / d:,.2f}/day", _bill.checkout_url(k, user))
+            plans = [(k, lab, (f"${c // 100:,}" if c % 100 == 0 else f"${c / 100:,.2f}"), f"${c / 100 / d:,.2f}/day", _bill.checkout_url(k, user))
                      for k, (d, c, lab) in _bill.PASSES.items()]
             act = _bill.has_access(user) and user.get("role") != "owner"
             return self._send(200, _site.pricing_page(user, plans, _bill.fmt_until(_bill.access_until(user)) if act else None, act))
