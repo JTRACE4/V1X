@@ -4659,6 +4659,19 @@ def poll_loop():
                 _rng = line_stats["range_pct"] if line_stats else None
                 stage_calls = locked.setdefault("stage_calls", {})
                 stage_just = None
+                # 2026-10-22 (user): the MINI CALL is the INSTANT call from the last 10 rounds near this target - it is
+                # made the moment the round (and its target) is known, then graded at settlement on its own scoreboard spot
+                if "mini" not in stage_calls and target:
+                    try:
+                        _mc = mini_call_now(asset["name"], target, live_price, elapsed_seconds, ticker, price_decimals)
+                        if _mc:
+                            stage_calls["mini"] = {"call": _mc["call"], "pct": _mc["pct"], "n": _mc["n"], "ts": time.time(),
+                                                   "elapsed": int(elapsed_seconds)}
+                            print(f"[{asset['name']}] MINI CALL (instant): {'UP' if _mc['call'] == 'YES' else 'DOWN'} {_mc['pct']:.0%} "
+                                  f"from the last {_mc['n']} rounds near the target {ticker}")
+                            _save_locked_state()
+                    except Exception as _mce:
+                        print(f"[mini call] {_mce!r}")
                 _flow_now = stage_parts.get("flow")
                 try:
                     _f2 = _flow.HUB.window_detail(asset["name"], 120)["pct"] if asset["name"] in _flow.ASSETS else None
@@ -4824,16 +4837,6 @@ def poll_loop():
                         "ts": time.time(),
                     }
                     stage_just = _sk
-                    if _sk == "sealed":
-                        # 2026-10-22 (user): the MINI CALL gets its own scoreboard spot - lock it at the same 8:00 mark
-                        try:
-                            _mc = mini_call_now(asset["name"], target, live_price, elapsed_seconds, ticker, price_decimals)
-                            if _mc:
-                                stage_calls["mini"] = {"call": _mc["call"], "pct": _mc["pct"], "n": _mc["n"], "ts": time.time()}
-                                print(f"[{asset['name']}] MINI CALL (8:00): {'UP' if _mc['call'] == 'YES' else 'DOWN'} {_mc['pct']:.0%} "
-                                      f"from the last {_mc['n']} rounds near the target {ticker}")
-                        except Exception as _mce:
-                            print(f"[mini call] {_mce!r}")
                     print(f"[{asset['name']}] {_lab} ({_mk}): {(_call + ' ' + _tier) if _call else 'SKIPPED'} at {int(elapsed_seconds) // 60}:"
                           f"{int(elapsed_seconds) % 60:02d} - {stage_p_yes:.1%} UP, {_crosses} crosses {('- ' + _why) if _why else ''} {ticker}")
                     _save_locked_state()
@@ -6469,6 +6472,17 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .lw-chip i, .lw-chip b, .lw-chip > span { text-shadow:0 1px 3px rgba(20,15,18,0.95), 0 0 8px rgba(20,15,18,0.8) !important; }
 .lw-chip.c-ob i, .lw-chip.c-ob > span { text-shadow:none !important; filter:drop-shadow(0 1px 2px rgba(20,15,18,0.95)); }
 .lw-chips { gap:12px !important; }
+/* 2026-10-22 (user): mini scoreboard button - top-right corner of each card, out of the price / buy-pressure flow */
+.card { position:relative; }
+.sb-jump { position:absolute; top:14px; right:16px; z-index:4; display:inline-flex; align-items:center; gap:6px; padding:5px 10px 5px 8px;
+  border-radius:999px; border:1px solid rgba(220,187,145,0.35); background:rgba(42,34,38,0.75); color:#dcbb91; cursor:pointer;
+  font-family:var(--br-bold); font-weight:800; font-size:12px; letter-spacing:.3px; transition:border-color .2s, transform .2s; }
+.sb-jump svg { width:18px; height:18px; }
+.sb-jump b { color:#fbf4ec; font-weight:800; }
+.sb-jump:hover { border-color:#e9a5bb; transform:translateY(-1px); }
+@media (max-width:900px) { .sb-jump { top:10px; right:10px; padding:4px 8px 4px 6px; font-size:11px; } .sb-jump svg { width:16px; height:16px; } }
+@keyframes sbFlash { 0% { box-shadow:0 0 0 0 rgba(233,165,187,0.55); } 100% { box-shadow:0 0 0 18px rgba(233,165,187,0); } }
+.card .scoreboard.sb-flash { animation:sbFlash 1.1s ease-out 2; border-radius:14px; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8580,6 +8594,14 @@ function lwMacd(cl) {
   const h = m.map((v, i) => v - sg[i]); h.line = m[m.length - 1]; return h;      // histogram (+ the MACD line's last value)
 }
 // 2026-10-22 (user): vector arrows instead of the words UP / DOWN
+function sbJump(btn) {
+  try {
+    const sb = btn.closest('.card').querySelector('.scoreboard');
+    if (!sb) return;
+    sb.scrollIntoView({behavior: 'smooth', block: 'start'});
+    sb.classList.remove('sb-flash'); void sb.offsetWidth; sb.classList.add('sb-flash');
+  } catch (e) {}
+}
 function lwArrow(dir) {
   if (!dir) return '<svg class="lw-arr" viewBox="0 0 20 20" aria-label="flat"><path d="M3 10h14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>';
   return '<svg class="lw-arr" viewBox="0 0 20 20" aria-label="' + (dir > 0 ? 'up' : 'down') + '"><path d="' + (dir > 0 ? 'M10 3 L17.5 14 H2.5 Z' : 'M10 17 L17.5 6 H2.5 Z') + '" fill="currentColor"/></svg>';
@@ -11116,6 +11138,20 @@ def round_history_html(name, call="sealed", rng="all", limit=300):
 
 
 @_never_break
+def build_sb_jump(name):
+    """2026-10-22 (user): a small scoreboard button in the card's top-right corner - tap to jump to the scoreboard."""
+    try:
+        r = stage_record(_history.get(name, []), "sealed")
+        pct = f'{r["wins"] / r["n"]:.0%}' if r["n"] else "--"
+    except Exception:
+        pct = "--"
+    return ('<button class="sb-jump" type="button" onclick="sbJump(this)" title="Scoreboard - tap to see the full record" aria-label="Open scoreboard">'
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/>'
+            '<path d="M12 4v16" stroke="currentColor" stroke-width="1.4" opacity=".6"/>'
+            '<circle cx="7.6" cy="12" r="2.1" fill="#3dd69c"/><circle cx="16.4" cy="12" r="2.1" fill="#f05454"/></svg>'
+            f'<b>{pct}</b></button>')
+
+
 def build_scoreboard(name, d):
     """Win / loss record since launch for each call, the CURRENT streak of each (win or loss), the best and worst runs,
     today's record, and the last 15 results."""
@@ -11127,7 +11163,7 @@ def build_scoreboard(name, d):
     day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
     cols = []
     for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"),
-                               ("mini", "MINI CALL &middot; 8:00", "mini_correct"))
+                               ("mini", "MINI CALL &middot; INSTANT", "mini_correct"))
                               + ((("bot", "BOT CALL (auto-buy)", "correct"),) if SHOW_BOT_RECORD else ())):
         rows = [h for h in hist if h.get(field) is not None and not (key != "bot" and h.get(f"{key}_reversal"))]
         res = [bool(h[field]) for h in rows]
@@ -11147,7 +11183,7 @@ def build_scoreboard(name, d):
                         f'over {_mb["n"]:,} rounds</div>')
         if not n:
             cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">'
-                        + ("Starts tracking now &ndash; the mini call locks at 8:00 each round." if key == "mini" else "No results yet.")
+                        + ("Starts tracking now &ndash; the instant call from the last 10 rounds near the target, made the moment each round starts." if key == "mini" else "No results yet.")
                         + f'</div>{_mbt}</div>')
             continue
         ct, cn, bw, bl = _streak_stats(res)
@@ -12468,6 +12504,7 @@ def render_html():
                               f'{live_trading_html}</details>')
         parts.append(f'''
         <div class="card" data-asset="{name}">
+          {build_sb_jump(name)}
           {experimental_html}
           <div class="head-row">
             <div class="asset-name"><span class="asset-label asset-{name}"><img class="brain-mark" src="/static/logo.png" width="34" height="34" alt="">{COIN_BADGE.get(name, "")}<span class="coin-txt">{name}</span></span> {flip_badge_html}{boom_html}{win_alert_html}{lock_alert_html}<div class="round-left">{clock_html}</div></div>
