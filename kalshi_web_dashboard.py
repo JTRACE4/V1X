@@ -4418,6 +4418,7 @@ def poll_loop():
                             hist[-1][f"{_sk}_zone80"] = _c.get("zone80")
                             hist[-1][f"{_sk}_sitout"] = bool(_c.get("sitout"))
                             hist[-1][f"{_sk}_payout"] = _c.get("rev_payout")
+                            hist[-1][f"{_sk}_radar"] = _c.get("radar_agree")      # True / False / None - for later checks
                         _lt = _sc_prev.get("late") or {}
                         if _lt.get("call"):
                             hist[-1]["decided_call"] = _lt["call"]
@@ -4681,6 +4682,25 @@ def poll_loop():
                     if _sitout:
                         _why = f"leaning {'UP' if _call == 'YES' else 'DOWN'}, but {_sitout} - sit this one out"
                         _call, _tier, _rev = None, None, None
+                    # 2026-10-22 (user): SEALED call only - if 2+ verified top traders (80%+ over 10+ rounds, 7 days) are in
+                    # the round and most agree with the call, it moves up one tier; most against, down one. Never flips the
+                    # side, never makes a call on its own, never changes what auto-buy buys (that follows the price band).
+                    _radar_agree = None
+                    if _sk == "sealed" and _call:
+                        try:
+                            _ev = _radar.elite_view(ticker, _radar_result)
+                            if _ev["side"]:
+                                _radar_agree = (_ev["side"] == "UP") == (_call == "YES")
+                                _ti = {"SUPER": 0, "GOOD": 1, "WEAK": 2}.get(_tier, 1)
+                                _ti = max(0, _ti - 1) if _radar_agree else min(2, _ti + 1)
+                                _tier = ("SUPER", "GOOD", "WEAK")[_ti]
+                                _n_with = _ev["up"] if _ev["side"] == "UP" else _ev["down"]
+                                _why = " + ".join(x for x in (_why, f'top traders {"agree" if _radar_agree else "lean the other way"} '
+                                                                    f'({_n_with} of {_ev["up"] + _ev["down"]})') if x)
+                                print(f"[radar] {asset['name']} sealed: top traders {_ev['side']} ({_ev['up']} up / {_ev['down']} down) "
+                                      f"-> {'agree' if _radar_agree else 'disagree'}, tier now {_tier}")
+                        except Exception as _rde:
+                            print(f"[radar] sealed input skipped: {_rde!r}")
                     _z80 = _z80roi = None
                     try:
                         _rule = (_bt.decisions().get("rule80") or {}).get(_sk)
@@ -4696,7 +4716,7 @@ def poll_loop():
                         "zone80": _z80, "zone80_roi": _z80roi, "sitout": bool(_sitout), "lean": _lean,
                         "reversal": bool(_rev), "rev_payout": _rev["payout"] if _rev else None,
                         "rev_score": _rev["score"] if _rev else None,
-                        "call": _call, "tier": _tier, "skipped": _call is None, "why": _why,
+                        "call": _call, "tier": _tier, "skipped": _call is None, "why": _why, "radar_agree": _radar_agree,
                         "p_yes": round(_use_p if _use_p is not None else stage_p_yes, 4), "strength": stage_strength(stage_p_yes),
                         "kalshi_yes": kalshi_price, "fair_yes": round(fair_yes, 4) if fair_yes is not None else None,
                         "flow_up": round(_flow_now, 4) if _flow_now is not None else None,
@@ -5905,6 +5925,13 @@ body { background:#15110f !important; }
 .snd-toggle.on { border-color:#3dd69c; background:rgba(61,214,156,0.16); color:#c9f7e6; }
 .snd-toggle + .wr-badge { margin-left:8px; }
 .sb-conf b, .sb-klock b { font-size:1.08em; }
+.radar-box { margin:8px 0; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid #4a3c43; }
+.rd-h { font-weight:800; letter-spacing:1px; margin-bottom:6px; }
+.rd-bar { display:flex; height:10px; border-radius:6px; overflow:hidden; background:#352b30; margin:4px 0; }
+.rd-bar i.up { background:#3dd69c; } .rd-bar i.down { background:#f05454; }
+.rd-tot { font-size:13px; margin-bottom:4px; } .rd-row { font-size:13px; padding:2px 0; } .rd-fake { margin-top:4px; }
+.rd-tab summary { cursor:pointer; font-size:13px; margin-top:6px; } .radar-admin { margin:8px 0; font-size:13px; }
+.radar-admin code { word-break:break-all; } .radar-admin ul { margin:6px 0; padding-left:18px; }
 .bt100 { margin:6px 0 10px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid #4a3c43; }
 .bt100-h { font-size:13px; margin-bottom:6px; color:#eee2d7; }
 .bt100-t { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
@@ -6560,6 +6587,23 @@ function updateFlipWatch() {
     return '<div class="fw-item ' + cls + '"><b>' + n + ' FLIP WATCH</b><span class="fw-dir">' + (v.goingUp ? '&#9650; heading UP' : '&#9660; heading DOWN') + '</span>'
       + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span>' + st + '</span>' : '') + '<span class="fw-t">' + t + ' left</span></div>';
   }).join('');
+}
+
+// 2026-10-22: Trader Radar - say it when a VERIFIED watched trader takes a side (owner page only)
+const radarSaid = new Set();
+function checkRadarAlerts() {
+  document.querySelectorAll('.radar-alert').forEach(el => {
+    const k = el.getAttribute('data-key');
+    if (!k || radarSaid.has(k)) return;
+    radarSaid.add(k);
+    const name = el.getAttribute('data-name');
+    if (!(soundEnabled && assetSoundEnabled[name] !== false)) return;
+    const coin = name === 'BTC' ? 'Bitcoin' : name;
+    const usd = parseInt(el.getAttribute('data-usd') || '0', 10);
+    speak((el.getAttribute('data-who') || 'A watched trader') + ' is on ' + (el.getAttribute('data-side') === 'UP' ? 'up' : 'down')
+      + ' on ' + coin + (usd ? ', ' + usd.toLocaleString('en-US') + ' dollars.' : '.'), false, 15000);
+  });
+  if (radarSaid.size > 500) radarSaid.clear();
 }
 
 // ---- 2026-10-22: two spoken "money moments", once per coin per round each:
@@ -7649,6 +7693,7 @@ async function refresh() {
   checkBuildingAlerts();
   updateFlipWatch();
   try { updateMoneyMoments(); } catch (e) {}
+  try { checkRadarAlerts(); } catch (e) {}
   checkRegimeAlerts();
   checkReversalAlerts();
   checkCertainFlipAlerts();
@@ -7892,6 +7937,7 @@ def fmt_price(x, decimals=2):
 
 
 import multi_exchange_flow as _flow
+import trader_radar as _radar
 import rsi_check as _rsi_check
 
 
@@ -9080,7 +9126,10 @@ def build_stage_box(name, d, key):
                               f' &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
                               f'{"" if c.get("crosses") == 1 else "es"} so far')
                 + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line, locked at {c.get("elapsed", 0) // 60}:{c.get("elapsed", 0) % 60:02d}</div>' if diff is not None else "")
-                + hold_html + _sig_html(c.get("signals"))
+                + hold_html
+                + ('' if c.get("radar_agree") is None else
+                   f'<div class="sb-line">&#128225; Top traders {"agree" if c["radar_agree"] else "lean the other way"}</div>')
+                + _sig_html(c.get("signals"))
                 + (f'<!--OWNER--><div class="sb-note">{c["why"]}</div><!--/OWNER-->' if c.get("why") else ""))
         tip = "locked call - graded when the round settles"
     elif c.get("skipped") and key == "sealed" and ((d.get("stage_calls") or {}).get("late") or {}).get("call"):
@@ -11357,6 +11406,7 @@ def render_html():
           {near_footer_html}
           </details><!--/OWNER-->
           <!--OWNER-->{live_pull_html}<!--/OWNER-->
+          <!--OWNER-->{radar_html(name, d.get("ticker", ""))}{radar_admin_html() if name == LIVE_ASSETS[-1] else ""}<!--/OWNER-->
         </div>''')
 
     return "".join(parts) if parts else "<p>Waiting for first poll...</p>"
@@ -11562,6 +11612,82 @@ def bt100_widget_html(name):
             f'<div class="hint">&#9733; = the call auto-buy follows ({auto}). Worst drop along the way '
             f'${b["dd"]:,.0f}{(" &middot; " + span) if span else ""}. Uses the price Kalshi showed at the moment of '
             f'the call; real fills can differ by a cent or two.</div></div>')
+
+
+# ---- 2026-10-22: Trader Radar (see trader_radar.py) --------------------------------------------------------------------
+RADAR_ORIGINS = ("https://kalshi.com", "https://www.kalshi.com")
+
+
+def _radar_result(ticker):
+    """'UP' / 'DOWN' once the round has settled, else None."""
+    asset = (ticker or "")[2:5]
+    for h in reversed(_history.get(asset, [])):
+        if h.get("ticker") == ticker:
+            a = h.get("actual_side")
+            return "UP" if a == "YES" else ("DOWN" if a == "NO" else None)
+    return None
+
+
+def _fmt_usd(x):
+    return f"${x / 1000:.1f}k" if x >= 1000 else f"${x:,.0f}"
+
+
+def radar_html(name, ticker):
+    """Owner-only Trader Radar box for one coin: this round's verified positions, then records by hour / today / 7 days."""
+    rv = _radar.round_view(ticker or "")
+    rec = _radar.records(_radar_result, asset=name)
+    tot = rv["up"] + rv["down"]
+    if rv["positions"]:
+        up_pct = rv["up"] / tot * 100 if tot else 50
+        bar = (f'<div class="rd-bar"><i class="up" style="width:{up_pct:.0f}%"></i><i class="down" style="width:{100 - up_pct:.0f}%"></i></div>'
+               f'<div class="rd-tot"><span class="up">UP {_fmt_usd(rv["up"])}</span> vs <span class="down">DOWN {_fmt_usd(rv["down"])}</span></div>')
+        rows = "".join(f'<div class="rd-row"><b>{_html_attr(e["who"])}</b> <span class="{"up" if e["side"] == "UP" else "down"}">'
+                       f'{e["side"]} {_fmt_usd(e["usd"])}</span> <span class="hint">{max(0, int(time.time() - e["ts"]))}s ago</span></div>'
+                       for e in rv["positions"])
+    else:
+        bar, rows = "", '<div class="hint">No verified watched traders in this round yet.</div>'
+    fakes = ""
+    if rv["others"]:
+        fakes = ('<div class="hint rd-fake">Not counted: ' + ", ".join(
+            f'{_html_attr(e["name"])} ({"impostor" if e["status"] == "impostor" else "not locked yet"}, {e["side"]} {_fmt_usd(e["usd"])})'
+            for e in rv["others"][-4:]) + '</div>')
+    tabs = ""
+    for w, lab in (("hour", "Last hour"), ("today", "Today"), ("7d", "7 days")):
+        r = rec[w]
+        tr = sorted(r["traders"].items(), key=lambda kv: (-kv[1]["n"], kv[0]))
+        body = "".join(f'<tr><td>{_html_attr(k)}</td><td>{v["w"]}/{v["n"]}</td><td>{v["w"] / v["n"] * 100:.0f}%</td>'
+                       f'<td>{_fmt_usd(v["usd"])}</td></tr>' for k, v in tr) or '<tr><td colspan="4" class="hint">no settled rounds yet</td></tr>'
+        cn, cw = r["consensus"]
+        cons = f'Following the radar&#39;s bigger side: {cw}/{cn} ({cw / cn * 100:.0f}%)' if cn else "Radar consensus: no settled rounds yet"
+        tabs += (f'<details class="rd-tab" data-pat="RADAR|{name}|{w}"><summary>{lab}</summary>'
+                 f'<table class="bt100-t"><tr><th>Trader</th><th>Won</th><th>Win %</th><th>$ in</th></tr>{body}</table>'
+                 f'<div class="hint">{cons}</div></details>')
+    marks = "".join(f'<span class="radar-alert" data-name="{name}" data-who="{_html_attr(e["who"])}" data-side="{e["side"]}" '
+                    f'data-usd="{e["usd"]:.0f}" data-key="{_html_attr(e["msg_id"] or (e["who"] + e["ticker"] + e["side"]))}" style="display:none;"></span>'
+                    for e in _radar.recent_trusted(30) if e["asset"] == name)
+    return (f'<div class="radar-box"><div class="rd-h">&#128225; TRADER RADAR &middot; {name} '
+            f'<span class="hint">verified accounts only</span></div>{bar}{rows}{fakes}{tabs}{marks}</div>')
+
+
+def radar_admin_html():
+    """Owner-only setup panel: the token for the chat watcher, the watch list, and Trust buttons for real accounts."""
+    tr = _radar.traders()
+    lst = "".join(f'<li><b>{_html_attr(k)}</b> - {("locked to " + _html_attr(v["account_id"][:12]) + "...") if v.get("account_id") else "<span class=warn>not locked yet</span>"}'
+                  f'<form method="post" action="/radar_admin" style="display:inline"><input type="hidden" name="act" value="unwatch">'
+                  f'<input type="hidden" name="name" value="{_html_attr(k)}"><button>remove</button></form></li>' for k, v in tr.items())
+    sights = "".join(f'<li>{_html_attr(s["name"])} &rarr; watched as <b>{_html_attr(s["who"])}</b>, account {_html_attr(s["acct"][:16])} '
+                     f'({s["n"]} sightings) <form method="post" action="/radar_admin" style="display:inline">'
+                     f'<input type="hidden" name="act" value="trust"><input type="hidden" name="name" value="{_html_attr(s["who"])}">'
+                     f'<input type="hidden" name="acct" value="{_html_attr(s["acct"])}"><button>Trust this account</button></form></li>'
+                     for s in _radar.sightings_for_locking())
+    return (f'<details class="radar-admin"><summary><b>Trader Radar setup</b> <span class="hint">(watch list, real-account locks, '
+            f'chat watcher token)</span></summary>'
+            f'<div class="hint">Chat watcher token (paste into the BRAIN Chat Watcher extension): <code>{_html_attr(_radar.token())}</code></div>'
+            f'<ul>{lst}</ul><form method="post" action="/radar_admin"><input type="hidden" name="act" value="watch">'
+            f'<input name="name" placeholder="Kalshi username" maxlength="40"> <button>Watch</button></form>'
+            f'<div class="hint">Lock each name to its REAL account: open the trader&#39;s Kalshi profile, check it is them (e.g. Maxy is '
+            f'the one up ~$50k), then trust that account below. Lookalikes are ignored automatically.</div>'
+            f'<ul>{sights or "<li class=hint>No sightings to lock yet - they appear once the chat watcher is running.</li>"}</ul></details>')
 
 
 def _kalshi_key_status():
@@ -11933,9 +12059,61 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, _site.message_page("Done", f"{who} was {'approved' if kind == 'approve' else 'denied'}.", "/admin", "Open Admin"))
         return None
 
+    def do_OPTIONS(self):
+        """CORS preflight for the chat watcher (runs on kalshi.com, posts here)."""
+        if urllib.parse.urlparse(self.path).path == "/radar_ingest":
+            origin = self.headers.get("Origin") or ""
+            self.send_response(204)
+            if origin in RADAR_ORIGINS:
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Radar-Token")
+                self.send_header("Access-Control-Max-Age", "600")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(405)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def _radar_ingest(self):
+        origin = self.headers.get("Origin") or ""
+        cors = [("Access-Control-Allow-Origin", origin)] if origin in RADAR_ORIGINS else []
+        tok = self.headers.get("X-Radar-Token") or ""
+        if not tok or not _radar.token() or not _hmac.compare_digest(tok, _radar.token()):
+            return self._send(401, '{"ok":false}', "application/json", cors)
+        try:
+            ln = int(self.headers.get("Content-Length") or 0)
+            j = json.loads(self.rfile.read(min(ln, 200_000)).decode("utf-8")) if 0 < ln <= 200_000 else {}
+            res = _radar.ingest(j.get("rows") or [])
+        except Exception as _re:
+            print(f"[radar] ingest failed: {_re!r}")
+            return self._send(400, '{"ok":false}', "application/json", cors)
+        return self._send(200, json.dumps({"ok": True, **res}), "application/json", cors)
+
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        if path == "/radar_ingest":
+            return self._radar_ingest()
+        if path == "/radar_admin":
+            if not self._same_origin():
+                return self._send(403, "Blocked: request came from another site.", "text/plain")
+            u_ = self._user()
+            if not (u_ and u_.get("role") == "owner"):
+                return self._send(403, "Owner only.", "text/plain")
+            f_ = self._form()
+            act, nm = f_.get("act", ""), f_.get("name", "")
+            if act == "watch":
+                ok_, msg_ = _radar.watch(nm)
+            elif act == "unwatch":
+                ok_, msg_ = _radar.unwatch(nm)
+            elif act == "trust":
+                ok_, msg_ = _radar.trust(nm, f_.get("acct", ""))
+            else:
+                ok_, msg_ = False, "?"
+            print(f"[radar] {act} {nm}: {msg_}")
+            return self._redirect("/app")
         if not self._same_origin():
             return self._send(403, "Blocked: request came from another site.", "text/plain")
         user = self._user()
@@ -12680,6 +12858,10 @@ def main():
     if total:
         print(f"Loaded {total} past graded windows from disk ({HISTORY_FILE}).")
     _load_whale_scorecard()
+    try:
+        _radar.load()
+    except Exception as _rle:
+        print(f"[radar] could not load: {_rle!r}")
     try:
         _ks = _kcreds.info()
         _env_key = bool(os.environ.get("KALSHI_API_KEY_ID"))
