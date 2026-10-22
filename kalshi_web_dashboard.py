@@ -6248,8 +6248,12 @@ function _voiceNext() {
   setTimeout(() => { if (!finished && a.paused && a.currentTime === 0) fallback(); }, 6000);   // server too slow - read it locally
   setTimeout(done, 15000);
 }
+// 2026-10-22: spoken lines say "market", never "Kalshi" (the screen still shows Kalshi's name)
+function _marketWords(t) {
+  return String(t).replace(/on Kalshi\b/g, 'on the market').replace(/(^|[.!?] )Kalshi\b/g, '$1Market').replace(/\bKalshi\b/g, 'market');
+}
 function _voicePush(text, urgent, ttlMs) {
-  const item = { text: text, until: Date.now() + (ttlMs || 20000) };
+  const item = { text: _marketWords(text), until: Date.now() + (ttlMs || 20000) };
   if (urgent) voiceQ.unshift(item); else voiceQ.push(item);
   _voiceNext();
 }
@@ -6556,6 +6560,61 @@ function updateFlipWatch() {
     return '<div class="fw-item ' + cls + '"><b>' + n + ' FLIP WATCH</b><span class="fw-dir">' + (v.goingUp ? '&#9650; heading UP' : '&#9660; heading DOWN') + '</span>'
       + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span>' + st + '</span>' : '') + '<span class="fw-t">' + t + ' left</span></div>';
   }).join('');
+}
+
+// ---- 2026-10-22: two spoken "money moments", once per coin per round each:
+//  1) CASH OUT: the side BRAIN called is 90%+ on the market with 2+ minutes left -> "take profit or cash out to be safe"
+//  2) LATE COIN FLIP: 3 minutes or less left and the market is 40-60% -> say so, plus "it's flipping" when price crossed the
+//     line in the last 45 seconds or a flip was confirmed
+const CASHOUT_AT = 0.90, CASHOUT_MIN_LEFT = 120, TOSSUP_MAX_LEFT = 180, TOSSUP_MIN_LEFT = 20, CROSS_RECENT_MS = 45000;
+const moneySaid = new Set(), lastSideOf = {}, lastCrossAt = {};
+function _leftWords(left) {
+  const m = Math.floor(left / 60), s = left % 60;
+  if (m >= 2) return m + (s >= 30 ? ' and a half' : '') + ' minutes left';
+  if (m === 1) return 'a minute ' + (s >= 30 ? 'and a half ' : '') + 'left';
+  return s + ' seconds left';
+}
+function updateMoneyMoments() {
+  const now = Date.now();
+  document.querySelectorAll('.flip-chance-value[data-flip-src="radar"]').forEach(el => {
+    const key = el.getAttribute('data-flip-chance-key') || '';
+    const name = key.split('::')[0];
+    if (!name) return;
+    const roundKey = key.split('::').slice(0, 2).join('::');
+    const kup = parseFloat(el.getAttribute('data-kup'));
+    const left = parseInt(el.getAttribute('data-left') || '0', 10);
+    const above = el.getAttribute('data-above') === '1';
+    if (lastSideOf[roundKey] !== undefined && lastSideOf[roundKey] !== above) lastCrossAt[roundKey] = now;
+    lastSideOf[roundKey] = above;
+    if (isNaN(kup) || kup < 0 || !left) return;
+    const call = el.getAttribute('data-call'), callName = el.getAttribute('data-call-name') || '';
+    const real = (callName === 'sealed' || callName === 'early') && (call === 'YES' || call === 'NO');
+    const coin = name === 'BTC' ? 'Bitcoin' : name;
+    const canTalk = soundEnabled && assetSoundEnabled[name] !== false;
+    // 1) cash out
+    if (real && left >= CASHOUT_MIN_LEFT) {
+      const holding = call === 'YES' ? kup : 1 - kup;
+      const k1 = roundKey + '::cashout';
+      if (holding >= CASHOUT_AT && !moneySaid.has(k1)) {
+        moneySaid.add(k1);
+        if (canTalk) speak(coin + ' ' + (callName === 'sealed' ? 'sealed' : 'early') + ' call is at ' + Math.round(holding * 100)
+          + ' percent on the market with ' + _leftWords(left) + '. Take profit, or cash out to be safe.', true, 15000);
+      }
+    }
+    // 2) late coin flip (+ flipping)
+    const k2 = roundKey + '::tossup';
+    if (left <= TOSSUP_MAX_LEFT && left >= TOSSUP_MIN_LEFT && kup >= 0.40 && kup <= 0.60 && !moneySaid.has(k2)) {
+      moneySaid.add(k2);
+      const flipping = (lastCrossAt[roundKey] && now - lastCrossAt[roundKey] < CROSS_RECENT_MS) || flipFired.has(key + '::crit');
+      const lean = kup >= 0.5 ? 'up' : 'down';
+      let line = coin + ' is a real coin flip late in the round. Market ' + Math.round(Math.max(kup, 1 - kup) * 100)
+        + ' percent ' + lean + ', ' + _leftWords(left) + '.';
+      if (flipping) line += " And it's flipping, price just crossed the line.";
+      if (real && ((call === 'YES') !== (kup >= 0.5))) line += ' The market is leaning against the call.';
+      if (canTalk) speak(line, true, 15000);
+    }
+  });
+  if (moneySaid.size > 400) moneySaid.clear();
 }
 
 // "favorable regime" alert - added 2026-08-31 per real backtested data: BTC's
@@ -7589,6 +7648,7 @@ async function refresh() {
   checkFlipAlerts();
   checkBuildingAlerts();
   updateFlipWatch();
+  try { updateMoneyMoments(); } catch (e) {}
   checkRegimeAlerts();
   checkReversalAlerts();
   checkCertainFlipAlerts();
@@ -7813,6 +7873,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure. Good confidence.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure. Super confidence.'),650)">Test sealed call</button>
       <button onclick="speakRaw('Bitcoin flip update: heading down, against the sealed call. Solid, 78 percent on Kalshi. 3 and a half minutes left.')">Test flip update</button>
+      <button onclick="speakRaw('Bitcoin sealed call is at 92 percent on the market with 6 minutes left. Take profit, or cash out to be safe.')">Test cash out</button>
+      <button onclick="speakRaw('XRP is a real coin flip late in the round. Market 52 percent up, 2 minutes left. And it\'s flipping, price just crossed the line.')">Test late coin flip</button>
       <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('2.4 million dollar whale buy on Bitcoin.'),1300)">Test whale BUY (cha-ching)</button>
       <button onclick="playDenied(); setTimeout(()=>speakRaw('850 thousand dollar whale sell on XRP, against the move.'),1300)">Test whale SELL (double beep)</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
