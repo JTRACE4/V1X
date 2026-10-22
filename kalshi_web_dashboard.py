@@ -823,7 +823,7 @@ def render_candle_chart_svg(candles, target, current_price, typical_move, second
     if target is not None:
         ty = y(target)
         target_svg = (f'<line x1="0" y1="{ty:.1f}" x2="{width}" y2="{ty:.1f}" '
-                      f'stroke="#d29922" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>')
+                      f'stroke="#e5b85c" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>')
 
     # whale tick-marker strip - aggr.trade-style: one small vertical mark per
     # whale trade, positioned at its real timestamp, height/opacity scaled
@@ -916,7 +916,7 @@ def build_flip_gauge_svg(pct):
         rad = math.radians(angle_deg)
         return cx + radius * math.cos(rad), cy - radius * math.sin(rad)
 
-    zones = [(0, 30, "#3dd69c"), (30, 40, "#d29922"), (40, 45, "#f0883e"), (45, 60, "#f05454")]
+    zones = [(0, 30, "#3dd69c"), (30, 40, "#e5b85c"), (40, 45, "#e5b85c"), (45, 60, "#f05454")]
     arcs = []
     for zstart, zend, color in zones:
         a1 = 180 - (zstart / max_scale) * 180
@@ -5276,7 +5276,7 @@ PAGE_TEMPLATE = r"""<!doctype html>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&family=Bungee&family=Bebas+Neue&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..900,0..100;1,9..144,400..900,0..100&family=Nunito:wght@400;600;700;800;900&family=Montserrat:wght@500;600;700;800;900&family=Carlito:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background:#211b1e; color:#fbf4ec; margin:0; padding:12px 24px 24px; }
-h1 { font-size: 15px; color:#9d9d9d; margin:0 0 8px; }
+h1 { font-size: 15px; color:#8f8885; margin:0 0 8px; }
 .view-bar { margin:6px 0 2px; display:flex; gap:6px; align-items:center; }
 body[data-view="BTC"] .card[data-asset="XRP"], body[data-view="XRP"] .card[data-asset="BTC"] { display:none; }
 body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
@@ -5359,7 +5359,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flame-glow-1 { margin-left:-12px; animation: flame-wave-1 0.55s ease-in-out infinite; animation-delay:0.18s; }
 .flame-core { position:absolute; left:50%; bottom:3px; width:9px; height:16px; margin-left:-4.5px;
               border-radius:50%; filter: blur(2px); mix-blend-mode: screen;
-              background: radial-gradient(circle, #ffffff 0%, #ffea00 55%, transparent 100%);
+              background: radial-gradient(circle, #ffffff 0%, #e5b85c 55%, transparent 100%);
               animation: flame-wave-1 0.4s ease-in-out infinite alternate; }
 @keyframes flame-wave-3 { 0%,100% { transform:scaleY(1) scaleX(1) translateX(0) skewX(0deg); opacity:0.55; }
                           50% { transform:scaleY(1.1) scaleX(0.88) translateX(-2px) skewX(-3deg); opacity:0.75; } }
@@ -5370,7 +5370,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .smoke-streak { font-size:16px; line-height:1; text-align:right; margin-bottom:2px; opacity:0.7; animation: smoke-rise 2.2s ease-in-out infinite; }
 @keyframes smoke-rise { 0% { opacity:0; transform:translateY(4px) scale(0.9); } 30% { opacity:0.7; } 100% { opacity:0; transform:translateY(-10px) scale(1.15); } }
 .down { color:#f05454; }
-.warn { color:#d29922; }
+.warn { color:#e5b85c; }
 .position-tag { color:#e9a5bb; }  /* live position summary label - added 2026-09-27 per user
                                      request ("a different color other than white green or red...
                                      so it stands out") - a distinct cyan-blue, not reused anywhere
@@ -5412,20 +5412,20 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .tug-box span { color:#bcaaa1; font-size:11px; }
 .tug-agree { font-size:12px; padding:5px 10px; border-radius:6px; margin:4px 0; }
 .tug-agree.ok { background:#0f2a1a; border:1px solid #26a878; color:#3dd69c; }
-.tug-agree.warn { background:#2d2606; border:1px solid #d4b106; color:#e3b341; }
+.tug-agree.warn { background:#2d2606; border:1px solid #e5b85c; color:#e5b85c; }
 .tug-around { margin-top:4px; font-size:11px; }
 .line-diff { font-size:12px; font-weight:800; margin-top:2px; white-space:nowrap; }
 .live-price-inline .lbl { font-size:10px; color:#bcaaa1; text-transform:uppercase; }
 .callbox .big { font-size:14px; font-weight:700; line-height:1.2; }
 .callbox .lbl { font-size:9px; color:#bcaaa1; text-transform:uppercase; line-height:1.25; }
 .asset-label { font-weight:800; letter-spacing:0.5px; }
-.asset-BTC { color:#f7931a; } .asset-XRP { color:#4aa8ff; }
+.asset-BTC { color:#f7931a; } .asset-XRP { color:#00e5ff; }
 .clock { display:flex; align-items:center; gap:5px; margin-top:4px; font-family:Consolas, 'Courier New', monospace; font-size:17px; font-weight:700; color:#fbf4ec; }
 .clock svg { display:block; }
-.clock.clock-warn { color:#d29922; } .clock.clock-hot { color:#f05454; }
-.callbox-locked { background:#2d2606; border:2px solid #d4b106; box-shadow:0 0 8px rgba(212,177,6,0.5); }
-.callbox-locked .lbl { color:#f0d040; }
-.callbox-locked .big { color:#ffe680; }
+.clock.clock-warn { color:#e5b85c; } .clock.clock-hot { color:#f05454; }
+.callbox-locked { background:#2d2606; border:2px solid #e5b85c; box-shadow:0 0 8px rgba(212,177,6,0.5); }
+.callbox-locked .lbl { color:#e5b85c; }
+.callbox-locked .big { color:#e5b85c; }
 .head-row { display:flex; align-items:stretch; justify-content:flex-start; flex-wrap:wrap; row-gap:12px; }
 .head-row .asset-name { flex:0 0 auto; align-self:center; min-width:70px; }
 .head-row .kalshi-arrow { margin-left:6px; flex:1 1 0; min-width:70px; align-items:center; justify-content:flex-start; }
@@ -5474,19 +5474,19 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
    fills the rest - the split point itself is the "which side is winning"
    read, labeled with both percentages. */
 #lock-toasts { position:fixed; top:70px; right:20px; z-index:99999; display:flex; flex-direction:column; gap:10px; pointer-events:none; }
-.lock-toast { background:#211b1e; border:2px solid #f2cc60; color:#f2cc60; padding:14px 22px; font-size:22px;
+.lock-toast { background:#211b1e; border:2px solid #e5b85c; color:#e5b85c; padding:14px 22px; font-size:22px;
               font-weight:700; border-radius:10px; box-shadow:0 4px 18px rgba(0,0,0,0.6); }
 #rsi-alerts { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:100000; display:flex; flex-direction:column; gap:8px; align-items:center; max-width:94vw; }
 .rsi-pill { background:#211b1e; border:3px solid currentColor; border-radius:12px; padding:12px 26px; text-align:center; cursor:pointer;
             font-size:26px; font-weight:800; letter-spacing:0.5px; animation:rsiPulse 1.4s ease-in-out infinite; }
 .rsi-pill small { display:block; font-size:12px; font-weight:400; opacity:0.75; letter-spacing:0; margin-top:2px; }
-.rsi-under { color:#00e5ff; } .rsi-over { color:#ff4dd2; }
+.rsi-under { color:#00e5ff; } .rsi-over { color:#ff4f7e; }
 @keyframes rsiPulse { 0%,100% { box-shadow:0 0 6px 0 currentColor; } 50% { box-shadow:0 0 30px 8px currentColor; } }
 .rsi-hot { font-weight:800; animation:rsiText 1.4s ease-in-out infinite; }
-.rsi-hot-under { color:#00e5ff; } .rsi-hot-over { color:#ff4dd2; }
+.rsi-hot-under { color:#00e5ff; } .rsi-hot-over { color:#ff4f7e; }
 @keyframes rsiText { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
 #sound-reminder { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:99999; background:#3d2f00;
-                  border:1px solid #f2cc60; color:#f2cc60; padding:10px 18px; border-radius:8px; font-size:14px; }
+                  border:1px solid #e5b85c; color:#e5b85c; padding:10px 18px; border-radius:8px; font-size:14px; }
 #incoming-alerts { position:fixed; top:90px; left:50%; transform:translateX(-50%); z-index:100001; display:flex; flex-direction:column; gap:10px; align-items:center; max-width:96vw; }
 .incoming-banner { background:#211b1e; border:4px solid currentColor; border-radius:14px; padding:16px 30px; text-align:center; cursor:pointer;
                    animation:rsiPulse 1.1s ease-in-out infinite; max-width:94vw; }
@@ -5534,7 +5534,7 @@ details.pat-main > summary { cursor:pointer; list-style:none; }
 .pat-bias { font-weight:700; white-space:nowrap; }
 .pat-status { margin-left:8px; font-size:11px; color:#a8968e; text-transform:uppercase; }
 .pat-st { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; margin-right:4px; }
-.st-forming { color:#e9a5bb; } .st-formed { color:#a371f7; } .st-confirmed { color:#39d0d8; } .st-failed { color:#ff7b72; }
+.st-forming { color:#e9a5bb; } .st-formed { color:#e9a5bb; } .st-confirmed { color:#00e5ff; } .st-failed { color:#f05454; }
 .pat-pct { margin-left:8px; font-size:12px; font-weight:700; white-space:nowrap; }
 .pat-pbar { display:inline-block; width:46px; height:6px; margin-right:5px; border-radius:3px; background:#4a3c43; vertical-align:middle; overflow:hidden; }
 .pat-pbar i { display:block; height:100%; background:currentColor; transition:width 0.4s ease; }
@@ -5561,7 +5561,7 @@ details.pat > summary { cursor:pointer; }
 .pat-text { flex:1 1 auto; font-size:15px; line-height:1.5; }
 .pat-text > div { margin-bottom:6px; }
 @media (max-width:560px) { .pat-info-row { flex-wrap:wrap; } .pat-pic { flex:1 1 100%; max-width:100%; } }
-.pat-info b { color:#f2cc60; }
+.pat-info b { color:#e5b85c; }
 .pat-dir { margin-top:8px; font-size:20px; font-weight:800; line-height:1; }
 .pat-dir small { font-size:11px; font-weight:400; opacity:0.8; margin-left:4px; }
 .pat-dir.up { color:#3dd69c; } .pat-dir.down { color:#f05454; } .pat-dir.flat { color:#bcaaa1; }
@@ -5624,18 +5624,18 @@ details.pat > summary { cursor:pointer; }
 .top-note { font-size:10px; margin-top:4px; line-height:1.35; }
 .top-flip { display:flex; flex-direction:column; align-items:center; }
 .top-flip .flip-cap { margin-top:2px; }
-.rsi-over { color:#ff4dd2; }
+.rsi-over { color:#ff4f7e; }
 .fr-track { height:8px; background:#352b30; border-radius:4px; overflow:hidden; margin:6px 0 3px; }
 .fr-track i { display:block; height:100%; border-radius:4px; background:currentColor; transition:width 0.4s ease; }
 .fr-line { display:flex; justify-content:space-between; gap:6px; flex-wrap:wrap; font-size:12px; }
 .fr-why { font-size:11px; margin-top:3px; line-height:1.35; }
-.fr-high { color:#f0883e; } .fr-ext { color:#ff4dd2; font-weight:800; animation:rsiText 1.2s ease-in-out infinite; }
+.fr-high { color:#e5b85c; } .fr-ext { color:#ff4f7e; font-weight:800; animation:rsiText 1.2s ease-in-out infinite; }
 .fa-list { max-height:196px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding-right:2px; }
 .fa-item { border-left:4px solid #4a3c43; background:#2a2226; border-radius:4px; padding:4px 7px; font-size:12px; line-height:1.3; }
 .fa-item.fa-up { border-left-color:#3dd69c; } .fa-item.fa-down { border-left-color:#f05454; }
 .fa-item.fa-sev3 { background:#1f1a12; } .fa-item.fa-sev1 { opacity:0.8; }
 .fa-item.fa-fresh { animation:faFresh 1.2s ease-in-out 4; }
-@keyframes faFresh { 0%,100% { box-shadow:none; } 50% { box-shadow:0 0 0 2px #f2cc60; } }
+@keyframes faFresh { 0%,100% { box-shadow:none; } 50% { box-shadow:0 0 0 2px #e5b85c; } }
 .fa-tag { font-size:10px; font-weight:800; letter-spacing:0.4px; margin-right:3px; }
 .fa-age { float:right; font-size:10px; }
 .fa-detail { color:#bcaaa1; font-size:11px; margin-top:1px; }
@@ -5645,10 +5645,10 @@ details.pat > summary { cursor:pointer; }
 .stage-box .big { font-size:16px; font-weight:800; }
 .stage-title { font-weight:800; color:#fbf4ec !important; margin-bottom:3px; }
 .stage-early { border:2px solid #e9a5bb; }
-.stage-sealed { border:2px solid #d4b106; background:#1c1806; box-shadow:0 0 8px rgba(212,177,6,0.4); }
-.stage-sealed .stage-title { color:#f0d040 !important; }
+.stage-sealed { border:2px solid #e5b85c; background:#1c1806; box-shadow:0 0 8px rgba(212,177,6,0.4); }
+.stage-sealed .stage-title { color:#e5b85c !important; }
 .stage-box.stage-up { background:#0f2a1a; } .stage-box.stage-down { background:#2a1212; }
-.stage-sealed.stage-up, .stage-sealed.stage-down { border-color:#d4b106; }
+.stage-sealed.stage-up, .stage-sealed.stage-down { border-color:#e5b85c; }
 .stage-locked-lbl { margin-top:3px; font-weight:700; color:#fbf4ec !important; }
 .stage-rec { margin-top:4px; border-top:1px solid #4a3c43; padding-top:3px; }
 .bot-calls .value, .stage-sum .value { font-weight:400; font-size:13px; text-align:right; }
@@ -5664,23 +5664,23 @@ details.pat > summary { cursor:pointer; }
 .press-health { margin-top:6px; font-size:11px; }
 .stage-box { box-sizing:border-box; display:flex; flex-direction:column; justify-content:flex-start; text-align:center;
              flex:1 1 200px; min-width:190px; max-width:260px; margin-left:10px; padding:12px 12px 10px; border-radius:14px;
-             background:#2a2226; border:2px solid #4a515e; }
+             background:#2a2226; border:2px solid #4a3c43; }
 .sb-title { font-size:13px; font-weight:800; letter-spacing:1px; color:#eee2d7; margin-bottom:6px; }
 .sb-dir { font-size:40px; font-weight:900; line-height:1.05; letter-spacing:0.5px; }
 .sb-count { font-size:34px; font-family:Consolas, 'Courier New', monospace; }
 .sb-tier { display:inline-block; align-self:center; margin:6px 0 4px; padding:3px 16px; border-radius:20px; font-size:18px; font-weight:900; letter-spacing:2px; }
-.tier-super { color:#ffb347; background:rgba(255,215,106,0.12); border:2px solid #ffb347; text-shadow:0 0 10px rgba(255,215,106,0.7); animation:superGlow 1.8s ease-in-out infinite; }
+.tier-super { color:#e5b85c; background:rgba(255,215,106,0.12); border:2px solid #e5b85c; text-shadow:0 0 10px rgba(255,215,106,0.7); animation:superGlow 1.8s ease-in-out infinite; }
 .tier-good { color:#3dd69c; background:rgba(90,209,160,0.12); border:2px solid #3dd69c; }
-.tier-weak { color:#c7b98a; background:rgba(199,185,138,0.08); border:2px dashed #8f8466; }
-.tier-skip { color:#bcaaa1; border:2px dashed #4a5680; }
+.tier-weak { color:#dcbb91; background:rgba(199,185,138,0.08); border:2px dashed #a8968e; }
+.tier-skip { color:#bcaaa1; border:2px dashed #4a3c43; }
 span.tier-super, span.tier-good, span.tier-weak { padding:0 5px; border-radius:6px; font-size:11px; font-weight:800; border-width:1px; animation:none; }
 @keyframes superGlow { 0%,100% { box-shadow:0 0 4px rgba(255,215,106,0.4); } 50% { box-shadow:0 0 18px rgba(255,215,106,0.85); } }
 .sb-line { font-size:13px; color:#eee2d7; margin-top:3px; }
-.sb-note { font-size:11px; color:#e3b341; margin-top:3px; }
+.sb-note { font-size:11px; color:#e5b85c; margin-top:3px; }
 .sb-rec { margin-top:8px; padding-top:5px; border-top:1px solid #4a3c43; font-size:12px; color:#bcaaa1; }
 .stage-early { border-color:#e9a5bb; box-shadow:0 0 14px rgba(111,140,255,0.25); }
-.stage-sealed { border-color:#ffb347; box-shadow:0 0 16px rgba(255,215,106,0.3); background:#16182a; }
-.stage-sealed .sb-title { color:#ffb347; }
+.stage-sealed { border-color:#e5b85c; box-shadow:0 0 16px rgba(255,215,106,0.3); background:#2a2226; }
+.stage-sealed .sb-title { color:#e5b85c; }
 .stage-box.stage-up { background:linear-gradient(180deg,#10302a 0%,#2a2226 75%); }
 .stage-box.stage-down { background:linear-gradient(180deg,#341626 0%,#2a2226 75%); }
 .stage-box.stage-skip { opacity:0.85; }
@@ -5688,11 +5688,11 @@ span.tier-super, span.tier-good, span.tier-weak { padding:0 5px; border-radius:6
 .cross-row .value { font-weight:400; }
 .rounds-panel { margin-top:14px; padding:10px 12px; background:#272024; border:1px solid #4a3c43; border-radius:12px; }
 .rc-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
-.rc { background:#2a2226; border:1px solid #2e333c; border-radius:8px; padding:5px 6px; min-width:0; }
+.rc { background:#2a2226; border:1px solid #352b30; border-radius:8px; padding:5px 6px; min-width:0; }
 .rc-live { grid-column:1 / -1; border-color:#e9a5bb; }
 .rc-head { font-size:11px; color:#eee2d7; margin-bottom:2px; line-height:1.4; }
 @media (max-width:700px) { .rc-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
-.call-tag { display:inline-block; font-size:10px; padding:0 5px; border-radius:5px; border:1px solid #4a515e; color:#eee2d7; margin-right:2px; }
+.call-tag { display:inline-block; font-size:10px; padding:0 5px; border-radius:5px; border:1px solid #4a3c43; color:#eee2d7; margin-right:2px; }
 .call-tag.tag-ok { border-color:#3dd69c; color:#3dd69c; } .call-tag.tag-bad { border-color:#f05454; color:#f05454; } .call-tag.tag-skip { opacity:0.6; }
 /* ---- chill night theme (2026-10-20): deep indigo sky, soft moonlight text, mint / coral instead of hard green / red ---- */
 body { background:#211b1e; background-image:radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,0.55) 50%, transparent 51%),
@@ -5700,7 +5700,7 @@ body { background:#211b1e; background-image:radial-gradient(1px 1px at 12% 18%, 
   radial-gradient(1px 1px at 35% 62%, rgba(255,255,255,0.3) 50%, transparent 51%), radial-gradient(1px 1px at 92% 78%, rgba(255,255,255,0.35) 50%, transparent 51%),
   radial-gradient(1200px 600px at 85% -10%, rgba(111,140,255,0.16), transparent 60%), radial-gradient(900px 500px at -10% 110%, rgba(90,209,160,0.07), transparent 60%);
   background-attachment:fixed; color:#fbf4ec; }
-h1 { color:#dcbb91; } h1::before { content:"\263E  "; color:#ffb347; }
+h1 { color:#dcbb91; } h1::before { content:"\263E  "; color:#e5b85c; }
 .card { background:rgba(17,26,46,0.92); border-color:#4a3c43; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.35); }
 .top-w, .tug { background:#272024; border-color:#4a3c43; border-radius:12px; }
 /* ---- 2026-10-20 (3): calm + clean - one typeface, tabular numbers, no flashing ---- */
@@ -5713,7 +5713,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .label { font-weight:400; } .value { font-weight:600; }
 .hint { color:#bcaaa1; }
 .boom, .rsi-hot, .fa-item.fa-fresh, .tier-super, .fr-ext, .incoming-banner, .rsi-pill, .smoke-streak, .fx-spark, .fx-drop { animation:none !important; }
-.fa-item.fa-fresh { box-shadow:inset 0 0 0 1px #ffb347; }
+.fa-item.fa-fresh { box-shadow:inset 0 0 0 1px #e5b85c; }
 .boom { font-size:12px; padding:4px 12px; }
 #incoming-alerts, #rsi-alerts, #lock-toasts, .big-flip-alert, .whale-cross { display:none !important; }
 #top-banner { position:fixed; top:0; left:0; right:0; z-index:100002; padding:9px 18px; font-size:14px; font-weight:700; text-align:center;
@@ -5741,18 +5741,18 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .scoreboard { background:#272024; border:1px solid #4a3c43; border-radius:14px; padding:12px 14px; margin-bottom:12px; }
 .sc-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
 @media (max-width:760px) { .sc-grid { grid-template-columns:1fr; } }
-.sc-col { background:#2a2226; border:1px solid #2e333c; border-radius:10px; padding:10px 12px; min-width:0; }
+.sc-col { background:#2a2226; border:1px solid #352b30; border-radius:10px; padding:10px 12px; min-width:0; }
 .sc-title { font-size:11px; font-weight:700; letter-spacing:1px; color:#eee2d7; margin-bottom:6px; }
 .sc-main { display:flex; align-items:center; gap:12px; }
 .sc-pct { font-size:30px; font-weight:800; color:#fbf4ec; line-height:1; }
 .sc-wl { font-size:14px; line-height:1.35; }
 .sc-cur { margin:8px 0 6px; }
-.fr-high { color:#ff9f43 !important; } .fr-track2 i.fr-high { background:#ff9f43 !important; }
-.sb-rev { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#ffd36e; }
+.fr-high { color:#e5b85c !important; } .fr-track2 i.fr-high { background:#e5b85c !important; }
+.sb-rev { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#e5b85c; }
 .wr-rev { margin:4px 0 6px; font-size:12px; padding:6px; border-radius:8px; background:#211a21; }
-.vol-warn { margin:4px 0 8px; padding:8px 10px; border-radius:10px; border:1px solid #d29922; background:rgba(210,153,34,0.12); color:#f3d28c; font-size:12px; line-height:1.4; }
+.vol-warn { margin:4px 0 8px; padding:8px 10px; border-radius:10px; border:1px solid #e5b85c; background:rgba(210,153,34,0.12); color:#dcbb91; font-size:12px; line-height:1.4; }
 .hist-toast { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:9999; padding:10px 14px; border-radius:10px; background:#e5b85c; color:#1a1218; font-weight:700; }
-.sb-z80 { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#7be0b0; }
+.sb-z80 { display:inline-block; margin:2px 0; padding:2px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#3dd69c; }
 .sb-line.k-agree, .sb-line.k-agree * { color:#ffffff !important; font-weight:800; }
 .sb-line.k-disagree, .sb-line.k-disagree * { color:#000000 !important; font-weight:800; }
 .sb-late { display:inline-block; margin:2px 0 4px; padding:2px 9px; border-radius:999px; font-weight:800; font-size:12px; color:#1a1218; background:#e5b85c; }
@@ -5764,7 +5764,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
   background:rgba(20,16,20,0.85); min-width:96px; line-height:1.2; -webkit-tap-highlight-color:transparent; }
 .wr-badge:empty { display:none; }
 .wr-streak { font-weight:800; font-size:18px; } .wr-streak span { font-size:11px; font-weight:600; opacity:0.7; }
-.wr-streak.wr-w { color:#e5b85c; } .wr-streak.wr-l { color:#a99be0; }
+.wr-streak.wr-w { color:#e5b85c; } .wr-streak.wr-l { color:#f05454; }
 .wr-sub { font-size:11px; opacity:0.85; white-space:nowrap; }
 .wr-panel { display:none; position:fixed; z-index:9000; top:calc(env(safe-area-inset-top,0px) + 70px); right:8px; left:auto; bottom:8px;
   width:min(460px, calc(100vw - 16px)); overflow:auto; background:#171217; border:1px solid #4a3c43; border-radius:14px; padding:10px;
@@ -5813,7 +5813,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px; }
 .fa-item .fa-detail { display:none; }
 .fa-item:hover .fa-detail, .fa-item:active .fa-detail { display:block; }
 .fa-where { color:#eee2d7; font-size:12px; }
-.fa-item.fa-void { border-left-color:#fbf4ec; background:#151b2b; }
+.fa-item.fa-void { border-left-color:#fbf4ec; background:#2a2226; }
 .void { color:#fbf4ec !important; }
 .fa-item.fa-void b { font-weight:700; }
 .fa-arrow { font-size:11px; }
@@ -5836,7 +5836,7 @@ body.ov-off .ov { display:none; }
 .rsi-num { font-size:34px; font-weight:800; line-height:1.05; }
 .rsi-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
 .rsi-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
-.rz-ob { border-color:#ff4dd2; } .rz-ob .rsi-num, .rz-ob .rsi-zone { color:#ff4dd2; }
+.rz-ob { border-color:#ff4f7e; } .rz-ob .rsi-num, .rz-ob .rsi-zone { color:#ff4f7e; }
 .rz-bull { border-color:#26a878; } .rz-bull .rsi-num, .rz-bull .rsi-zone { color:#3dd69c; }
 .rz-norm .rsi-num, .rz-norm .rsi-zone { color:#eee2d7; }
 .rz-bear { border-color:#cf3b3b; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#f05454; }
@@ -5847,12 +5847,12 @@ body.ov-off .ov { display:none; }
 .fr-track2 i { display:block; height:100%; background:currentColor; border-radius:3px; }
 .fr-txt { font-size:12px; line-height:1.35; margin-top:2px; }
 .alerts-only { grid-template-columns:1fr !important; }
-.mc-bad td { color:#e3b341; }
+.mc-bad td { color:#e5b85c; }
 /* ======================= BRAIN skin (2026-10-20): modern night grey, island night skyline, white logo ======================= */
 body { background-color:#211b1e !important;
   background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%201600%20600%22%20preserveAspectRatio%3D%22xMidYMax%20slice%22%3E%3Ccircle%20cx%3D%221260%22%20cy%3D%22380%22%20r%3D%2234%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.18%22/%3E%3Ccircle%20cx%3D%221260%22%20cy%3D%22380%22%20r%3D%2218%22%20fill%3D%22%23f3f5f8%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%221180%22%20y%3D%22566%22%20width%3D%22160%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.22%22/%3E%3Crect%20x%3D%221189%22%20y%3D%22571%22%20width%3D%22146%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.19%22/%3E%3Crect%20x%3D%221198%22%20y%3D%22576%22%20width%3D%22132%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.16%22/%3E%3Crect%20x%3D%221207%22%20y%3D%22581%22%20width%3D%22118%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.13%22/%3E%3Crect%20x%3D%221216%22%20y%3D%22586%22%20width%3D%22104%22%20height%3D%222%22%20fill%3D%22%23e9edf2%22%20opacity%3D%220.10%22/%3E%3Cpath%20d%3D%22M300%20560%20Q%20520%20470%20760%20548%20Q%20900%20500%201120%20556%20L%201120%20600%20L%20300%20600%20Z%22%20fill%3D%22%230f1216%22/%3E%3Crect%20x%3D%22520%22%20y%3D%22522%22%20width%3D%2234%22%20height%3D%2226%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22524%22%20y%3D%22526%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ffcf6e%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22556%22%20y%3D%22514%22%20width%3D%2228%22%20height%3D%2234%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22560%22%20y%3D%22518%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ff8fb0%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22586%22%20y%3D%22526%22%20width%3D%2238%22%20height%3D%2222%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22590%22%20y%3D%22530%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%237fe3d6%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22626%22%20y%3D%22518%22%20width%3D%2230%22%20height%3D%2230%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22630%22%20y%3D%22522%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ffcf6e%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22658%22%20y%3D%22524%22%20width%3D%2236%22%20height%3D%2224%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22662%22%20y%3D%22528%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%239fd3ff%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22696%22%20y%3D%22516%22%20width%3D%2226%22%20height%3D%2232%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22700%22%20y%3D%22520%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ff8fb0%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%22980%22%20y%3D%22524%22%20width%3D%2230%22%20height%3D%2224%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%22984%22%20y%3D%22528%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%237fe3d6%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%221012%22%20y%3D%22518%22%20width%3D%2234%22%20height%3D%2230%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%221016%22%20y%3D%22522%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ffcf6e%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%221048%22%20y%3D%22526%22%20width%3D%2228%22%20height%3D%2222%22%20fill%3D%22%230e1014%22/%3E%3Crect%20x%3D%221052%22%20y%3D%22530%22%20width%3D%225%22%20height%3D%226%22%20fill%3D%22%23ff8fb0%22%20opacity%3D%220.55%22/%3E%3Crect%20x%3D%220%22%20y%3D%22556%22%20width%3D%221600%22%20height%3D%2244%22%20fill%3D%22%230c0e12%22/%3E%3Cg%20transform%3D%22translate%2860%200%29%20scale%281.0%201.0%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28230%200%29%20scale%280.72%200.72%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28860%200%29%20scale%280.62%200.62%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%281360%200%29%20scale%280.95%200.95%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%281500%200%29%20scale%280.7%200.7%29%22%20fill%3D%22%230b0d10%22%3E%3Cpath%20d%3D%22M0%20600%20C%206%20520%2018%20430%2040%20360%20L%2050%20362%20C%2030%20432%2020%20520%2016%20600%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%20-2.5%20350.0%20-50%20342%20-64.24999999999999%20351.0%20C%20-31.0%20348.0%207.0%20355.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%205.0%20329.0%20-35%20307%20-47.0%20331.75%20C%20-19.0%20323.5%2013.0%20342.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2025.0%20317.0%205%20287%20-1.0%20320.75%20C%2013.0%20309.5%2029.0%20335.75%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2050.0%20314.0%2055%20282%2056.5%20318.0%20C%2053.0%20306.0%2049.0%20334.0%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2075.0%20324.8%20105%20300%20114.0%20327.9%20C%2093.0%20318.6%2069.0%20340.3%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2092.5%20345.2%20140%20334%20154.25%20346.6%20C%20121.0%20342.4%2083.0%20352.2%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%2087.5%20368.0%20130%20372%20142.75%20367.5%20C%20113.0%20369.0%2079.0%20365.5%2045%20362%20Z%22/%3E%3Cpath%20d%3D%22M45%20362%20C%202.5%20369.2%20-40%20374%20-52.749999999999986%20368.6%20C%20-23.0%20370.4%2011.0%20366.2%2045%20362%20Z%22/%3E%3C/g%3E%3C/svg%3E"),
     radial-gradient(900px 420px at 80% -10%, rgba(233,165,187,0.10), transparent 60%),
-    linear-gradient(180deg, #0f1115 0%, #15181d 40%, #1b1f26 75%, #232831 100%) !important;
+    linear-gradient(180deg, #211b1e 0%, #211b1e 40%, #211b1e 75%, #2a2226 100%) !important;
   background-repeat:no-repeat, no-repeat, no-repeat; background-position:center bottom, center, center; background-size:100% auto, cover, cover;
   background-attachment:fixed, fixed, fixed; color:#fbf4ec; }
 h1 { display:none; }
@@ -5871,23 +5871,23 @@ h1 { display:none; }
 .rs-tile, .scoreboard, .top-w, .rounds-panel, .tug, .sc-col, .rc { background:rgba(48,39,43,0.90) !important; border-color:rgba(255,255,255,0.08) !important; }
 .rs-title, .top-w-title, .sc-title, .press-head b, .tug-title { font-family:var(--br-label) !important; font-size:17px !important;
   letter-spacing:2px !important; color:#dcbb91 !important; font-weight:400 !important; }
-.press-head b { color:#e8c27c !important; font-size:20px !important; }
+.press-head b { color:#dcbb91 !important; font-size:20px !important; }
 .sb-title { font-family:var(--br-label); font-size:17px !important; letter-spacing:2px; font-weight:400 !important; }
 .sb-dir, .sc-pct, .rsi-num, .fr-big, .tuc-time { font-family:var(--br-serif); font-weight:400 !important; letter-spacing:1px; }
 .calls-row .sb-dir { font-size:24px; }
 .sc-pct { font-size:26px; } .rsi-num { font-size:30px; } .flip-radar .fr-big { font-size:24px; }
 .asset-label { font-family:var(--br-serif); font-weight:400 !important; font-size:30px; }
-.asset-BTC { color:#e8c27c !important; } .asset-XRP { color:#dcbb91 !important; }
+.asset-BTC { color:#dcbb91 !important; } .asset-XRP { color:#dcbb91 !important; }
 .live-price-inline .big.up { color:#3dd69c !important; } .live-price-inline .big.down { color:#f05454 !important; }
 .stage-early { border-color:#e9a5bb !important; box-shadow:0 0 16px rgba(233,165,187,0.18) !important; }
-.stage-sealed { border-color:#e8c27c !important; box-shadow:0 0 18px rgba(232,194,124,0.22) !important; background:rgba(34,32,30,0.92) !important; }
+.stage-sealed { border-color:#dcbb91 !important; box-shadow:0 0 18px rgba(232,194,124,0.22) !important; background:rgba(34,32,30,0.92) !important; }
 .stage-box.stage-up { background:linear-gradient(180deg, rgba(61,214,156,0.18) 0%, rgba(48,39,43,0.92) 70%) !important; }
 .stage-box.stage-down { background:linear-gradient(180deg, rgba(240,84,84,0.20) 0%, rgba(48,39,43,0.92) 70%) !important; }
 .press-buy, .k-bar i, .rs-odds-bar i, .vol-buy { background:linear-gradient(90deg, #15a57d, #3dd69c) !important; }
 .press-sell, .k-bar, .rs-odds-bar, .vol-sell { background:linear-gradient(90deg, #f05454, #cf3b3b) !important; }
 .size-mode-btn, .chart-tf-btn, .sound-bar button { border-radius:10px !important; }
 .size-mode-active { background:rgba(233,165,187,0.16) !important; border-color:#e9a5bb !important; color:#f6d9e2 !important; }
-.tier-super { color:#e8c27c !important; border-color:#e8c27c !important; background:rgba(232,194,124,0.12) !important; }
+.tier-super { color:#dcbb91 !important; border-color:#dcbb91 !important; background:rgba(232,194,124,0.12) !important; }
 .tier-good { color:#3dd69c !important; border-color:#3dd69c !important; }
 .more-detail > summary b { font-family:var(--br-label); font-size:18px; letter-spacing:2px; color:#dcbb91; font-weight:400; }
 #top-banner { background:#2a2226 !important; }
@@ -5898,21 +5898,21 @@ h1 { display:none; }
 .tuc-lbl { font-family:var(--br-label); font-size:15px; letter-spacing:2px; color:#dcbb91; }
 .tuc-time { font-size:30px; line-height:1.1; color:#ffffff; }
 .tuc-what { font-size:12px; color:#eee2d7; margin-top:2px; }
-.tuc.tuc-early .tuc-what b { color:#e9a5bb; } .tuc.tuc-sealed .tuc-what b { color:#e8c27c; }
+.tuc.tuc-early .tuc-what b { color:#e9a5bb; } .tuc.tuc-sealed .tuc-what b { color:#dcbb91; }
 .tuc.tuc-early { border-color:rgba(233,165,187,0.45) !important; } .tuc.tuc-sealed { border-color:rgba(232,194,124,0.45) !important; }
 /* market trend box (top row, above the coin name) */
 .mkt { background:rgba(48,39,43,0.9); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px 8px; margin-bottom:8px; min-width:200px; }
 .mkt-btns { display:flex; gap:4px; }
 .mkt-btns button { flex:1; font-size:11px; font-weight:700; padding:3px 0; border-radius:7px; border:1px solid transparent; cursor:pointer;
-  color:#0f1115; font-family:var(--br-sans); }
-.mkt-btns button.bull { background:#3dd69c; } .mkt-btns button.bear { background:#f05454; } .mkt-btns button.neut { background:#5d6573; color:#fbf4ec; }
+  color:#211b1e; font-family:var(--br-sans); }
+.mkt-btns button.bull { background:#3dd69c; } .mkt-btns button.bear { background:#f05454; } .mkt-btns button.neut { background:#8f8885; color:#fbf4ec; }
 .mkt-btns button.sel { outline:2px solid #ffffff; outline-offset:1px; }
 .mkt-pane { display:none; font-size:12px; margin-top:5px; } .mkt-pane.show { display:block; }
 .mkt-pane b { font-size:13px; }
 .stage-pend { font-family:var(--br-label); font-size:22px; letter-spacing:2px; color:#bcaaa1; margin:4px 0; }
 .stage-cd { margin:2px 0 6px; } .stage-cd .hint { font-size:12px; letter-spacing:1px; text-transform:uppercase; }
 .stage-cd-t { font-family:var(--br-serif); font-size:30px; color:#ffffff; letter-spacing:1px; }
-.stage-cd-t.now { font-size:18px; color:#f2c46b; }
+.stage-cd-t.now { font-size:18px; color:#e5b85c; }
 /* line-cross box (calls row, next to RSI) */
 .calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(180px,1.05fr) minmax(100px,0.5fr) minmax(100px,0.5fr) !important; }
 @media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr !important; } }
@@ -5921,17 +5921,17 @@ h1 { display:none; }
 .lx-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
 .lx-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
 .lx-clean { border-color:#3dd69c !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:#3dd69c; }
-.lx-some { border-color:#e8c27c !important; } .lx-some .lx-num, .lx-some .lx-zone { color:#e8c27c; }
+.lx-some { border-color:#dcbb91 !important; } .lx-some .lx-num, .lx-some .lx-zone { color:#dcbb91; }
 .lx-chop { border-color:#f05454 !important; } .lx-chop .lx-num, .lx-chop .lx-zone { color:#f05454; }
 /* "FLIP" tag next to the calls (added 2026-09-25) - marks this window's
    real position as the flip-scalp entry, not the original locked call */
-.flip-badge { display:inline-block; background:#3d1a00; border:1px solid #d29922; color:#d29922;
+.flip-badge { display:inline-block; background:#3d1a00; border:1px solid #e5b85c; color:#e5b85c;
                font-size:11px; font-weight:800; letter-spacing:0.5px; padding:2px 7px;
                border-radius:5px; vertical-align:middle; margin-left:2px; }
 /* ======================= BRAIN rose skin (2026-10-20 b): its own look - rosy grey, tan and cream, soft serifs ======================= */
 :root { --br-bg:#211b1e; --br-tile:rgba(56,45,50,0.88); --br-line:rgba(240,214,200,0.12);
   --br-cream:#fbf4ec; --br-text:#eee2d7; --br-mute:#bcaaa1; --br-tan:#dcbb91; --br-blush:#e9a5bb;
-  --br-win:#e5b85c; --br-loss:#a99be0; --br-serif:'Fraunces', Georgia, 'Times New Roman', serif; --br-sans:'Carlito', 'Calibri', 'Segoe UI', -apple-system, Arial, sans-serif; }
+  --br-win:#e5b85c; --br-loss:#f05454; --br-serif:'Fraunces', Georgia, 'Times New Roman', serif; --br-sans:'Carlito', 'Calibri', 'Segoe UI', -apple-system, Arial, sans-serif; }
 html, body { font-family:var(--br-sans) !important; }
 body { color:var(--br-text) !important; background-color:var(--br-bg) !important;
   background-image:radial-gradient(1100px 520px at 100% -8%, rgba(233,165,187,0.16), transparent 62%),
@@ -5939,7 +5939,7 @@ body { color:var(--br-text) !important; background-color:var(--br-bg) !important
     linear-gradient(180deg, #211b1e 0%, #261f22 45%, #2c2428 100%) !important;
   background-size:cover !important; background-position:center !important; background-repeat:no-repeat !important; background-attachment:fixed !important; }
 .b-logo { filter:drop-shadow(0 2px 10px rgba(233,165,187,0.30)); }
-.b-spark { fill:#e8c27c; }
+.b-spark { fill:#dcbb91; }
 .g-logo { font-family:var(--br-serif) !important; font-style:italic; font-weight:800; font-size:46px; letter-spacing:0.5px;
   font-variation-settings:"opsz" 144, "SOFT" 100; color:var(--br-cream) !important; text-shadow:0 2px 14px rgba(233,165,187,0.25) !important; }
 .g-tag { font-family:var(--br-serif) !important; font-style:italic; font-size:17px; letter-spacing:0.3px; color:var(--br-tan) !important; font-variation-settings:"SOFT" 100; }
@@ -6042,12 +6042,12 @@ body { background:#15110f !important; }
   -webkit-mask:var(--i) center/contain no-repeat; mask:var(--i) center/contain no-repeat; }
 .ico[data-i="lock"] { --i:url(/static/ico-lock.svg?v=1); color:#e9a5bb; }
 .ico[data-i="radar"] { --i:url(/static/ico-radar.svg?v=1); color:#e9a5bb; }
-.ico[data-i="reversal"] { --i:url(/static/ico-reversal.svg?v=1); color:#e8742a; }
-.ico[data-i="star"] { --i:url(/static/ico-star.svg?v=1); color:#f2c46b; }
-.ico[data-i="hold"] { --i:url(/static/ico-hold.svg?v=1); color:#f2c46b; }
-.ico[data-i="flame"] { --i:url(/static/ico-flame.svg?v=1); color:#f2a65a; }
+.ico[data-i="reversal"] { --i:url(/static/ico-reversal.svg?v=1); color:#e5b85c; }
+.ico[data-i="star"] { --i:url(/static/ico-star.svg?v=1); color:#e5b85c; }
+.ico[data-i="hold"] { --i:url(/static/ico-hold.svg?v=1); color:#e5b85c; }
+.ico[data-i="flame"] { --i:url(/static/ico-flame.svg?v=1); color:#e5b85c; }
 .ico[data-i="clock"] { --i:url(/static/ico-clock.svg?v=1); color:#eee2d7; }
-.ico[data-i="cash"] { --i:url(/static/ico-cash.svg?v=1); color:#f2c46b; }
+.ico[data-i="cash"] { --i:url(/static/ico-cash.svg?v=1); color:#e5b85c; }
 .ico[data-i="check"] { --i:url(/static/ico-check.svg?v=1); }
 .ico[data-i="x"] { --i:url(/static/ico-x.svg?v=1); }
 .ico[data-i="warn"] { --i:url(/static/ico-warn.svg?v=1); }
@@ -6072,12 +6072,12 @@ body { background:#15110f !important; }
   background:rgba(30,46,50,0.42); -webkit-backdrop-filter:blur(12px) saturate(1.2); backdrop-filter:blur(12px) saturate(1.2);
   border:1px solid rgba(255,255,255,0.28); box-shadow:0 0 14px rgba(255,255,255,0.28), 0 0 3px rgba(255,255,255,0.35), 0 4px 14px rgba(0,0,0,0.25); }
 .fw-item b { font-weight:900; letter-spacing:1px; color:#cdb6ad; }
-.fw-with .fw-dir, .fw-with .fw-rel { color:#a9cfc1; }
+.fw-with .fw-dir, .fw-with .fw-rel { color:#c9f7e6; }
 .fw-st { color:#d6cac4; font-weight:700; }
 .fw-against { border-color:rgba(231,184,130,0.6); }
-.fw-against .fw-dir, .fw-against .fw-rel, .fw-against .fw-st { color:#e7b882; }
+.fw-against .fw-dir, .fw-against .fw-rel, .fw-against .fw-st { color:#dcbb91; }
 .fw-badge { margin-left:2px; padding:2px 9px; border-radius:999px; font-weight:900; letter-spacing:.6px; font-size:11px; }
-.fw-hold { background:rgba(47,74,79,0.75); color:#efe6df; border:1px solid rgba(111,154,142,0.7); } .fw-hold .ico { color:#a9cfc1; }
+.fw-hold { background:rgba(47,74,79,0.75); color:#efe6df; border:1px solid rgba(111,154,142,0.7); } .fw-hold .ico { color:#c9f7e6; }
 .fw-rev { background:rgba(154,90,68,0.8); color:#f6ece5; border:1px solid rgba(201,138,106,0.8); }
 body.has-flip-watch { padding-top:0; }
 @media (max-width:760px) { .fw-item { font-size:11.5px; gap:6px; } .fw-badge { font-size:10.5px; } }
@@ -6342,7 +6342,7 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 .fa-item[data-kind="burst"].fa-down, .fa-item[data-kind="burst"].fa-down .fa-head, .fa-item[data-kind="burst"].fa-down .fa-where,
 .fa-item[data-kind="burst"].fa-down .fa-age, .fa-item[data-kind="burst"].fa-down .fa-arrow, .fa-item[data-kind="burst"].fa-down .fa-usd { color:#d61f37 !important; text-shadow:none !important; }
 .fa-item[data-kind="burst"].fa-up, .fa-item[data-kind="burst"].fa-up .fa-head, .fa-item[data-kind="burst"].fa-up .fa-where,
-.fa-item[data-kind="burst"].fa-up .fa-age, .fa-item[data-kind="burst"].fa-up .fa-arrow, .fa-item[data-kind="burst"].fa-up .fa-usd { color:#0e8f58 !important; text-shadow:none !important; }
+.fa-item[data-kind="burst"].fa-up .fa-age, .fa-item[data-kind="burst"].fa-up .fa-arrow, .fa-item[data-kind="burst"].fa-up .fa-usd { color:#0b7a4b !important; text-shadow:none !important; }
 /* 2026-10-22 (user): alert dollar values in the same bold face as the buy-pressure numbers */
 .card .fa-item .fa-usd, .card .top-alerts .fa-item .fa-usd { font-family:var(--br-bold) !important; font-weight:800 !important; font-size:17px !important;
   letter-spacing:-.2px !important; font-variant-numeric:tabular-nums; }
@@ -6361,9 +6361,9 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 .lw-learn summary span { font-family:var(--br-sans); font-weight:400; letter-spacing:0; text-transform:none; color:var(--br-mute); margin-left:6px; }
 .lw-learn-body { font-size:13.5px; line-height:1.5; color:var(--br-text); padding:6px 4px 2px; }
 .lw-learn-body p { margin:0 0 8px; } .lw-learn-body b { color:#fbf4ec; }
-.lw-learn-body .lwl-rsi, .lw-learn-body .lwl-macd { display:inline-block; min-width:18px; color:#ffd23f; }
+.lw-learn-body .lwl-rsi, .lw-learn-body .lwl-macd { display:inline-block; min-width:18px; color:#fbf4ec; }
 .lw-learn-body .lwl-macd svg { display:inline-block !important; margin:0 !important; width:13px; height:13px; vertical-align:-1px; }
-.lw-learn-body .lwl-rsi-t, .lw-learn-body .lwl-macd-t, .lw-learn-body .lwl-15 { color:#ffd23f; }
+.lw-learn-body .lwl-rsi-t, .lw-learn-body .lwl-macd-t, .lw-learn-body .lwl-15 { color:#fbf4ec; font-weight:700; }
 /* 2026-10-22 (user): vector arrows everywhere instead of typed triangles - crisp at any size, take the text color */
 .va-u, .va-d { display:inline-block; width:.78em; height:.72em; background:currentColor; vertical-align:-.02em; margin-right:.12em; font-style:normal; }
 .va-u { clip-path:polygon(50% 0, 100% 100%, 0 100%); } .va-d { clip-path:polygon(0 0, 100% 0, 50% 100%); }
@@ -6382,6 +6382,11 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 .card .scoreboard > .rs-title .hint { font-weight:700 !important; }
 body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-title b { color:transparent !important; -webkit-text-fill-color:transparent !important;
   font-family:inherit !important; font-weight:inherit !important; background:none !important; }
+/* 2026-10-22 (user): no black behind the chart's RSI / MACD signs - a theme pink-to-cream tint instead */
+.lw-chip { background:linear-gradient(160deg, rgba(233,165,187,0.30) 0%, rgba(220,187,145,0.20) 100%) !important;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  box-shadow:inset 0 0 0 1px rgba(251,244,236,0.22) !important; }
+.lw-chip b, .lw-chip b.w { text-shadow:0 1px 2px rgba(33,27,30,0.55); }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -6420,7 +6425,7 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .lw-chip.c-ob { border-color:#ff4f7e; border-image:linear-gradient(90deg, #ff2a3d, #ff5fd0) 1; border-radius:0; box-shadow:0 0 9px rgba(255,77,140,0.35); }
 .lw-chip.c-ob i, .lw-chip.c-ob > span, .rz-ob .rsi-num, .rz-ob .rsi-zone {
   background:linear-gradient(90deg, #ff2a3d 0%, #ff4f7e 50%, #ff5fd0 100%); -webkit-background-clip:text; background-clip:text; color:transparent !important; }
-.rz-ob { border-color:#ff4d8c !important; }
+.rz-ob { border-color:#ff4f7e !important; }
 .rz-bull .rsi-num, .rz-bull .rsi-zone { color:#3dd69c !important; } .rz-bear .rsi-num, .rz-bear .rsi-zone { color:#f05454 !important; }
 .rz-norm .rsi-num, .rz-norm .rsi-zone { color:#b9b3b0 !important; }
 .lw-rec-g { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:3px 0 6px; }
@@ -6446,10 +6451,10 @@ html, body { overflow-x:hidden; }
 
 .rv-watch { margin-top:8px; padding:7px 9px; border-radius:10px; font-size:11.5px; line-height:1.35; border:1px solid rgba(255,255,255,0.10); background:rgba(154,90,68,0.10); }
 .rv-watch b { letter-spacing:.5px; }
-.rv-ready { border-color:#c98a6a; background:rgba(154,90,68,0.30); box-shadow:0 0 14px rgba(231,184,130,0.18); color:#f6ece5; }
-.rv-near { border-color:rgba(231,184,130,0.45); color:#e7b882; }
+.rv-ready { border-color:#dcbb91; background:rgba(154,90,68,0.30); box-shadow:0 0 14px rgba(231,184,130,0.18); color:#f6ece5; }
+.rv-near { border-color:rgba(231,184,130,0.45); color:#dcbb91; }
 .rv-far { color:#bcaaa1; }
-.sc-rev .sc-title { color:#e7b882; }
+.sc-rev .sc-title { color:#dcbb91; }
 .sc-legend .u { color:#3dd69c; font-weight:800; } .sc-legend .d { color:#f05454; font-weight:800; }
 .sc-streak.win { color:#3dd69c !important; background:rgba(61,214,156,0.12) !important; border-color:#3dd69c !important; }
 .sc-streak.loss { color:#f05454 !important; background:rgba(240,84,84,0.12) !important; border-color:#f05454 !important; }
@@ -8519,7 +8524,7 @@ function lwRead(a, o) {
     const sub = flat ? 'no push' : soon ? 'may flip' : fading ? 'slowing' : 'building';
     chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w">' + lwArrow(flat ? 0 : (up ? 1 : -1)) + '</b><span>' + sub + '</span></span>';
     if (flat) mc = 'Momentum: no real push either way right now.';
-    else if (soon) mc = 'Momentum is ' + word + ' but fading fast - it may turn ' + (up ? 'DOWN' : 'UP') + ' in about ' + bars + ' ' + unit + (bars > 1 ? 's' : '') + '.';
+    else if (soon) mc = 'Momentum is ' + word + ' but fading fast \u2013 it may turn ' + (up ? 'DOWN' : 'UP') + ' in about ' + bars + ' ' + unit + (bars > 1 ? 's' : '') + '.';
     else if (fading) mc = 'Momentum is ' + word + ' but slowing down.';
     else mc = 'Momentum is ' + word + ' and getting stronger.';
   }
@@ -8536,7 +8541,7 @@ function lwRead(a, o) {
     if (o.lineV && px && q('.lwl-15')) {
       const d = (px - o.lineV) / o.lineV * 100;
       q('.lwl-15').textContent = 'Right now price is ' + Math.abs(d).toFixed(3) + '% ' + (d >= 0 ? 'above' : 'below') + ' the line'
-        + (Math.abs(d) < 0.05 ? ' - that is very close, so small moves matter a lot.' : Math.abs(d) < 0.15 ? ' - close enough that a quick move can still flip it.' : ' - a real cushion, so it would take a bigger move to flip.');
+        + (Math.abs(d) < 0.05 ? ' \u2013 very close, so small moves matter a lot.' : Math.abs(d) < 0.15 ? ' \u2013 close enough that a quick move can still flip it.' : ' \u2013 a real cushion, so it would take a bigger move to flip it.');
     }
   } catch (e) {}
 }
@@ -8562,19 +8567,19 @@ function lwCreate(a) {
     + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
     + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line</div>'
-    // 2026-10-22 (user): tap to learn - EMA, the live RSI + MACD read, and why it matters in a 15-minute round
+    // 2026-10-22 (user): tap to learn &ndash; EMA, the live RSI + MACD read, and why it matters in a 15-minute round
     + '<details class="lw-learn"><summary>What do these mean? <span>EMA &middot; RSI &middot; MACD &middot; 15-minute rounds</span></summary><div class="lw-learn-body">'
-    + '<p><b>EMA lines</b> - the average price over the last 12, 25 and 50 candles, with the newest candles counting the most. '
+    + '<p><b>EMA lines</b> &ndash; the average price over the last 12, 25 and 50 candles, with the newest candles counting the most. '
     + 'Price above the lines with 12 on top, then 25, then 50 means an uptrend. The reverse order means a downtrend. '
     + 'Lines bunched together and crossing each other means there is no clear trend.</p>'
     + '<p><b>RSI <span class="lwl-rsi">--</span></b> <span class="lwl-rsi-t"></span> RSI runs from 0 to 100 and measures how hard price has been pushed lately. '
-    + 'Over 70 is <i>overbought</i> - it ran up fast and often cools off. Under 30 is <i>oversold</i> - it sold off fast and often bounces. Around 50 is neutral.</p>'
+    + 'Over 70 is <i>overbought</i> &ndash; it ran up fast and often cools off. Under 30 is <i>oversold</i> &ndash; it sold off fast and often bounces. Around 50 is neutral.</p>'
     + '<p><b>MACD <span class="lwl-macd">--</span></b> <span class="lwl-macd-t"></span> MACD compares a fast average (12 candles) to a slow one (26). '
     + 'When the fast one pulls above the slow one, momentum is up. When the gap between them shrinks, momentum is fading and a turn may be coming.</p>'
     + '<p><b>Why it matters in a 15-minute round</b> <span class="lwl-15"></span> Each round is decided by one thing: is price above or below the line when the 15 minutes end. '
     + 'When price is sitting close to the line, even a small push decides the round, so short-term reads (1-minute RSI, a MACD turn, buy pressure) matter more than the long-term trend. '
-    + 'Fast charts react fast and can flip back just as fast - that is why BRAIN weighs several reads plus the history of rounds like this one before it calls.</p>'
-    + '<p class="hint">Information only - not financial advice.</p></div></details>'
+    + 'Fast charts react fast and can flip back just as fast &ndash; that is why BRAIN weighs several reads plus the history of rounds like this one before it calls.</p>'
+    + '<p class="hint">Information only &ndash; not financial advice.</p></div></details>'
     + '<div class="lw-pats"></div>';
   const el = box.querySelector('.lw-chart');
   const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: 'Montserrat'},
@@ -9076,7 +9081,7 @@ def build_pattern_window(asset_name):
     only the patterns that are 80%+ formed or finished AND have a proven track record. The chart is drawn in the browser
     and kept between the page's 1-second refreshes, so zoom / scroll survive. Information only."""
     return (f'<div class="lw-win" data-asset="{asset_name}"><div class="pat-win-head"><b>{asset_name} LIVE CHART</b></div>'
-            f'<div class="lw-slot" data-asset="{asset_name}"><span class="hint">loading chart...</span></div></div>')
+            f'<div class="lw-slot" data-asset="{asset_name}"><span class="hint">Loading chart&hellip;</span></div></div>')
 
 
 # ---- reliable patterns for the live chart (2026-10-22, user: "only 80%+ formed or successfully formed; keep the most
@@ -9487,7 +9492,7 @@ def streak_windows_html(records, name):
                     f'<!--OWNER--><td>{no_call or "-"}</td><td>{("<span class=warn>" + str(offline) + "</span>") if offline else "-"}</td><!--/OWNER-->'
                     f'<td>{best_w or "-"}</td><td>{best_l or "-"}</td><!--OWNER--><td>{pnl_html}</td><!--/OWNER--></tr>')
     return (f'<details class="streak-pull" data-pat="STREAK|{name}" open><summary style="display:none;"></summary>'
-            f'<table class="press-table"><tr><th>Window</th><th>Rounds</th><th>W - L</th><th>Win %</th>'
+            f'<table class="press-table"><tr><th>Window</th><th>Rounds</th><th>W&ndash;L</th><th>Win %</th>'
             f'<!--OWNER--><th>No call</th><th>Bot off</th><!--/OWNER--><th>Best run</th><th>Worst run</th>'
             f'<!--OWNER--><th>Real $</th><!--/OWNER--></tr>{"".join(rows)}</table></details>')
 
@@ -9655,7 +9660,7 @@ def _rsi_gauge_svg(rsi1, rsi5):
         a = math.radians(180 - v / 100 * 180)
         return cx + rad * math.cos(a), cy - rad * math.sin(a)
     arcs = []
-    for z0, z1, col in ((0, 30, "#00e5ff"), (30, 70, "#4a3c43"), (70, 100, "#ff4dd2")):
+    for z0, z1, col in ((0, 30, "#00e5ff"), (30, 70, "#4a3c43"), (70, 100, "#ff4f7e")):
         x1, y1 = xy(z0, r); x2, y2 = xy(z1, r)
         arcs.append(f'<path d="M {x1:.1f} {y1:.1f} A {r} {r} 0 0 1 {x2:.1f} {y2:.1f}" stroke="{col}" stroke-width="14" fill="none"/>')
     for t in (30, 50, 70):
@@ -9664,7 +9669,7 @@ def _rsi_gauge_svg(rsi1, rsi5):
     out = "".join(arcs)
     if rsi5 is not None:
         tx, ty = xy(max(0, min(100, rsi5)), r + 13)
-        out += f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="5" fill="#e3b341" stroke="#211b1e" stroke-width="1.5"><title>5-minute RSI {rsi5:.0f}</title></circle>'
+        out += f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="5" fill="#e5b85c" stroke="#211b1e" stroke-width="1.5"><title>5-minute RSI {rsi5:.0f}</title></circle>'
     if rsi1 is not None:
         nx, ny = xy(max(0, min(100, rsi1)), r - 12)
         out += (f'<line x1="{cx}" y1="{cy}" x2="{nx:.1f}" y2="{ny:.1f}" stroke="#fbf4ec" stroke-width="3" stroke-linecap="round"/>'
@@ -9672,7 +9677,7 @@ def _rsi_gauge_svg(rsi1, rsi5):
                 f'<text x="{cx}" y="{cy + 26}" text-anchor="middle" fill="#fbf4ec" font-size="18" font-weight="800">{rsi1:.0f}</text>')
     else:
         out += f'<text x="{cx}" y="{cy + 20}" text-anchor="middle" fill="#bcaaa1" font-size="12">warming up</text>'
-    for t, col in ((30, "#00e5ff"), (70, "#ff4dd2")):
+    for t, col in ((30, "#00e5ff"), (70, "#ff4f7e")):
         lx, ly = xy(t, r - 24)
         out += f'<text x="{lx:.1f}" y="{ly + 4:.1f}" text-anchor="middle" fill="{col}" font-size="11" font-weight="700">{t}</text>'
     return f'<svg viewBox="0 0 180 122" width="150" height="102" style="display:block;">{out}</svg>'
@@ -9872,7 +9877,7 @@ def build_alert_box(name):
             + (f' <span class="fa-where">{where}</span>' if where else "")
             + f'<span class="fa-age hint">{_ago(a["ts"])}</span><div class="fa-detail">{a["detail"]}</div></div>')
     if not items:
-        items.append('<div class="hint fa-empty">Quiet - nothing big in the last hour.</div>')
+        items.append('<div class="hint fa-empty">Quiet &ndash; nothing big in the last hour.</div>')
     h = _flow.HUB.feed_health()
     lt = _ENG.liq_totals(name, 300)
     liq_txt = ""
@@ -9970,8 +9975,8 @@ def build_stage_box(name, d, key):
         body = (f'<div class="sb-dir {"up" if up else "down"}">{"<i class=va-u></i> UP" if up else "<i class=va-d></i> DOWN"}</div>{rev}'
                 f'<div class="sb-tier {_TIER_CLS.get(tier, "")}">{tier}</div>'
                 + _conf_lines(p_side, tier, _kalshi_at_lock(c),
-                              f' &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
-                              f'{"" if c.get("crosses") == 1 else "es"} so far')
+                              (f' &middot; {c.get("crosses")} line cross{"" if c.get("crosses") == 1 else "es"} so far'
+                               if c.get("crosses") is not None else ""))
                 + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line, locked at {c.get("elapsed", 0) // 60}:{c.get("elapsed", 0) % 60:02d}</div>' if diff is not None else "")
                 + hold_html
                 + ('' if c.get("radar_agree") is None else
@@ -10129,7 +10134,7 @@ def _round_svg(rec, w=300, h=96, live=False):
            f'<polygon points="{area}" fill="#3dd69c" fill-opacity="0.22" clip-path="url(#{cid}a)"/>',
            f'<polygon points="{area}" fill="#f05454" fill-opacity="0.22" clip-path="url(#{cid}b)"/>']
     for e, lbl in ((240, "4:00"), (480, "8:00")):
-        out.append(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#7f8fff" stroke-dasharray="2 3" stroke-width="1" opacity="0.7"/>'
+        out.append(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#dcbb91" stroke-dasharray="2 3" stroke-width="1" opacity="0.7"/>'
                    f'<text x="{X(e) + 2:.1f}" y="10" fill="#f6d9e2" font-size="9">{lbl}</text>')
     out.append(f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#fbf4ec" stroke-width="1" opacity="0.55"/>')
     out.append(f'<polyline points="{pts}" fill="none" stroke="#fbf4ec" stroke-width="1.6"/>')
@@ -10144,7 +10149,7 @@ def _round_label(ticker):
         return ticker or "?"
     o = (t - dt.timedelta(minutes=15)).astimezone(ZoneInfo("America/New_York"))
     c = t.astimezone(ZoneInfo("America/New_York"))
-    return f'{o.strftime("%I:%M").lstrip("0")}-{c.strftime("%I:%M %p").lstrip("0")}'
+    return f'{o.strftime("%I:%M").lstrip("0")}&ndash;{c.strftime("%I:%M %p").lstrip("0")}'
 
 
 def _kalshi_spark(pts, w=300, h=54):
@@ -10155,7 +10160,7 @@ def _kalshi_spark(pts, w=300, h=54):
     line = " ".join(f"{X(e):.1f},{Y(v):.1f}" for e, v in pts)
     last = pts[-1][1]
     col = "#3dd69c" if last >= 0.5 else "#f05454"
-    marks = "".join(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#7f8fff" stroke-dasharray="2 3" opacity="0.6"/>'
+    marks = "".join(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#dcbb91" stroke-dasharray="2 3" opacity="0.6"/>'
                     for e in (240, 480))
     return (f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" preserveAspectRatio="none">{marks}'
             f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#bcaaa1" stroke-dasharray="3 3" opacity="0.6"/>'
@@ -10716,7 +10721,7 @@ def build_flip_radar(name, d):
     kal = ""
     if kp is not None:
         k_opp = (1 - kp) if call == "YES" else kp
-        kal = f'<div class="fr-txt hint">market: other side {k_opp * 100:.0f}%</div>'
+        kal = f'<div class="fr-txt hint">Market odds on the other side: {k_opp * 100:.0f}%</div>'
     spike = ""
     if fr.get("raw") is not None and fr["raw"] - pct >= 10:
         spike = f'<div class="fr-txt hint">spiking to {fr["raw"]:.0f}%</div>'
@@ -11073,8 +11078,8 @@ def build_scoreboard(name, d):
           if h.get(f"{k}_reversal") and h.get(f"{k}_correct") is not None and _after_reset(h)]
     if not rv:
         cols.append('<div class="sc-col sc-rev"><div class="sc-title"><i class=ico data-i=reversal></i> REVERSALS &middot; underdog calls</div>'
-                    '<div class="sc-empty">Fresh start Oct 22 - the new flip-history system only calls an underdog when the last '
-                    '30 days back it. None yet.</div></div>')
+                    '<div class="sc-empty">Fresh start Oct 22 &ndash; the new flip-history system only calls an underdog when the past '
+                    '30 days back it up. None yet.</div></div>')
     if rv:
         rw = sum(1 for x in rv if x[0])
         pays = [x[2] for x in rv if x[2]]
@@ -11133,7 +11138,7 @@ def build_rounds_panel(name, d):
                      f'<b class="{"down" if n >= CROSS_SKIP else ("warn" if n == 2 else "")}">{n}</b> cross{"es" if n != 1 else ""} '
                      f'<span class="hint"><i class=va-u></i>{r.get("up", 0)} <i class=va-d></i>{r.get("down", 0)}</span> &middot; {res}<br>{tags}</div>{_round_svg(r)}</div>')
     if len(cells) <= 1:
-        cells.append('<div class="rc hint" style="padding:18px;">finished rounds show here</div>')
+        cells.append('<div class="rc hint" style="padding:18px;">Finished rounds show up here.</div>')
     tot = [r.get("crosses", 0) for r in past]
     avg = f' &middot; average {sum(tot) / len(tot):.1f} crosses per round over the last {len(tot)}' if tot else ""
     # 2026-10-22 (user: "combine the tabs, reduce redundancy, give it a cool name, plain American English"):
@@ -11155,10 +11160,10 @@ def _call_tag(c, actual, key="early"):
     if c.get("call"):
         ok = "" if actual is None else (" <i class=ico data-i=check></i>" if c["call"] == actual else " <i class=ico data-i=x></i>")
         okc = "" if actual is None else (" tag-ok" if c["call"] == actual else " tag-bad")
-        return (f'<span class="call-tag{okc}">{"4m" if key == "early" else "8m"} '
-                f'{"UP" if c["call"] == "YES" else "DN"} {(c.get("tier") or "").lower()}{ok}</span>')
+        return (f'<span class="call-tag{okc}">{"4:00" if key == "early" else "8:00"} call: '
+                f'{"<i class=va-u></i> UP" if c["call"] == "YES" else "<i class=va-d></i> DOWN"} ({(c.get("tier") or "").lower()}){ok}</span>')
     if c.get("skipped"):
-        return f'<span class="call-tag tag-skip">{"4m" if key == "early" else "8m"} skip</span>'
+        return f'<span class="call-tag tag-skip">{"4:00" if key == "early" else "8:00"}: no call</span>'
     return ""
 
 
@@ -11765,7 +11770,7 @@ def render_html():
         if d.get("fair_yes") is not None and d.get("confidence") is not None and d.get("leaning"):
             fair_lean = d["fair_yes"] if d["leaning"] == "YES" else 1 - d["fair_yes"]
             gap = (fair_lean - d["confidence"]) * 100
-            fair_color = "#4ade80" if gap >= 0 else ("#f87171" if gap <= -10 else "#fbbf24")
+            fair_color = "#3dd69c" if gap >= 0 else ("#f05454" if gap <= -10 else "#e5b85c")
             fair_html = (f'<div class="row"><span class="label">Fair value ({d["leaning"]})</span>'
                          f'<span class="value" style="color:{fair_color}">{fair_lean:.1%} '
                          f'({gap:+.0f}c vs market, vol {d.get("fair_sigma_bps_min") or 0:.1f} bps/min, '
@@ -11803,8 +11808,8 @@ def render_html():
         if d.get("experimental"):
             experimental_html = (
                 '<div class="row" style="background:#2d2606;border-radius:6px;padding:8px 12px;'
-                'margin-bottom:8px;border:1px solid #d4b106;">'
-                '<span style="color:#f0d040;font-weight:600;">EXPERIMENTAL - reset 2026-09-10. Ran '
+                'margin-bottom:8px;border:1px solid #e5b85c;">'
+                '<span style="color:#e5b85c;font-weight:600;">EXPERIMENTAL - reset 2026-09-10. Ran '
                 '~52% live at first; the fix was a choppiness/trend veto (only calls when gold is '
                 'moving cleanly). Re-backtested on 703 real settled markets: 86% holdout accuracy '
                 'with the veto, but it only calls ~40-50% of windows. History was wiped to start '
@@ -12004,7 +12009,7 @@ def render_html():
         _left = max(0, int(d["seconds_left"]))
         _frac = min(1.0, _left / 900.0)
         _cl = "clock-hot" if _left <= 30 else ("clock-warn" if _left <= 120 else "")
-        _stroke = "#f05454" if _left <= 30 else ("#d29922" if _left <= 120 else "#e9a5bb")
+        _stroke = "#f05454" if _left <= 30 else ("#e5b85c" if _left <= 120 else "#e9a5bb")
         _clock_to = f' data-to="{d["close_epoch"]:.0f}"' if d.get("close_epoch") else ""
         clock_html = (f'<div class="clock {_cl}" title="{d.get("ticker", "")}">'
                       f'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#4a3c43" stroke-width="3"/>'
