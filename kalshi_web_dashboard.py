@@ -5901,6 +5901,9 @@ h1 { display:none; }
 .mkt-pane { display:none; font-size:12px; margin-top:5px; } .mkt-pane.show { display:block; }
 .mkt-pane b { font-size:13px; }
 .stage-pend { font-family:'Bebas Neue', 'Inter', sans-serif; font-size:22px; letter-spacing:2px; color:#bcaaa1; margin:4px 0; }
+.stage-cd { margin:2px 0 6px; } .stage-cd .hint { font-size:12px; letter-spacing:1px; text-transform:uppercase; }
+.stage-cd-t { font-family:'Bungee', 'Inter', sans-serif; font-size:30px; color:#ffffff; letter-spacing:1px; }
+.stage-cd-t.now { font-size:18px; color:#f2c46b; }
 /* line-cross box (calls row, next to RSI) */
 .calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(180px,1.05fr) minmax(100px,0.5fr) minmax(100px,0.5fr) !important; }
 @media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr !important; } }
@@ -9736,7 +9739,14 @@ def build_stage_box(name, d, key):
                         f'{pt}</b></span></div>')
             else:
                 prev = f'<div class="sb-line">Right now: <span class="flat"><b>it would skip</b></span> ({pw})</div>'
-        body = (f'<div class="stage-pend">PENDING &middot; LOCKS AT {mk}</div>{prev}{_sig_html(d.get("stage_sig"))}')
+        # 2026-10-22 (user): live countdown right in the tile - no separate "time until call" box
+        if wait > 0:
+            _to = int(time.time()) + wait
+            cd = (f'<div class="stage-cd"><span class="hint">locks in</span> '
+                  f'<span class="stage-cd-t" data-to="{_to}">{wait // 60}:{wait % 60:02d}</span></div>')
+        else:
+            cd = '<div class="stage-cd"><span class="stage-cd-t now">LOCKING NOW</span></div>'
+        body = (f'<div class="stage-pend">PENDING</div>{cd}{prev}{_sig_html(d.get("stage_sig"))}')
         tip = "locks automatically at the mark and is graded at settlement"
     rec = stage_record(_history.get(name, []), key)
     rec_html = (f'<div class="sb-rec">{rec["wins"]}/{rec["n"]} right ({rec["wins"] / rec["n"]:.0%})</div>' if rec["n"]
@@ -12048,7 +12058,7 @@ def render_html():
         <div class="card" data-asset="{name}">
           {experimental_html}
           <div class="head-row">
-            <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{boom_html}{win_alert_html}{lock_alert_html}</div>
+            <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{boom_html}{win_alert_html}{lock_alert_html}<div class="round-left">{clock_html}</div></div>
             <div class="live-price-inline">
               <div class="lbl">Live price</div>
               <div class="big {spot_vs_target_css}">{fmt_price(d["spot_price"], decimals)}</div>
@@ -12060,7 +12070,6 @@ def render_html():
               {_kalshi_line(d)}
             </div>
             <div class="head-right">
-              <div class="time-tile">{build_time_until_call(name, d)}<div class="round-left"><span class="hint">round ends in</span> {clock_html}</div></div>
               <div class="mkt-tile"><div class="tuc-lbl">MARKET TREND</div>{build_market_box(name)}</div>
             </div>
           </div>
