@@ -12750,12 +12750,22 @@ def target_history_html(name, d):
     if near:
         ups = sum(1 for r in near if r["up"])
         dn = len(near) - ups
-        side_up = ups >= dn
-        pct = max(ups, dn) / len(near)
-        cls = "flat" if ups == dn else ("up" if side_up else "down")
-        word = "SPLIT" if ups == dn else ("UP" if side_up else "DOWN")
+        if ups != dn:
+            side_up = ups > dn
+            pct = max(ups, dn) / len(near)
+            sub = f"{max(ups, dn)} of {len(near)} recent rounds near this target ended {'UP' if side_up else 'DOWN'}"
+        else:
+            # 2026-10-22 (user): a split goes to whichever side won more of the newest 5
+            last5 = near[:5]
+            u5 = sum(1 for r in last5 if r["up"])
+            side_up = u5 > len(last5) - u5
+            pct = max(u5, len(last5) - u5) / len(last5)
+            sub = (f"{ups}-{dn} split over {len(near)} - tie broken by the newest {len(last5)}: "
+                   f"{max(u5, len(last5) - u5)} of {len(last5)} ended {'UP' if side_up else 'DOWN'}")
+        cls = "up" if side_up else "down"
+        word = "UP" if side_up else "DOWN"
         mini = (f'<div class="mini-call mc-{cls}"><span class="mc-lbl">MINI CALL</span><b class="mc-dir">{word}</b>'
-                f'<span class="mc-pct">{pct * 100:.0f}%</span><span class="mc-sub">{max(ups, dn)} of {len(near)} recent rounds near this target ended {word if word != "SPLIT" else "each way"}</span></div>')
+                f'<span class="mc-pct">{pct * 100:.0f}%</span><span class="mc-sub">{sub}</span></div>')
         # same spot: of those near rounds, the ones where price was on the SAME side of the line at this same minute
         same = []
         if name == "BTC" and _side_now is not None:
@@ -12773,7 +12783,11 @@ def target_history_html(name, d):
         if len(same) >= 5:
             su = sum(1 for r in same if r["up"])
             sd_ = len(same) - su
-            sw = "SPLIT" if su == sd_ else ("UP" if su > sd_ else "DOWN")
+            if su == sd_:                          # split -> the newest 5 decide
+                _u5 = sum(1 for r in same[:5] if r["up"])
+                sw = "UP" if _u5 > 5 - _u5 else "DOWN"
+            else:
+                sw = "UP" if su > sd_ else "DOWN"
             mini += (f'<div class="mc-same">Price is <b>{"ABOVE" if _side_now else "BELOW"}</b> the line {_el_min} min into the round - '
                      f'the last {len(same)} near rounds like that ended <b class="{"flat" if sw == "SPLIT" else sw.lower() if sw == "UP" else "down"}">'
                      f'{sw} {max(su, sd_)}/{len(same)} ({max(su, sd_) / len(same) * 100:.0f}%)</b></div>')
