@@ -472,8 +472,9 @@ def pricing_page(user, plans, until_text=None, active=False):
             + status + f'<div class="grid">{cards}</div>'
             + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Passes are one-time payments and never '
               'renew on their own - we email you 2 days before yours ends. <b>All sales are final, no refunds.</b> Accounts that misuse '
-              'the service or put it at risk can be suspended or ended without a refund (see Terms). BRAIN is educational '
-              'market analysis, not financial advice; calls can be wrong and trading can lose money. '
+              'the service or put it at risk can be suspended or ended without a refund (see Terms). BRAIN is an information and '
+              'data service: it gathers and shows what market data and its models are reading. Nothing here is financial advice, '
+              'a recommendation, or an instruction to trade or use your money; readings can be wrong and trading can lose money. '
               '<a href="/terms" style="color:#e9a5bb">Terms</a> &middot; questions: support@brainswatch.com</p></div>')
     return page("Pricing - BRAIN", body, PRICING_CSS)
 
@@ -564,12 +565,29 @@ def guide_html(user):
 
 
 TERMS = [
-    ("Information and education only", "BRAIN shows market data, charts and model readings for informational and educational "
-     "purposes only. Nothing on this site is financial, investment, legal or tax advice, or a recommendation to buy or sell anything."),
-    ("No guarantees", "Calls, confidence levels, win rates, backtests and every other reading are estimates. Past results don't "
-     "predict future results, data can be late or wrong, and the service can go down without warning."),
-    ("Your decisions, your risk", "Trading and investing can lose money, including everything you put in. You're responsible for "
-     "your own decisions. Talk to a licensed professional before making financial decisions."),
+    ("What BRAIN is: an information and data service", "BRAIN is an automated information service. Its software gathers "
+     "public market data (prices, trades, order books, Kalshi market prices and similar), watches it, and shows what that data "
+     "and BRAIN's own models are reading - charts, statistics, model estimates, labels and alerts. That is all BRAIN does: it "
+     "collects, measures and displays information, for informational and educational purposes."),
+    ("Not financial advice. No recommendations. No instructions.", "Nothing on BRAIN is financial, investment, trading, legal "
+     "or tax advice, and nothing is a recommendation, solicitation, offer or instruction to buy, sell, hold or trade anything, or "
+     "to put money anywhere. No one is advised, recommended or told to follow any call, alert or reading, or to do anything with "
+     "their actual money. BRAIN does not know your finances, goals or risk tolerance and gives no advice suited to you."),
+    ("What the words on screen mean", "Calls (\"early\", \"sealed\", \"late\"), directions (UP / DOWN), confidence tiers "
+     "(SUPER / GOOD / WEAK), percentages, flip warnings, badges such as HOLD or REVERSAL, \"cash out\" and \"take profit\" "
+     "notes, whale and Trader Radar alerts, win rates, backtests and the $100-a-trade examples are labels for what the data and "
+     "models show at that moment. They describe market conditions; they are not instructions and not promises of any result. "
+     "Hypothetical and backtested results are simulated, use past data, and do not reflect real trading."),
+    ("No adviser relationship", "BRAIN, its owner and staff are not registered investment advisers, commodity trading advisors, "
+     "brokers, dealers, financial planners or fiduciaries, and using BRAIN does not create any adviser, client or fiduciary "
+     "relationship. BRAIN is not affiliated with, endorsed by or connected to Kalshi, CF Benchmarks or any exchange shown."),
+    ("Your decisions, your risk", "Prediction markets and trading carry a high risk of loss, including losing everything you "
+     "put in. Every decision to trade, how much, and when, is yours alone, made on your own judgment, and you are fully "
+     "responsible for it and its results. Only trade money you can afford to lose. If you want advice, talk to a licensed "
+     "professional. You must be 18 or older and allowed to use these markets where you live."),
+    ("Accuracy and availability", "Data can be late, missing or wrong; models can be wrong; and the service can slow down, "
+     "freeze or go offline without warning. Past results, streaks and win rates never predict future results. BRAIN and its "
+     "owner are not responsible for any loss or damage from using, or relying on, anything shown here."),
     ("Passes and payments", "The live dashboard needs a pass: 7 days ($64.99), 30 days ($165) or 3.5 months ($379), paid "
      "once through Stripe. Passes never renew on their own - buying another adds its days on top of any time you have left. "
      "ALL SALES ARE FINAL: no refunds, including for unused time."),
