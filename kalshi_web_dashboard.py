@@ -6338,8 +6338,8 @@ try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VO
 function setNeuralVoice(v) {
   neuralVoice = v; neuralBroken = false;
   try { localStorage.setItem('neuralVoice', v); } catch (e) {}
-  if (v === 'tony') { speakRaw("It's Tony. I got the market. You listen when I talk."); speakRaw('Bitcoin sealed call: up, 84 percent. Strong one.'); return; }
-  if (v === 'sarge') { speakRaw('Sarge here. I watch the market, you stay sharp.'); speakRaw('Bitcoin sealed call: up, 84 percent. Strong one.'); return; }
+  if (v === 'tony') { speakRaw("It's Tony. I got the market."); speakRaw('Bitcoin sealed call: up, 84 percent.'); return; }
+  if (v === 'sarge') { speakRaw('Sarge here. Eyes on the market.'); speakRaw('Bitcoin sealed call: up, 84 percent.'); return; }
   speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is ' + NEURAL_VOICES[v] + '. Bitcoin sealed call: up, 84 percent.');
 }
 // browser fallback: the most natural-sounding female voices first (premium / enhanced / natural before the old robotic ones)
@@ -6690,8 +6690,9 @@ function checkBuildingAlerts() {
     if (why === 'crit') flipFired.add(key + '::jump');
     if (!soundEnabled || assetSoundEnabled[name] === false) return;
     const coin = name === 'BTC' ? 'Bitcoin' : name;
-    if (why === 'crit') speakUrgent(coin + ' is flipping.', 0);
-    else speak(coin + ' might flip.', false, 12000);      // budgeted (2026-10-22)
+    // 2026-10-22 (user): never say "flip" unless the market has actually switched sides - this alert is a call update,
+    // and the softer warning stays on screen only
+    if (why === 'crit') speakUrgent(coin + ' call update: under pressure.', 0);
   });
 }
 
@@ -6741,7 +6742,9 @@ function updateFlipWatch() {
         speak(coin + ', ninety seconds, ' + how + '.', false, 15000);
       } else if (state !== w.lastState && w.lastState !== null && now - w.lastSpoke >= WATCH_EVERY_MS) {
         w.lastSpoke = now; w.lastState = state;
-        speak(coin + (withCall === null ? ' now ' + how : (withCall ? ' turned back our way' : ' turned the other way')) + '.', false, 15000);
+        // the market really switched sides -> THIS is the only spoken "flip"
+        if (withCall === false) speakUrgent(coin + ' is flipping.', 0);
+        else speak(coin + (withCall === null ? ' now ' + how : ' is back on our side') + '.', false, 15000);
       } else if (w.lastState === null) {
         w.lastState = state;                       // the flip alert itself already said this
       }
@@ -6827,7 +6830,7 @@ function updateMoneyMoments() {
       moneySaid.add(k2);
       const flipping = (lastCrossAt[roundKey] && now - lastCrossAt[roundKey] < CROSS_RECENT_MS) || flipFired.has(key + '::crit');
       const lean = kup >= 0.5 ? 'up' : 'down';
-      let line = coin + ' is a coin flip, ' + _leftWords(left) + '.';
+      let line = coin + ' is a toss-up, ' + _leftWords(left) + '.';
       if (flipping) line += ' It just crossed the line.';
       if (canTalk && soundEnabled && voiceAlertsEnabled) _voicePush(line, false, 15000, true);
     }
@@ -7336,7 +7339,7 @@ function checkStageAlerts() {
       // e.g. "Bitcoin sealed call: up, 84 percent sure. Kalshi at 72 percent. Super confidence."
       const d2 = dir === 'UP' ? 'up' : 'down';
       // plain + short (2026-10-22): "Bitcoin sealed call: up, 84 percent. Strong one." / "... Underdog pick."
-      const conf = tier === 'SUPER' ? ' Strong one.' : '';
+      const conf = '';
       const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent.' : '.') + conf
         + (rev ? ' Underdog pick.' : '');
       speakUrgent(line, 650);
@@ -7518,7 +7521,8 @@ function checkWhaleAlerts() {
         const amt = wusd >= 1e6 ? (wusd / 1e6).toFixed(1) + ' million dollar ' : (wusd >= 1e3 ? Math.round(wusd / 1e3) + ' thousand dollar ' : '');
         // 2026-10-22: then how much it can matter for this round (size vs volume, distance to the line, Kalshi's odds)
         const wsay = el.getAttribute('data-whale-say') || '';
-        speakDelayed('Whale ' + wside + ' on ' + wcoin + (amt ? ', ' + amt.replace(' dollar ', '').trim() : '') + '.', 1300);     // plain + short (2026-10-22)
+        if (wusd >= (HUGE_PRINT_USD[name] || 1e9))       // 2026-10-22 (user): talks less - only the really big whales are spoken
+          setTimeout(() => speak('Whale ' + wside + ' on ' + wcoin + (amt ? ', ' + amt.replace(' dollar ', '').trim() : '') + '.', false, 12000), 1300);
       }
     }
   });
@@ -8093,13 +8097,13 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
           <option value="tony">Tony (tough New York guy)</option><option value="sarge">Sarge (drill sergeant)</option><option value="device">This device's voice</option>
         </select></label>
       <br>
-      <button onclick="speakRaw('Bitcoin might flip.')">Test flip warning</button>
+      <button onclick="speakRaw('Bitcoin call update: under pressure.')">Test call update</button>
       <button onclick="speakRaw('XRP is flipping.')">Test flip alert</button>
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent.'),650)">Test early call</button>
-      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent. Strong one.'),650)">Test sealed call</button>
+      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent.'),650)">Test sealed call</button>
       <button onclick="speakRaw('Bitcoin, ninety seconds, looking good.')">Test 90-second check-in</button>
       <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
-      <button onclick="speakRaw('XRP is a coin flip, 2 minutes left. It just crossed the line.')">Test late coin flip</button>
+      <button onclick="speakRaw('XRP is a toss-up, 2 minutes left. It just crossed the line.')">Test late toss-up</button>
       <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Whale buy on Bitcoin, 2.4 million.'),1300)">Test whale BUY (cha-ching)</button>
       <button onclick="playDenied(); setTimeout(()=>speakRaw('Whale sell on XRP, 850 thousand.'),1300)">Test whale SELL (double beep)</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
@@ -11758,11 +11762,11 @@ _NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b
              (r"\byour\b", "ya"), (r"\byou\b", "ya"), (r"\bsure\b", "shuah"), (r"\bhere\b", "heah"), (r"\bover\b", "ovah"),
              (r"\bthere\b", "theah"), (r"\bListen\b", "Lissen"), (r"\btalk\b", "tawk"), (r"\bthem\b", "'em"))
 _NY_START = ((r"^Heads up: ", "Ay, heads up! "), (r"^(Bitcoin|XRP) is flipping", r"Ay, \1 is flippin'"),
-             (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"Awright. \1 \2 call: "),
+             
              (r"^(Bitcoin|XRP) flip update: ", r"\1, check it out: "))
 _NY_END = ("I'm tellin' ya.", "Trust me.", "Fuhgeddaboudit.")
 _NY_CAUTION = ("Keep ya eyes open, awright?", "Don't sweat it, I got ya.", "Watch it, I'm lookin' out for ya.", "Easy now, stay with me.")
-_SARGE_START = ((r"^Heads up: a", "Attention! A"), (r"^(Bitcoin|XRP) is flipping", r"Incoming! \1 is flipping"),
+_SARGE_START = ((r"^Heads up: a", "Attention! A"), 
                 (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"\1! \2 call! Going "))
 _SARGE_END = ("Outstanding!", "Hooah!", "Good work!")
 _SARGE_CAUTION = ("Stay sharp, I got your six!", "Eyes up! Stay frosty!", "Hold the line! I believe in you!", "Steady! We do this together!")
@@ -11819,8 +11823,7 @@ def _persona(text, key, respell=True):
         end = ends[pick % len(ends)]
     # 2026-10-22 (user: "the military voice guy is overtalking with too many corny tag lines"): sign-offs only on a call
     # locking, and only about one call in three. Warnings, updates and alerts stay short and plain.
-    if not re.search(r"(?i)\b(early|sealed|late) call\b", text) or pick % 3:
-        end = ""
+    end = ""      # 2026-10-22 (user): no sign-offs ("Hooah", "I'm tellin' ya") at all
     out = (t + " " + end).strip()
     return out if len(out) <= 220 else t[:220]
 
