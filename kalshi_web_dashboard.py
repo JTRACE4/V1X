@@ -6368,6 +6368,20 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
 .va-u, .va-d { display:inline-block; width:.78em; height:.72em; background:currentColor; vertical-align:-.02em; margin-right:.12em; font-style:normal; }
 .va-u { clip-path:polygon(50% 0, 100% 100%, 0 100%); } .va-d { clip-path:polygon(0 0, 100% 0, 50% 100%); }
 .sb-dir .va-u, .sb-dir .va-d { width:.7em; height:.62em; vertical-align:.04em; }
+/* 2026-10-22 (user): scoreboard, live chart and BEEN HERE BEFORE get the same open look as the whale alerts -
+   no boxed panel, no trapezoid tab, the title in the BRAIN pink gradient */
+.card .scoreboard, body[data-view] .card .scoreboard, .card .rounds-panel, body[data-view] .card .rounds-panel, .card .lw-win, body[data-view] .card .lw-win, .card .tgt-hist, body[data-view] .card .tgt-hist { border:0 !important; background:none !important; box-shadow:none !important; border-radius:0 !important;
+  padding:2px 2px 4px !important; margin:14px 0 10px !important; }
+.card .scoreboard::before, .card .rounds-panel::before, .card .lw-win::before, .card .tgt-hist::before { display:none !important; }
+.card .scoreboard > .rs-title, body .card .scoreboard > .rs-title, body[data-view] .card .scoreboard > .rs-title, .card .rounds-panel > .top-w-title, body .card .rounds-panel > .top-w-title, body[data-view] .card .rounds-panel > .top-w-title, .card .lw-win > .pat-win-head > b, body .card .lw-win > .pat-win-head > b, body[data-view] .card .lw-win > .pat-win-head > b, .card .tgt-hist > .th-h, body .card .tgt-hist > .th-h, body[data-view] .card .tgt-hist > .th-h {
+  position:static !important; display:inline-block !important; clip-path:none !important; filter:none !important; padding:0 0 6px !important; margin:0 !important;
+  background:linear-gradient(90deg, #e9a5bb 0%, #f3c6b4 50%, #dcbb91 100%) !important; -webkit-background-clip:text !important; background-clip:text !important;
+  color:transparent !important; font-family:var(--br-label) !important; font-weight:900 !important; font-size:15px !important; letter-spacing:2px !important;
+  white-space:normal !important; max-width:100%; }
+.card .scoreboard > .rs-title b, .card .scoreboard > .rs-title .hint, .card .rounds-panel > .top-w-title b, .card .rounds-panel > .top-w-title .hint, .card .lw-win > .pat-win-head > b b, .card .lw-win > .pat-win-head > b .hint, .card .tgt-hist > .th-h b, .card .tgt-hist > .th-h .hint { color:transparent !important; -webkit-text-fill-color:transparent; }
+.card .scoreboard > .rs-title .hint { font-weight:700 !important; }
+body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-title b { color:transparent !important; -webkit-text-fill-color:transparent !important;
+  font-family:inherit !important; font-weight:inherit !important; background:none !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
