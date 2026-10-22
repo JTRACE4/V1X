@@ -6314,6 +6314,9 @@ body .rounds-panel > .top-w-title, body[data-view] .rounds-panel > .top-w-title 
   font-family:var(--br-serif) !important; font-weight:800 !important; letter-spacing:0 !important;
   font-variation-settings:"opsz" 72, "SOFT" 50 !important; font-variant-numeric:lining-nums tabular-nums; }
 .sb-dir { font-size:28px !important; }
+.bhb-sub { font-family:var(--br-label); font-weight:800; font-size:11.5px; letter-spacing:1.4px; text-transform:uppercase; color:var(--br-tan); margin:10px 0 6px; }
+.bhb-sub .hint { font-family:var(--br-sans); font-weight:400; letter-spacing:0; text-transform:none; }
+.rounds-panel .mini-call { margin-top:0; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -11025,9 +11028,16 @@ def build_rounds_panel(name, d):
         cells.append('<div class="rc hint" style="padding:18px;">finished rounds show here</div>')
     tot = [r.get("crosses", 0) for r in past]
     avg = f' &middot; average {sum(tot) / len(tot):.1f} crosses per round over the last {len(tot)}' if tot else ""
-    return (f'<div class="rounds-panel"><div class="top-w-title">PRICE vs THE LINE &middot; LAST 6 ROUNDS '
-            f'<span class="hint">white line = the line &middot; dots = line crosses{avg}</span></div>'
-            + _TGT_MINI.get(name, "") +
+    # 2026-10-22 (user: "combine the tabs, reduce redundancy, give it a cool name, plain American English"):
+    # one panel - what happened the last times we were here + how price moved around the line in the last 6 rounds
+    _TGT_BODY.pop(name, None)
+    try:
+        target_history_html(name, d)
+    except Exception as _e:
+        print(f"[been here before] {_e!r}")
+    return (f'<div class="rounds-panel"><div class="top-w-title">BEEN HERE BEFORE</div>'
+            + _TGT_BODY.get(name, "") +
+            f'<div class="bhb-sub">Last 6 rounds vs the line <span class="hint">(white line = the line &middot; dots = times price crossed it{avg})</span></div>'
             f'<div class="rc-grid">{"".join(cells)}</div></div>')
 
 
@@ -12299,7 +12309,6 @@ def render_html():
           {near_footer_html}
           </details><!--/OWNER-->
           <!--OWNER-->{live_pull_html}<!--/OWNER-->
-          {target_history_html(name, d)}
           {('<!--OWNER-->' + radar_html(name, d.get("ticker", "")) + radar_admin_html() + '<!--/OWNER-->') if name == "BTC" else ""}
         </div>''')
 
@@ -12654,6 +12663,7 @@ MINI_CALL_N = 10               # 2026-10-22 (user): mini call from the last 10 r
 TARGET_RECENT_PCT = 0.01       # 2026-10-22 (user): exact target first, then the closest within 1%, from the last 30 days
 TARGET_LOOKBACK_S = 30 * 86400
 _tgt_cache = {}
+_TGT_BODY = {}            # inner html of the target history (shown inside BEEN HERE BEFORE)
 _TGT_MINI = {}            # latest mini call html per coin (also shown in the price-vs-line panel)
 
 
@@ -12714,6 +12724,8 @@ def target_history_html(name, d):
     ck = (name, round(line, 6), _side_now, _el_min)
     hit = _tgt_cache.get(ck)
     if hit and time.time() - hit[0] < 30:
+        if len(hit) > 2:
+            _TGT_BODY[name] = hit[2]
         return hit[1]
     dec = d.get("price_decimals", 2)
     cur = d.get("ticker", "")
@@ -12825,10 +12837,13 @@ def target_history_html(name, d):
     if not rows and not touch:
         html = (f'<div class="tgt-hist"><div class="th-h">Past rounds near {fmt_price(line, dec)}</div>'
                 f'<div class="hint">No past rounds near this target yet.</div></div>')
+        _TGT_BODY[name] = '<div class="hint">No past rounds near this target yet.</div>'
     else:
         html = (f'<div class="tgt-hist"><div class="th-h">Last {len(recent)} rounds near {fmt_price(line, dec)} '
                 f'<span class="hint">30 days</span></div>{mini}{rows}{touch}</div>')
-    _tgt_cache[ck] = (time.time(), html)
+        _TGT_BODY[name] = (f'{mini}<div class="bhb-sub">Last {len(recent)} rounds near {fmt_price(line, dec)} '
+                           f'<span class="hint">(last 30 days &middot; hover a chip for details)</span></div>{rows}{touch}')
+    _tgt_cache[ck] = (time.time(), html, _TGT_BODY.get(name, ""))
     if len(_tgt_cache) > 50:
         _tgt_cache.clear()
     return html
