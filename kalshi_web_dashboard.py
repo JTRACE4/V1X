@@ -11782,8 +11782,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif parsed.path == "/data":
-            _full, _pub, _wr = _cached_page()
-            _html = _full if (user and user.get("role") == "owner") else _pub
+            _pg_full, _pg_public, _wr = _cached_page()
+            _html = _pg_full if (user and user.get("role") == "owner") else _pg_public
             body = json.dumps({"html": _html, "build": BUILD_ID, "wr": _wr, "now": time.time(),
                                "vol_warn": bool(ON_RAILWAY and not HISTORY_ON_VOLUME)}).encode()
             _send_body(self, body, "application/json")
