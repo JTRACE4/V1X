@@ -6246,6 +6246,20 @@ body .top-alerts > .top-w-title, body[data-view] .top-alerts > .top-w-title, bod
 .asset-label .coin-txt { color:#ffffff !important; }
 .asset-label .brain-mark { width:34px; height:34px; filter:drop-shadow(0 2px 8px rgba(233,165,187,.40)); }
 .asset-label .coin-badge { margin-right:2px !important; }
+/* 2026-10-22 (user): mini call from the last 10 rounds near the target */
+.mini-call { display:flex; align-items:center; flex-wrap:wrap; gap:4px 10px; padding:8px 12px; margin:2px 0 8px; border-radius:12px;
+  background:rgba(20,15,18,0.55); border:1px solid rgba(255,255,255,0.10); }
+.mini-call .mc-lbl { font-family:var(--br-label); font-size:15px; letter-spacing:2px; color:var(--br-tan); }
+.mini-call .mc-dir { font-size:24px; font-weight:900; } .mini-call .mc-pct { font-size:20px; font-weight:900; color:#ffffff; }
+.mini-call .mc-sub { flex:1 1 100%; font-size:12px; color:var(--br-mute); }
+.mini-call.mc-up { border-color:rgba(61,214,156,0.55); } .mini-call.mc-up .mc-dir { color:#3dd69c; }
+.mini-call.mc-down { border-color:rgba(240,84,84,0.55); } .mini-call.mc-down .mc-dir { color:#f05454; }
+.mini-call.mc-flat .mc-dir { color:#bcaaa1; }
+.mc-same { font-size:13px; margin:-2px 0 8px; } .mc-same b.up { color:#3dd69c; } .mc-same b.down { color:#f05454; } .mc-same b.flat { color:#bcaaa1; }
+.th-chips { display:flex; flex-wrap:wrap; gap:5px; margin:2px 0 8px; }
+.th-chip { font-size:11.5px; font-weight:800; padding:3px 8px; border-radius:999px; border:1px solid; white-space:nowrap; cursor:default; }
+.th-chip.up { color:#3dd69c; border-color:rgba(61,214,156,0.5); background:rgba(61,214,156,0.08); }
+.th-chip.down { color:#f05454; border-color:rgba(240,84,84,0.5); background:rgba(240,84,84,0.08); }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -11009,6 +11023,7 @@ def build_rounds_panel(name, d):
     avg = f' &middot; average {sum(tot) / len(tot):.1f} crosses per round over the last {len(tot)}' if tot else ""
     return (f'<div class="rounds-panel"><div class="top-w-title">PRICE vs THE LINE &middot; LAST 6 ROUNDS '
             f'<span class="hint">white line = the line &middot; dots = line crosses{avg}</span></div>'
+            + _TGT_MINI.get(name, "") +
             f'<div class="rc-grid">{"".join(cells)}</div></div>')
 
 
@@ -12631,9 +12646,11 @@ def radar_html(name, ticker):
 TARGET_MATCH_PCT = 0.05       # "the same price target" = exact, or within 5%
 
 
+MINI_CALL_N = 10               # 2026-10-22 (user): mini call from the last 10 rounds near the target
 TARGET_RECENT_PCT = 0.01       # 2026-10-22 (user): exact target first, then the closest within 1%, from the last 30 days
 TARGET_LOOKBACK_S = 30 * 86400
 _tgt_cache = {}
+_TGT_MINI = {}            # latest mini call html per coin (also shown in the price-vs-line panel)
 
 
 def _target_touches(name, line):
@@ -12687,7 +12704,10 @@ def target_history_html(name, d):
     line = d.get("target_price")
     if not line:
         return ""
-    ck = (name, round(line, 6))
+    _sp = d.get("spot_price")
+    _side_now = None if _sp is None else (_sp >= line)
+    _el_min = int((d.get("elapsed_seconds") or 0) // 60)
+    ck = (name, round(line, 6), _side_now, _el_min)
     hit = _tgt_cache.get(ck)
     if hit and time.time() - hit[0] < 30:
         return hit[1]
@@ -12705,7 +12725,7 @@ def target_history_html(name, d):
         try:
             for m in _bt.settled_markets():
                 if m.get("strike") and m["ticker"] not in rounds and m["ticker"] != cur:
-                    rounds[m["ticker"]] = {"strike": m["strike"], "up": m["result"] == "yes", "ts": m["close"], "h": None}
+                    rounds[m["ticker"]] = {"strike": m["strike"], "up": m["result"] == "yes", "ts": m["close"], "open": m.get("open"), "h": None}
         except Exception:
             pass
     rs = list(rounds.values())
@@ -12714,23 +12734,60 @@ def target_history_html(name, d):
     # 2026-10-22 (b, user): the EXACT target if it happened in the last 30 days, otherwise the closest within 1% (the most
     # recent breaks a tie), otherwise simply the nearest target on record
     rs = [r for r in rs if now - r["ts"] <= TARGET_LOOKBACK_S]
-    tick = 10 ** -dec
-    recent = sorted((r for r in rs if r["diff"] <= TARGET_RECENT_PCT),
-                    key=lambda r: (abs(r["strike"] - line) >= tick, round(abs(r["strike"] - line), dec), -r["ts"]))[:3]
-    if len(recent) < 3:
-        used = {id(r) for r in recent}
-        recent += sorted((r for r in rs if id(r) not in used), key=lambda r: (r["diff"], -r["ts"]))[:3 - len(recent)]
-    rows = ""
-    for r in recent:
+    # 2026-10-22 (c, user): the 10 MOST RECENT rounds (last 30 days) whose target was within 1% -> a "mini call" from
+    # the majority. If fewer than 10 are that close, the next-closest targets fill in.
+    near = sorted((r for r in rs if r["diff"] <= TARGET_RECENT_PCT), key=lambda r: -r["ts"])[:MINI_CALL_N]
+    if len(near) < MINI_CALL_N:
+        used = {id(r) for r in near}
+        near += sorted((r for r in rs if id(r) not in used), key=lambda r: (r["diff"], -r["ts"]))[:MINI_CALL_N - len(near)]
+        near.sort(key=lambda r: -r["ts"])
+    recent = near
+    mini = ""
+    if near:
+        ups = sum(1 for r in near if r["up"])
+        dn = len(near) - ups
+        side_up = ups >= dn
+        pct = max(ups, dn) / len(near)
+        cls = "flat" if ups == dn else ("up" if side_up else "down")
+        word = "SPLIT" if ups == dn else ("UP" if side_up else "DOWN")
+        mini = (f'<div class="mini-call mc-{cls}"><span class="mc-lbl">MINI CALL</span><b class="mc-dir">{word}</b>'
+                f'<span class="mc-pct">{pct * 100:.0f}%</span><span class="mc-sub">{max(ups, dn)} of {len(near)} recent rounds near this target ended {word if word != "SPLIT" else "each way"}</span></div>')
+        # same spot: of those near rounds, the ones where price was on the SAME side of the line at this same minute
+        same = []
+        if name == "BTC" and _side_now is not None:
+            try:
+                m1 = _bt.minute_candles()
+                if m1:
+                    for r in sorted((r for r in rs if r["diff"] <= TARGET_RECENT_PCT and r.get("open")), key=lambda r: -r["ts"]):
+                        c = m1.get(int(r["open"]) // 60 * 60 + _el_min * 60)
+                        if c and (c[3] >= r["strike"]) == _side_now:
+                            same.append(r)
+                            if len(same) >= MINI_CALL_N:
+                                break
+            except Exception as _se:
+                print(f"[target history] same-spot: {_se!r}")
+        if len(same) >= 5:
+            su = sum(1 for r in same if r["up"])
+            sd_ = len(same) - su
+            sw = "SPLIT" if su == sd_ else ("UP" if su > sd_ else "DOWN")
+            mini += (f'<div class="mc-same">Price is <b>{"ABOVE" if _side_now else "BELOW"}</b> the line {_el_min} min into the round - '
+                     f'the last {len(same)} near rounds like that ended <b class="{"flat" if sw == "SPLIT" else sw.lower() if sw == "UP" else "down"}">'
+                     f'{sw} {max(su, sd_)}/{len(same)} ({max(su, sd_) / len(same) * 100:.0f}%)</b></div>')
+    _TGT_MINI[name] = mini
+    rows = '<div class="th-chips">'
+    for r in near:
         h = r["h"] or {}
         sc, ok = h.get("sealed_call"), h.get("sealed_correct")
-        call_txt = (f' &middot; BRAIN {"UP" if sc == "YES" else "DOWN"} <b class="{"th-ok" if ok else "th-bad"}">{"<i class=ico data-i=check></i>" if ok else "<i class=ico data-i=x></i>"}</b>'
-                    if sc else "")
-        off = abs(r["strike"] - line)
         when = dt.datetime.fromtimestamp(r["ts"], et)
-        rows += (f'<div class="th-row"><span class="hint">{when:%b %d %-I:%M %p}</span> target {fmt_price(r["strike"], dec)} '
-                 f'<span class="hint">({"exact match" if off < 10 ** -dec else f"{fmt_price(off, dec)} / {r["diff"] * 100:.2f}% off"})</span> &rarr; '
-                 f'<b class="{"up" if r["up"] else "down"}">ended {"UP" if r["up"] else "DOWN"}</b>{call_txt}</div>')
+        off = abs(r["strike"] - line)
+        tip = (f'{when:%b %d %-I:%M %p} - target {fmt_price(r["strike"], dec)} '
+               f'({"exact match" if off < 10 ** -dec else f"{r["diff"] * 100:.2f}% off"}) - ended {"UP" if r["up"] else "DOWN"}'
+               + (f' - BRAIN called {"UP" if sc == "YES" else "DOWN"} ({"right" if ok else "wrong"})' if sc else ""))
+        rows += (f'<span class="th-chip {"up" if r["up"] else "down"}" title="{_html_attr(tip)}">'
+                 f'{"&#9650;" if r["up"] else "&#9660;"} {when:%b %-d %-I:%M%p}'.replace("AM", "a").replace("PM", "p") + '</span>')
+    rows += '</div>' if near else ""
+    if not near:
+        rows = ""
     touch = ""
     try:
         for ts, tf, exact, px, mv in _target_touches(name, line):
@@ -12751,9 +12808,8 @@ def target_history_html(name, d):
         html = (f'<div class="tgt-hist"><div class="th-h">Past rounds near {fmt_price(line, dec)}</div>'
                 f'<div class="hint">No past rounds near this target yet.</div></div>')
     else:
-        ups = sum(1 for r in recent if r["up"])
-        html = (f'<div class="tgt-hist"><div class="th-h">Past rounds near {fmt_price(line, dec)} '
-                f'<span class="hint">({ups} up, {len(recent) - ups} down)</span></div>{rows}{touch}</div>')
+        html = (f'<div class="tgt-hist"><div class="th-h">Last {len(recent)} rounds near {fmt_price(line, dec)} '
+                f'<span class="hint">30 days</span></div>{mini}{rows}{touch}</div>')
     _tgt_cache[ck] = (time.time(), html)
     if len(_tgt_cache) > 50:
         _tgt_cache.clear()
