@@ -5904,6 +5904,7 @@ body { background:#15110f !important; }
   font:800 14px 'Nunito', 'Inter', sans-serif; cursor:pointer; white-space:nowrap; min-height:40px; -webkit-tap-highlight-color:transparent; }
 .snd-toggle.on { border-color:#3dd69c; background:rgba(61,214,156,0.16); color:#c9f7e6; }
 .snd-toggle + .wr-badge { margin-left:8px; }
+.sb-conf b, .sb-klock b { font-size:1.08em; }
 .bt100 { margin:6px 0 10px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid #4a3c43; }
 .bt100-h { font-size:13px; margin-bottom:6px; color:#eee2d7; }
 .bt100-t { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
@@ -7045,14 +7046,16 @@ function checkStageAlerts() {
     }
     const dir = call === 'YES' ? 'UP' : 'DOWN';
     const rev = el.getAttribute('data-rev') === '1', sure = el.getAttribute('data-sure');
-    showLockToast(name, what + ': ' + dir + ' - ' + tier + (rev ? ' - REVERSAL' : ''), '');
+    const kpAt = el.getAttribute('data-kp') || '';
+    showLockToast(name, what + ': ' + dir + ' - BRAIN ' + (sure ? sure + '% ' : '') + tier + (kpAt ? ' - Kalshi ' + kpAt + '%' : '') + (rev ? ' - REVERSAL' : ''), '');
     if (soundEnabled && assetSoundEnabled[name] !== false) {
       // 2026-10-20: both calls are read out loud, in full
       playCallChime(stage);
-      // e.g. "Bitcoin sealed call: up, 84 percent sure. Super confidence."
+      // e.g. "Bitcoin sealed call: up, 84 percent sure. Kalshi at 72 percent. Super confidence."
       const d2 = dir === 'UP' ? 'up' : 'down';
       const conf = { SUPER: ' Super confidence.', GOOD: ' Good confidence.', WEAK: ' Weak confidence.' }[tier] || '';
-      const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent sure.' : '.') + conf
+      const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent sure.' : '.')
+        + (kpAt ? ' Kalshi at ' + kpAt + ' percent.' : '') + conf
         + (rev ? ' This one is a reversal.' : '');
       speakUrgent(line, 650);
     }
@@ -8958,6 +8961,24 @@ def _never_break(fn):
 _TIER_CLS = {"SUPER": "tier-super", "GOOD": "tier-good", "WEAK": "tier-weak"}
 
 
+def _kalshi_at_lock(c):
+    """Kalshi's price for the CALLED side at the moment the call locked (0-1), or None."""
+    if not c or not c.get("call"):
+        return None
+    if c.get("kp") is not None:
+        return c["kp"]
+    ky = c.get("kalshi_yes")
+    return (ky if c["call"] == "YES" else 1 - ky) if ky is not None else None
+
+
+def _conf_lines(p_side, tier, kp, extra=""):
+    """2026-10-22: BRAIN's own confidence + tier, and the Kalshi % the call locked at, on their own lines."""
+    k = (f'<div class="sb-line sb-klock">Kalshi at lock: <b>{kp:.0%}</b>{extra}</div>' if kp is not None
+         else (f'<div class="sb-line sb-klock">{extra.lstrip(" &middot;")}</div>' if extra else ""))
+    return (f'<div class="sb-line sb-conf">BRAIN confidence: <b>{p_side:.0%}</b> &middot; '
+            f'<span class="{_TIER_CLS.get(tier, "")}">{tier}</span></div>{k}')
+
+
 @_never_break
 def build_stage_box(name, d, key):
     """The big EARLY (4:00) or SEALED (8:00) call box: direction, confidence tier (SUPER / GOOD / WEAK) or SKIPPED + why."""
@@ -8991,8 +9012,9 @@ def build_stage_box(name, d, key):
                if c.get("reversal") else "")
         body = (f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>{rev}'
                 f'<div class="sb-tier {_TIER_CLS.get(tier, "")}">{tier}</div>'
-                f'<div class="sb-line">{p_side:.0%} sure &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
-                f'{"" if c.get("crosses") == 1 else "es"} so far</div>'
+                + _conf_lines(p_side, tier, _kalshi_at_lock(c),
+                              f' &middot; {c.get("crosses") if c.get("crosses") is not None else "?"} line cross'
+                              f'{"" if c.get("crosses") == 1 else "es"} so far')
                 + (f'<div class="sb-line">{"+" if diff >= 0 else "-"}{fmt_price(abs(diff), dec)} vs. the line, locked at {c.get("elapsed", 0) // 60}:{c.get("elapsed", 0) % 60:02d}</div>' if diff is not None else "")
                 + hold_html + _sig_html(c.get("signals"))
                 + (f'<!--OWNER--><div class="sb-note">{c["why"]}</div><!--/OWNER-->' if c.get("why") else ""))
@@ -9013,7 +9035,8 @@ def build_stage_box(name, d, key):
         body = (f'<div class="sb-late">&#9201; LATE CALL &middot; PRICE HAS DECIDED</div>'
                 f'<div class="sb-dir {"up" if up else "down"}">{"&#9650; UP" if up else "&#9660; DOWN"}</div>'
                 f'<div class="sb-tier {_TIER_CLS.get(lt.get("tier") or "GOOD", "")}">{lt.get("tier") or "GOOD"}</div>'
-                f'<div class="sb-line">{p_side:.0%} sure &middot; called at {el_ // 60}:{el_ % 60:02d}</div>{hold_html}'
+                + _conf_lines(p_side, lt.get("tier") or "GOOD", _kalshi_at_lock(lt), f' &middot; called at {el_ // 60}:{el_ % 60:02d}')
+                + hold_html +
                 f'<div class="sb-line hint">Sat out at 8:00 - {_html_attr(c.get("why") or "")}</div>')
         tip = "the sealed call sat this round out, then price clearly decided"
     elif c.get("skipped"):
@@ -9069,12 +9092,14 @@ def build_stage_box(name, d, key):
         alert = (f'<span class="stage-alert" data-name="{name}" data-stage="{key}" data-call="{c.get("call") or ""}" '
                  f'data-tier="{c.get("tier") or ""}" data-why="{_html_attr(c.get("why") or "") if not c.get("call") else ""}" data-rev="{1 if c.get("reversal") else 0}" data-lean="{c.get("lean") or ""}" data-sitout="{1 if c.get("sitout") else 0}" '
                  f'data-sure="{round(max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)) * 100)}" '
+                 f'data-kp="{round(_kalshi_at_lock(c) * 100) if _kalshi_at_lock(c) is not None else ""}" '
                  f'data-key="{name}::{d.get("ticker", "")}::{key}" style="display:none;"></span>')
     lt_ = (d.get("stage_calls") or {}).get("late") or {}
     if key == "sealed" and lt_.get("call") and (d.get("stage_just") == "late" or time.time() - (lt_.get("ts") or 0) < 25):
         alert += (f'<span class="stage-alert" data-name="{name}" data-stage="late" data-call="{lt_["call"]}" data-tier="{lt_.get("tier") or ""}" '
                   f'data-why="" data-rev="0" data-lean="" data-sitout="0" '
                   f'data-sure="{round(max(lt_.get("p_yes") or 0.5, 1 - (lt_.get("p_yes") or 0.5)) * 100)}" '
+                  f'data-kp="{round(_kalshi_at_lock(lt_) * 100) if _kalshi_at_lock(lt_) is not None else ""}" '
                   f'data-key="{name}::{d.get("ticker", "")}::late" style="display:none;"></span>')
     return (f'<div class="{cls}" title="{_html_attr(tip)}"><div class="sb-title">{title}</div>{body}{rec_html}{alert}</div>')
 
