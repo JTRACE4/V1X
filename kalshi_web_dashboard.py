@@ -6084,6 +6084,18 @@ body.has-flip-watch { padding-top:0; }
 .sc-legend { font-size:10px; margin-top:4px; }
 /* 2026-10-22: live chart (same as the free page) */
 .lw-win { display:block; width:100%; margin:14px 0 6px; }
+/* 2026-10-22 (user): RSI + line crosses in one square; streak tile in the top row beside "time until call" */
+.calls-row { grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(180px,1.05fr) minmax(150px,0.8fr) !important; }
+@media (max-width:760px) { .calls-row { grid-template-columns:1fr 1fr !important; } }
+body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)) !important; }
+.rsi-lx { display:flex !important; flex-direction:column; justify-content:center; gap:8px; padding:10px 8px !important; }
+.rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
+  min-height:0 !important; text-align:center; }
+.rsi-lx > .lx-box, .rsi-lx > .rs-tile.lx-box.lx-clean, .rsi-lx > .rs-tile.lx-box.lx-some, .rsi-lx > .rs-tile.lx-box.lx-chop {
+  border:0 !important; border-top:1px solid rgba(255,255,255,0.10) !important; border-radius:0 !important; padding-top:8px !important; }
+.head-row > .sk-box { flex:0 1 210px !important; min-width:170px; margin:0 0 0 10px !important; padding:8px 12px !important; align-self:stretch;
+  display:flex; flex-direction:column; justify-content:center; }
+@media (max-width:760px) { .head-row > .sk-box { margin:0 !important; flex:1 1 100% !important; } }
 .lw-win .pat-win-head { margin-bottom:4px; }
 .lw-slot { display:block; width:100%; }
 .lw-box { margin-top:6px; width:100%; }
@@ -10380,9 +10392,10 @@ def build_time_until_call(name, d):
     else:
         _to = f' data-to="{d["close_epoch"]:.0f}"' if d.get("close_epoch") else ""
         t = f"<span{_to}>{left // 60}:{left % 60:02d}</span>"
-        what = f'both calls are in &middot; next round in <span{_to} data-to-fmt="words">{_mmss_words(left)}</span>'
+        what = 'both calls are in'
         cls = "tuc-done"
-    return (f'<div class="callbox tuc {cls}"><div class="tuc-lbl">TIME UNTIL CALL</div><div class="tuc-time">{t}</div>'
+    # 2026-10-22 (user): after the sealed call the box counts down to the next round
+    return (f'<div class="callbox tuc {cls}"><div class="tuc-lbl">{"TIME UNTIL NEXT ROUND" if cls == "tuc-done" else "TIME UNTIL CALL"}</div><div class="tuc-time">{t}</div>'
             f'<div class="tuc-what">{what}</div></div>')
 
 
@@ -10437,8 +10450,9 @@ def build_cross_box(name, d):
 
 @_never_break
 def build_round_strip(name, d):
+    # 2026-10-22 (user): RSI + line crosses share one square; the streak tile moved up next to "time until call"
     return (f'<div class="round-strip calls-row">{build_stage_box(name, d, "early")}{build_stage_box(name, d, "sealed")}'
-            f'{build_flip_radar(name, d)}{build_rsi_box(name, d)}{build_cross_box(name, d)}{build_streak_box(name, d)}</div>')
+            f'{build_flip_radar(name, d)}<div class="rs-tile rsi-lx">{build_rsi_box(name, d)}{build_cross_box(name, d)}</div></div>')
 
 
 def _streak_stats(results):
@@ -11954,6 +11968,7 @@ def render_html():
               {_kalshi_line(d)}
             </div>
             {build_time_until_call(name, d)}
+            {build_streak_box(name, d)}
           </div>
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}
