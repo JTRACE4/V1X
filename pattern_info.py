@@ -3,7 +3,7 @@ pull-down tabs). Keys are matched as lower-case substrings of the label name, lo
 Each entry: (what it is, what it usually signals, what to watch / what cancels it)."""
 
 DISCLAIMER = ("Patterns describe what price has done; they are probabilities, not promises. In our own tests of chart "
-              "signals on Kalshi's 15-minute markets, none of them beat the trading fees, so treat this as background reading.")
+              "signals on 15-minute prediction markets, none of them beat the trading fees, so treat this as background reading.")
 
 INFO = {
     # ---- single candles

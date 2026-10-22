@@ -364,7 +364,7 @@ STAGE_CALL_MIN = 0.55          # call right away once the blended chance of one 
 STAGE_FORCE_MIN = 0.52         # after the 60s wait: still call (WEAK) if the minute's average leans 52%+ one way
 
 
-SIGNAL_NAMES = (("kalshi", "Kalshi"), ("line", "price vs line"), ("candles", "candles"), ("flow", "buys vs sells"), ("trend", "trend"))
+SIGNAL_NAMES = (("kalshi", "Market"), ("line", "price vs line"), ("candles", "candles"), ("flow", "buys vs sells"), ("trend", "trend"))
 
 
 def _ema(vals, n):
@@ -1945,7 +1945,7 @@ def check_manual_position_change(ticker):
         row.update({"ts": dt.datetime.now(dt.timezone.utc).isoformat(), "event": "sell",
                     "contracts": round(closed_contracts, 2), "cost_dollars": closed_cost,
                     "payoff_dollars": realized_delta, "order_id": "",
-                    "sell_reason": "manual sell (detected via Kalshi position check - not "
+                    "sell_reason": "manual sell (detected via market position check - not "
                                     "initiated by this dashboard)"})
         _live_append_log(row)
         # a hand sale is the user's decision for this window - never buy this
@@ -2842,7 +2842,7 @@ def _rsi_all_exchanges(symbol, fallback):
         v = _flow.HUB.composite_rsi(symbol.split("-")[0])
     except Exception:
         v = None
-    return (v, "all exchanges") if v is not None else (fallback, "Coinbase only - warming up")
+    return (v, "all exchanges") if v is not None else (fallback, "one venue only - warming up")
 
 
 def _record_whale_trade(symbol, price, size, aggressor, venue=""):
@@ -4022,7 +4022,7 @@ def compute_info_call_snapshot(asset, active, ticker, seconds_left, target, kals
     streak_type, streak_count = get_streak(asset_history)
 
     return {
-        "ticker": ticker + " (INFO call - our own momentum, not Kalshi's price)",
+        "ticker": ticker + " (INFO call - our own momentum, not the market's price)",
         "seconds_left": round(seconds_left),
         "spot_price": round(live_price, 2) if live_price is not None else None,
         "live_venues": live_venues,
@@ -4138,7 +4138,7 @@ def _push_dashboard_alerts(asset, v):
         if w:
             _eng.add_alert(name, "wall", bw["alert_side"], f"BIG {'SELL' if bw['alert_side'] == 'sell' else 'BUY'} ORDER WAITING: {_u(w[1])}",
                            f"resting {'offer' if bw['alert_side'] == 'sell' else 'bid'} at {fmt_price(w[0], dec)} "
-                           f"({w[2] * 100:.2f}% from price, Coinbase book) - "
+                           f"({w[2] * 100:.2f}% from price, Index venue 1 book) - "
                            f"{'someone is waiting to sell above the price' if bw['alert_side'] == 'sell' else 'someone is waiting to buy below the price'}",
                            usd=w[1], price=w[0], sev=1, sound=False)
     sw = v.get("dramatic_swing")
@@ -4151,7 +4151,7 @@ def _push_dashboard_alerts(asset, v):
                            cooldown_key=("boom", name, sw), cooldown=90)
     if v.get("certain_flip_just_fired"):
         _eng.add_alert(name, "flip", "sell" if v["locked"].get("my_call") == "YES" else "buy", "FLIP - THE LOCKED CALL IS BUSTING",
-                       f"fast move against the locked {v['locked'].get('my_call')} and Kalshi now favours the other side "
+                       f"fast move against the locked {v['locked'].get('my_call')} and the market now favours the other side "
                        f"({(v.get('cur_flip_chance') or 0):.0%})", sev=3, sound=False)
 
 
@@ -5018,7 +5018,7 @@ def poll_loop():
                         if _entry_cost is not None and _tp > _entry_cost:
                             _live_buy_gave_up.add(active["ticker"])  # stop any top-up buying on this window
                             sell_live_position(active["ticker"],
-                                               f"take-profit at {main_pos_price:.0%} Kalshi price (target {_tp:.0%})")
+                                               f"take-profit at {main_pos_price:.0%} market price (target {_tp:.0%})")
                 elif _main_pos_for_gain and _main_pos_for_gain.get("strategy") == "flip":
                     flip_pos_gain, flip_pos_price = _position_current_gain_and_price(_main_pos_for_gain)
 
@@ -6360,7 +6360,7 @@ function _voiceNext() {
   setTimeout(() => { if (!finished && a.paused && a.currentTime === 0) fallback(); }, 6000);   // server too slow - read it locally
   setTimeout(done, 15000);
 }
-// 2026-10-22: spoken lines say "market", never "Kalshi" (the screen still shows Kalshi's name)
+// 2026-10-22: spoken lines say "market", never "Kalshi" (the screen says "market" too, since 2026-10-22 per user)
 function _marketWords(t) {
   return String(t).replace(/on Kalshi\b/g, 'on the market').replace(/(^|[.!?] )Kalshi\b/g, '$1Market').replace(/\bKalshi\b/g, 'market');
 }
@@ -6654,7 +6654,7 @@ function updateFlipWatch() {
       const callWord = callName === 'sealed' ? 'the sealed call' : (callName === 'early' ? 'the early call' : 'the call');
       speak(coin + ' flip update: heading ' + (goingUp ? 'up' : 'down')
         + (withCall === null ? '' : (withCall ? ', with ' + callWord : ', against ' + callWord))
-        + (strength !== null ? '. ' + (sw => sw.charAt(0).toUpperCase() + sw.slice(1))(_strengthWord(strength)) + ', ' + Math.round(strength * 100) + ' percent on Kalshi' : '')
+        + (strength !== null ? '. ' + (sw => sw.charAt(0).toUpperCase() + sw.slice(1))(_strengthWord(strength)) + ', ' + Math.round(strength * 100) + ' percent on the market' : '')
         + '. ' + tl + '.', false, 20000);
     }
   });
@@ -6855,7 +6855,7 @@ function showBigFlipAlert(assetName, side) {
   el.className = 'big-flip-alert ' + (side === 'YES' ? 'flip-up' : 'flip-down');
   const arrow = side === 'YES' ? '\u2B06' : '\u2B07';
   el.innerHTML = '<div class="big-flip-title">\u26A0 FLIP \u2014 ' + assetName + ' \u2014 ' + side +
-    ' FOR SURE? ' + arrow + '</div><div class="big-flip-sub">Kalshi\'s own price just swung the other way - check it yourself</div>';
+    ' FOR SURE? ' + arrow + '</div><div class="big-flip-sub">The market\'s own price just swung the other way - check it yourself</div>';
   document.body.appendChild(el);
   try {
     const anim = el.animate(
@@ -7011,7 +7011,7 @@ function showLossBanner(assetName, amount) {
   const bigFinger = '<span class="loss-banner-emoji">' + finger + '</span>';
   const el = document.createElement('div');
   el.className = 'loss-banner';
-  el.innerHTML = bigFinger + ' FUCK YOU, KALSHI! ' + assetName + ' ' + amount.toFixed(2) + ' ' + bigFinger;
+  el.innerHTML = bigFinger + ' FUCK YOU, MARKET! ' + assetName + ' ' + amount.toFixed(2) + ' ' + bigFinger;
   document.body.appendChild(el);
   try {
     const anim = el.animate(
@@ -7037,7 +7037,7 @@ function checkLossAlerts() {
     showLossBanner(name, amount);
     if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       playLossBuzz();
-      speakDelayed(name + '. Lost $' + Math.abs(amount).toFixed(2) + '. Fuck you, Kalshi!');
+      speakDelayed(name + '. Lost $' + Math.abs(amount).toFixed(2) + '. Fuck you, market!');
     }
   });
 }
@@ -7061,7 +7061,10 @@ function showLockToast(name, call, kp) {
 // RSI extreme alert - added 2026-10-10 per user request: big pulsing banner (no screen flash) + beep + voice when the
 // 1-minute RSI(14) reaches 25 or below (oversold) or 75 or above (overbought). Fires once per entry into the zone; it
 // leaves the zone at 28 / 72 so a wobble around 25 or 75 does not re-alert. Information only - never used for buying.
-const RSI_LOW = 25, RSI_HIGH = 75, RSI_BACK_LOW = 28, RSI_BACK_HIGH = 72;
+// 2026-10-22 (user: "give a voice read for when RSI is overbought and oversold"): same 70 / 30 levels the RSI box shows;
+// it leaves the zone at 67 / 33 so a wobble around the line doesn't repeat, and the same coin won't repeat within 2 minutes.
+const RSI_LOW = 30, RSI_HIGH = 70, RSI_BACK_LOW = 33, RSI_BACK_HIGH = 67, RSI_VOICE_GAP_MS = 120000;
+const rsiSpokeAt = {};
 const rsiZone = {};
 const rsiDismissed = {};
 try { Object.assign(rsiZone, JSON.parse(sessionStorage.getItem('rsiZone') || '{}')); } catch (e) {}
@@ -7098,9 +7101,13 @@ function checkRsiAlerts() {
     if (z !== prev) {
       rsiZone[name] = z; rsiDismissed[name] = false;
       try { sessionStorage.setItem('rsiZone', JSON.stringify(rsiZone)); } catch (e) {}
-      if (z && LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
+      if (z && soundEnabled && assetSoundEnabled[name] !== false && Date.now() - (rsiSpokeAt[name + z] || 0) > RSI_VOICE_GAP_MS) {
+        rsiSpokeAt[name + z] = Date.now();
         playRsiAlert(z);
-        speakDelayed(name + '. Warning. ' + (z === 'under' ? 'Oversold.' : 'Overbought.'), 600);
+        const coin = name === 'BTC' ? 'Bitcoin' : name;
+        speakDelayed(coin + ' RSI ' + Math.round(v) + '. ' + (z === 'under'
+          ? 'Oversold. Sellers have pushed hard and may be running out of steam.'
+          : 'Overbought. Buyers have pushed hard and may be running out of steam.'), 600);
       }
     }
     if (z && !rsiDismissed[name]) live[name] = {z: z, v: v};
@@ -7123,7 +7130,7 @@ function checkRsiAlerts() {
 }
 window.testRsiAlert = function(name, zone) {   // console helper: testRsiAlert('BTC','under')
   rsiZone[name || 'BTC'] = ''; const el = document.createElement('span'); el.className = 'rsi-marker';
-  el.setAttribute('data-rsi-name', name || 'BTC'); el.setAttribute('data-rsi', zone === 'over' ? '78' : '22'); el.style.display = 'none';
+  el.setAttribute('data-rsi-name', name || 'BTC'); el.setAttribute('data-rsi', zone === 'over' ? '74' : '26'); el.style.display = 'none';
   document.body.appendChild(el); checkRsiAlerts(); el.remove();
 };
 // "INCOMING" banner - a huge buy / sell building across the exchanges (burst of taker flow, giant print, or a big resting wall)
@@ -7238,7 +7245,7 @@ function checkStageAlerts() {
     const dir = call === 'YES' ? 'UP' : 'DOWN';
     const rev = el.getAttribute('data-rev') === '1', sure = el.getAttribute('data-sure');
     const kpAt = el.getAttribute('data-kp') || '';
-    showLockToast(name, what + ': ' + dir + ' - BRAIN ' + (sure ? sure + '% ' : '') + tier + (kpAt ? ' - Kalshi ' + kpAt + '%' : '') + (rev ? ' - REVERSAL' : ''), '');
+    showLockToast(name, what + ': ' + dir + ' - BRAIN ' + (sure ? sure + '% ' : '') + tier + (kpAt ? ' - Market ' + kpAt + '%' : '') + (rev ? ' - REVERSAL' : ''), '');
     if (soundEnabled && assetSoundEnabled[name] !== false) {
       // 2026-10-20: both calls are read out loud, in full
       playCallChime(stage);
@@ -7246,7 +7253,7 @@ function checkStageAlerts() {
       const d2 = dir === 'UP' ? 'up' : 'down';
       const conf = { SUPER: ' Super confidence.', GOOD: ' Good confidence.', WEAK: ' Weak confidence.' }[tier] || '';
       const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent sure.' : '.')
-        + (kpAt ? ' Kalshi at ' + kpAt + ' percent.' : '') + conf
+        + (kpAt ? ' Market at ' + kpAt + ' percent.' : '') + conf
         + (rev ? ' This one is a reversal.' : '');
       speakUrgent(line, 650);
     }
@@ -7971,7 +7978,7 @@ window.onload = function() {
 };
 </script>
 </head><body>
-<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Kalshi BTC &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false"><i class=ico data-i=sound-off></i> Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
+<div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>BTC market &middot; 15-minute rounds</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false"><i class=ico data-i=sound-off></i> Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
 <div id="vol-warn" class="vol-warn" style="display:none;"><i class=ico data-i=warn></i> Round history is NOT on a Railway volume - every redeploy wipes it.
 This page keeps a backup on this device and puts it back after a wipe, but add a volume to fix it for good:
@@ -8006,7 +8013,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="speakRaw('A flip is happening on XRP.')">Test flip alert</button>
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure. Good confidence.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure. Super confidence.'),650)">Test sealed call</button>
-      <button onclick="speakRaw('Bitcoin flip update: heading down, against the sealed call. Solid, 78 percent on Kalshi. 3 and a half minutes left.')">Test flip update</button>
+      <button onclick="speakRaw('Bitcoin flip update: heading down, against the sealed call. Solid, 78 percent on the market. 3 and a half minutes left.')">Test flip update</button>
       <button onclick="speakRaw('Bitcoin sealed call is at 92 percent on the market with 6 minutes left. Some traders cash out here.')">Test cash-out level</button>
       <button onclick="speakRaw('XRP is a real coin flip late in the round. Market 52 percent up, 2 minutes left. And it\'s flipping, price just crossed the line.')">Test late coin flip</button>
       <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('2.4 million dollar whale buy on Bitcoin.'),1300)">Test whale BUY (cha-ching)</button>
@@ -8159,7 +8166,7 @@ def tug_numbers(name, d):
     k_up = None
     if kf and kf["ticker"] == d.get("ticker") and (kf["yes"] + kf["no"]) > 0:
         k_up = kf["yes"] / (kf["yes"] + kf["no"])
-    feeds.append(("Kalshi money", k_up, None))
+    feeds.append(("Market money", k_up, None))
     lq = (_flow.HUB.summary(name).get("deriv") or {})
     ls, ll = lq.get("liq_short_usd_5m", 0) or 0, lq.get("liq_long_usd_5m", 0) or 0
     liq_min = 200_000 if name == "BTC" else 20_000
@@ -8262,7 +8269,7 @@ def build_tug_panel(name, d):
     if d.get("confidence") is not None and d.get("leaning") in ("YES", "NO"):
         y = d["confidence"] if d["leaning"] == "YES" else 1 - d["confidence"]
         yes_c = (round(y * 100), round((1 - y) * 100))
-    kal = f'Kalshi: UP {yes_c[0]}c &middot; DOWN {yes_c[1]}c' if yes_c else ""
+    kal = f'Market: UP {yes_c[0]}c &middot; DOWN {yes_c[1]}c' if yes_c else ""
     px = max(spot, 1e-9)
     buy_pct = (bu / (bu + se) * 100) if (bu + se) > 0 else None
     coin = name
@@ -8286,7 +8293,7 @@ def build_tug_panel(name, d):
                   f'<b>{_usd_short(lv["below"])}</b> ({lv["above"] / tot * 100:.0f}% above)</div>')
     mm, ss = divmod(int(left), 60)
     return (f'<div class="tug"><div class="tug-title">PRICE VS THE LINE - BREAKDOWN <span class="hint">(this round &middot; resets in {mm:02d}:{ss:02d})</span></div>'
-            f'<div class="tug-top"><div><div class="hint">price to beat (Kalshi line)</div><div class="tug-big">{fmt_price(line, dec)}</div><div class="hint">{kal}</div></div>'
+            f'<div class="tug-top"><div><div class="hint">price to beat (the line)</div><div class="tug-big">{fmt_price(line, dec)}</div><div class="hint">{kal}</div></div>'
             f'<div class="tug-diff {"up" if up_side else "down"}">{"+" if up_side else "-"}{fmt_price(abs(diff), dec)} {"above" if up_side else "below"}</div></div>'
             f'<div class="tug-gauge"><span class="tug-gl hint">DOWN</span><span class="tug-gline"></span><i style="left:{needle:.1f}%"></i><span class="tug-gr hint">UP</span></div>'
             f'<div class="hint tug-cap">centre = the line &middot; needle = live price ({fmt_price(spot, dec)})</div>'
@@ -8857,8 +8864,8 @@ def kalshi_arrow_html(name, d):
         '</svg>'
     )
     return ('<div class="kalshi-arrow" data-name="' + name + '" data-angle="' + ("%.1f" % ang) + '" data-color="' + color + '" '
-            'title="Kalshi says ' + lean + ' at ' + ("%.1f%%" % (conf * 100)) + '">' + knight +
-            '<div class="kalshi-arrow-lbl">Kalshi&#39;s prediction</div>'
+            'title="Market says ' + lean + ' at ' + ("%.1f%%" % (conf * 100)) + '">' + knight +
+            '<div class="kalshi-arrow-lbl">Market&#39;s prediction</div>'
             '<div class="kalshi-arrow-pct" style="color:' + color + '">' + lean + ' ' + ("%.0f%%" % (conf * 100)) + '</div></div>')
 
 
@@ -9046,18 +9053,18 @@ def build_flip_chance_widget(name, d):
         pct = kp * 100
     else:
         pct = (1 - max(kp, 1 - kp)) * 100
-    gauge = build_flip_gauge_svg(pct) if pct is not None else '<div class="hint">waiting for Kalshi&#39;s price</div>'
+    gauge = build_flip_gauge_svg(pct) if pct is not None else '<div class="hint">waiting for the market&#39;s price</div>'
     if call in ("YES", "NO"):
         other = "NO" if call == "YES" else "YES"
         cap = (f'Chance the {label} (<span class="{"up" if call == "YES" else "down"}">{"UP" if call == "YES" else "DOWN"}</span>) '
                f'flips to <span class="{"up" if other == "YES" else "down"}">{"UP" if other == "YES" else "DOWN"}</span> before the close')
     else:
-        cap = "No call is locked yet, so this shows the chance that Kalshi's current favorite flips."
+        cap = "No call is locked yet, so this shows the chance that the market's current favorite flips."
     marker = ""
     if pct is not None:
         mkey = f'{name}::{d.get("ticker", "")}' + (f"::{key}" if key else "")
         marker = f'<span class="flip-chance-value" data-flip-chance-key="{mkey}" data-flip-chance-pct="{pct:.2f}" style="display:none;"></span>'
-    return (f'<div class="top-w top-flip"><div class="top-w-title">FLIP METER <span class="hint">Kalshi&#39;s own price</span></div>'
+    return (f'<div class="top-w top-flip"><div class="top-w-title">FLIP METER <span class="hint">the market&#39;s own price</span></div>'
             f'<div class="flip-gauge">{gauge}</div><div class="flip-cap">{cap}</div>{marker}</div>')
 
 
@@ -9092,7 +9099,7 @@ def _alert_line(a, dec):
         return (f"&#10227; WALL MOVED {a.get('dir', '')}: {usd} {a.get('wall', '')} {ven}",
                 f"{fp} &rarr; {px}" + (f" &middot; {n} moves" if n > 1 else ""))
     if k == "wall":
-        return f"BIG {'SELL' if sd == 'sell' else 'BUY'} ORDER WAITING {usd}", ("Coinbase @ " + px) if px else "Coinbase"
+        return f"BIG {'SELL' if sd == 'sell' else 'BUY'} ORDER WAITING {usd}", ("Index venue 1 @ " + px) if px else "Index venue 1"
     return a["title"], ""
 
 
@@ -9173,7 +9180,7 @@ def _kalshi_at_lock(c):
 
 def _conf_lines(p_side, tier, kp, extra=""):
     """2026-10-22: BRAIN's own confidence + tier, and the Kalshi % the call locked at, on their own lines."""
-    k = (f'<div class="sb-line sb-klock">Kalshi at lock: <b>{kp:.0%}</b>{extra}</div>' if kp is not None
+    k = (f'<div class="sb-line sb-klock">Market at lock: <b>{kp:.0%}</b>{extra}</div>' if kp is not None
          else (f'<div class="sb-line sb-klock">{extra.lstrip(" &middot;")}</div>' if extra else ""))
     return (f'<div class="sb-line sb-conf">BRAIN confidence: <b>{p_side:.0%}</b> &middot; '
             f'<span class="{_TIER_CLS.get(tier, "")}">{tier}</span></div>{k}')
@@ -9206,7 +9213,7 @@ def build_stage_box(name, d, key):
             hold_html = (f'<div class="sb-line {"k-agree" if agree else "k-disagree"}"><span>Market {"agrees" if agree else "disagrees"} '
                          f'&middot; <b>{holding:.0%}</b></span></div>')
         z80 = (f'<div class="sb-z80"><i class=ico data-i=star></i> 80% SETUP &middot; won {c["zone80"]:.0%} in backtest'
-               + (f' &middot; {c["zone80_roi"] * 100:+.0f}% per $ at Kalshi prices' if c.get("zone80_roi") is not None else "")
+               + (f' &middot; {c["zone80_roi"] * 100:+.0f}% per $ at market prices' if c.get("zone80_roi") is not None else "")
                + '</div>' if c.get("zone80") else "")
         rev = z80 + (f'<div class="sb-rev"><i class=ico data-i=reversal></i> REVERSAL{(" &middot; ~" + format(c["rev_payout"], ".1f") + "x") if c.get("rev_payout") else ""}</div>'
                if c.get("reversal") else "")
@@ -9407,7 +9414,7 @@ def _kalshi_line(d):
     edge = abs(kp - 0.5)
     side = "UP" if kp >= 0.5 else "DOWN"
     lean = "50/50" if edge < 0.02 else (f"leaning {side}" if edge < 0.25 else f"strongly {side}")
-    return (f'<div class="k-line"><div class="k-nums"><span class="up">UP {up}%</span><span class="k-lean">Kalshi live &middot; {lean}</span>'
+    return (f'<div class="k-line"><div class="k-nums"><span class="up">UP {up}%</span><span class="k-lean">Market live &middot; {lean}</span>'
             f'<span class="down">{100 - up}% DOWN</span></div><div class="k-bar"><i style="width:{up}%"></i><b></b></div></div>')
 
 
@@ -9415,7 +9422,7 @@ def _kalshi_line(d):
 def build_kalshi_tile(name, d):
     kp = d.get("kalshi_price")
     if kp is None:
-        return '<div class="rs-tile rs-odds"><div class="rs-title">KALSHI ODDS &middot; LIVE</div><div class="rs-wait">waiting for Kalshi&#39;s price...</div></div>'
+        return '<div class="rs-tile rs-odds"><div class="rs-title">MARKET ODDS &middot; LIVE</div><div class="rs-wait">waiting for the market&#39;s price...</div></div>'
     up = round(kp * 100)
     dn = 100 - up
     edge = abs(kp - 0.5)
@@ -9439,7 +9446,7 @@ def build_kalshi_tile(name, d):
         else:
             chg = '<span class="flat">steady over the last 30s</span>'
     mins, secs = divmod(max(0, int(d.get("seconds_left") or 0)), 60)
-    return (f'<div class="rs-tile rs-odds"><div class="rs-title">KALSHI ODDS &middot; LIVE <span class="rs-clock">{mins}:{secs:02d} left</span></div>'
+    return (f'<div class="rs-tile rs-odds"><div class="rs-title">MARKET ODDS &middot; LIVE <span class="rs-clock">{mins}:{secs:02d} left</span></div>'
             f'<div class="rs-odds-nums"><span class="up">UP <b>{up}%</b></span><span class="down"><b>{dn}%</b> DOWN</span></div>'
             f'<div class="rs-odds-bar"><i style="width:{up}%"></i><b></b></div>'
             f'<div class="rs-lean {lcls}">{lean}</div>{_kalshi_spark(pts)}<div class="rs-sub">{chg}'
@@ -9900,7 +9907,7 @@ def build_flip_radar(name, d):
     kal = ""
     if kp is not None:
         k_opp = (1 - kp) if call == "YES" else kp
-        kal = f'<div class="fr-txt hint">Kalshi still prices the other side at {k_opp * 100:.0f}% - reference only, it lags the tape</div>'
+        kal = f'<div class="fr-txt hint">The market still prices the other side at {k_opp * 100:.0f}% - reference only, it lags the tape</div>'
     spike = ""
     if fr.get("raw") is not None and fr["raw"] - pct >= 10:
         spike = (f'<div class="fr-txt hint">burst to {fr["raw"]:.0f}% right now - counts only if it holds '
@@ -10275,7 +10282,7 @@ def build_rounds_panel(name, d):
     tot = [r.get("crosses", 0) for r in past]
     avg = f' &middot; average {sum(tot) / len(tot):.1f} crosses per round over the last {len(tot)}' if tot else ""
     return (f'<div class="rounds-panel"><div class="top-w-title">PRICE vs THE LINE - THIS ROUND + LAST 6 ROUNDS '
-            f'<span class="hint">white line = the Kalshi line &middot; dots = line crosses{avg}</span></div>'
+            f'<span class="hint">white line = the line &middot; dots = line crosses{avg}</span></div>'
             f'<div class="rc-grid">{"".join(cells)}</div></div>')
 
 
@@ -10404,7 +10411,7 @@ def build_pressure_bar(asset_name, d=None, part="all"):
     else:
         ll, ls = dd.get("liq_long_usd_5m", 0) or 0, dd.get("liq_short_usd_5m", 0) or 0
         if ll or ls:
-            dv.append(f'liquidated 5m (OKX): longs {_usd_short(ll)} / shorts {_usd_short(ls)}')
+            dv.append(f'liquidated 5m (Futures venue 2): longs {_usd_short(ll)} / shorts {_usd_short(ls)}')
     cm = _ENG.cmeter
     if cm.get("trend") and cm["trend"].get("buy") is not None:
         t = cm["trend"]
@@ -10458,11 +10465,11 @@ def build_pressure_bar(asset_name, d=None, part="all"):
                        if r.get("tick_only") else
                        f'<tr><td>{r["label"]}</td><td>{r["counted"]:,.2f}</td><td>-</td><td>-</td><td>{pd_}</td><td class="hint">no 24h figure</td></tr>')
         mc_html = (f'<div class="press-health">{head_}</div><details class="press-more" data-pat="MATH|{asset_name}"><summary class="hint">'
-                   f'math check by exchange (BTC we counted in the last 15 min vs each exchange&#39;s own average 15 min, and its price vs Coinbase)'
+                   f'math check by exchange (BTC we counted in the last 15 min vs each exchange&#39;s own average 15 min, and its price vs Index venue 1)'
                    f'</summary><table class="press-table"><tr><th>exchange</th><th>BTC we counted</th><th>its normal</th><th>pace</th>'
-                   f'<th>price vs Coinbase</th><th></th></tr>{"".join(trs)}</table><div class="hint">Normal pace is 0.2x to 6x (busier in fast moves '
+                   f'<th>price vs Index venue 1</th><th></th></tr>{"".join(trs)}</table><div class="hint">Normal pace is 0.2x to 6x (busier in fast moves '
                    f'and at the US open). Above 10x on a calm market would mean a counting mistake. USDT markets usually sit within '
-                   f'&plusmn;0.1% of Coinbase&#39;s dollar price.</div></details>')
+                   f'&plusmn;0.1% of Index venue 1&#39;s dollar price.</div></details>')
     elif mc is not None:
         mc_html = '<div class="press-health hint">Math check: fetching each exchange&#39;s own 24h numbers (first check about 30 seconds after start)...</div>'
     top_html = (
@@ -10564,11 +10571,11 @@ def render_html():
         else:
             spot_vs_target_css = ""
         direction_source = d.get("direction_source", "self_computed" if synthetic else "kalshi")
-        target_label = "Window open (ref, no Kalshi market)" if synthetic else "Kalshi target"
+        target_label = "Window open (ref, no market)" if synthetic else "Market target"
         direction_label = {
-            "kalshi": "Direction (Kalshi's price)",
+            "kalshi": "Direction (the market's price)",
             "self_computed": "Direction (self-computed, no market price)",
-            "momentum": "Direction (our own momentum, not Kalshi's price)",
+            "momentum": "Direction (our own momentum, not the market's price)",
         }[direction_source]
 
         lean_class = "up" if d["leaning"] == "YES" else ("down" if d["leaning"] == "NO" else "flat")
@@ -10698,7 +10705,7 @@ def render_html():
         else:
             volume_recent_val = '<span class="flat">quiet - no trades</span>'
         volume_recent_row_html = (f'<div class="row"><span class="label">{name} volume right now '
-                                  f'(last {RECENT_VOLUME_WINDOW_SECONDS}s, all exchanges, not Kalshi)</span>'
+                                  f'(last {RECENT_VOLUME_WINDOW_SECONDS}s, all exchanges, not the market)</span>'
                                   f'<span class="value">{volume_recent_val}</span></div>')
 
         # buy vs sell volume tug-of-war bar - added 2026-09-30, see CSS comment
@@ -10898,7 +10905,7 @@ def render_html():
             fair_color = "#4ade80" if gap >= 0 else ("#f87171" if gap <= -10 else "#fbbf24")
             fair_html = (f'<div class="row"><span class="label">Fair value ({d["leaning"]})</span>'
                          f'<span class="value" style="color:{fair_color}">{fair_lean:.1%} '
-                         f'({gap:+.0f}c vs Kalshi, vol {d.get("fair_sigma_bps_min") or 0:.1f} bps/min, '
+                         f'({gap:+.0f}c vs market, vol {d.get("fair_sigma_bps_min") or 0:.1f} bps/min, '
                          f'{d.get("quote_source", "list")} price)</span></div>')
 
         boom_html = ""
@@ -10980,7 +10987,7 @@ def render_html():
             pnl_css = "up" if bet_pnl["total"] >= 0 else "down"
             bet_pnl_row_html = (
                 '<div class="row"><span class="label">If you bet $100 on every locked call '
-                '(real Kalshi price at lock time)</span>'
+                '(real market price at lock time)</span>'
                 f'<span class="value {pnl_css}">{bet_pnl["total"]:+,.2f} total '
                 f'({bet_pnl["wins"]}/{bet_pnl["n"]} bets won)</span></div>'
             )
@@ -11040,7 +11047,7 @@ def render_html():
         flip_meter_html = ""
         if flip_chance is not None:
             pct = flip_chance * 100
-            flip_source = "self-computed" if synthetic else "Kalshi's own price"
+            flip_source = "self-computed" if synthetic else "the market's own price"
             flip_window_key = f'{name}::{d.get("ticker", "")}'
             gauge_svg = build_flip_gauge_svg(pct)
             # user feedback 2026-09-02: the % alone was confusing - a flip
@@ -11112,7 +11119,7 @@ def render_html():
         if synthetic:
             sname = d.get("synthetic_name", name)
             stat = SYNTHETIC_HISTORICAL_STATS.get(sname)
-            stat_line = (f'Historically ({stat[0]} real Kalshi BTC windows): {sname} settles the SAME direction '
+            stat_line = (f'Historically ({stat[0]} real BTC market rounds): {sname} settles the SAME direction '
                         f'as BTC\'s result {stat[1]} of the time, OPPOSITE {stat[2]} - most likely because '
                         f'{sname} is simply {stat[3]} more volatile than BTC as a % of price, not because it '
                         f'leads or predicts BTC.' if stat else '')
@@ -11120,7 +11127,7 @@ def render_html():
                 f'<div class="ranges" style="margin-top:8px;">{stat_line} '
                 f'"My call" above is real (same validated logic as BTC/ETH, scaled for {sname}\'s own measured '
                 f"volatility, graded the same way) but is anchored to {sname}'s OWN window-open reference, not a "
-                "real Kalshi contract.</div>"
+                "real market contract.</div>"
             )
 
         mins, secs = divmod(d["seconds_left"], 60)
@@ -11128,7 +11135,7 @@ def render_html():
         _sp, _tp = d.get("spot_price"), d.get("target_price")
         if _sp is not None and _tp:
             _df = _sp - _tp
-            line_diff_html = (f'<div class="line-diff {"up" if _df >= 0 else "down"}" title="live price minus the line (the strike Kalshi settles against)">'
+            line_diff_html = (f'<div class="line-diff {"up" if _df >= 0 else "down"}" title="live price minus the line (the strike the market settles against)">'
                               f'{"&#9650;" if _df >= 0 else "&#9660;"} {fmt_price(abs(_df), decimals)} {"ABOVE" if _df >= 0 else "BELOW"} the line '
                               f'<span class="hint">({_df / _tp * 100:+.3f}%)</span></div>')
         _left = max(0, int(d["seconds_left"]))
@@ -11273,7 +11280,7 @@ def render_html():
                        style="width:60px;">
                 <button onclick="setBuyDelay('{name}')">Set</button>
                 &nbsp;(currently: {f'waits {buy_delay} candle' + ('s' if buy_delay != 1 else '') if buy_delay else 'buys right away'})</div>
-              <div class="hint">Auto-sell when Kalshi price hits (0 = hold to settlement):
+              <div class="hint">Auto-sell when market price hits (0 = hold to settlement):
                 <input type="number" id="mainsellprice-input-{name}"
                        value="{f'{main_sell_price * 100:.0f}' if main_sell_price else '0'}"
                        min="0" max="99" step="1"
@@ -11752,10 +11759,10 @@ def bt100_widget_html(name):
             f'{b["last"].astimezone(ZoneInfo("America/New_York")):%b %d}') if b["n"] else ""
     auto = "picked automatically by the better record" if name in AUTO_PICK_ASSETS else "fixed"
     return (f'<div class="bt100"><div class="bt100-h">If you had put <b>$100 on each</b> {name} call it buys '
-            f'(bought at {lo * 100:.0f}-{hi * 100:.0f}&cent;, held to settlement, Kalshi fee included)</div>'
+            f'(bought at {lo * 100:.0f}-{hi * 100:.0f}&cent;, held to settlement, market fee included)</div>'
             f'<table class="bt100-t"><tr><th>Call</th><th>Trades</th><th>Profit</th><th>Return</th></tr>{rows}</table>'
             f'<div class="hint"><i class=ico data-i=star></i> = the call auto-buy follows ({auto}). Best winning streak {b.get("best_run", 0)} in a row &middot; '
-            f'worst drop along the way ${b["dd"]:,.0f}{(" &middot; " + span) if span else ""}. Uses the price Kalshi showed at the moment of '
+            f'worst drop along the way ${b["dd"]:,.0f}{(" &middot; " + span) if span else ""}. Uses the price the market showed at the moment of '
             f'the call; real fills can differ by a cent or two.</div></div>')
 
 
@@ -11871,8 +11878,8 @@ def radar_admin_html():
             f'chat watcher token)</span></summary>'
             f'<div class="hint">Chat watcher token (paste into the BRAIN Chat Watcher extension): <code>{_html_attr(_radar.token())}</code></div>'
             f'<ul>{lst}</ul><form method="post" action="/radar_admin"><input type="hidden" name="act" value="watch">'
-            f'<input name="name" placeholder="Kalshi username" maxlength="40"> <button>Watch</button></form>'
-            f'<div class="hint">Lock each name to its REAL account: open the trader&#39;s Kalshi profile, check it is them (e.g. Maxy is '
+            f'<input name="name" placeholder="Trader username" maxlength="40"> <button>Watch</button></form>'
+            f'<div class="hint">Lock each name to its REAL account: open the trader&#39;s market profile, check it is them (e.g. Maxy is '
             f'the one up ~$50k), then trust that account below. Lookalikes are ignored automatically.</div>'
             f'<ul>{sights or "<li class=hint>No sightings to lock yet - they appear once the chat watcher is running.</li>"}</ul></details>')
 
@@ -11895,7 +11902,7 @@ def _kalshi_key_save(key_id, pem_text):
     global _live_client
     key_id = (key_id or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9-]{8,80}", key_id):
-        return False, "That doesn't look like a Kalshi API key ID (letters, numbers and dashes)."
+        return False, "That doesn't look like a market API key ID (letters, numbers and dashes)."
     if not _kcreds.can_store():
         return False, "The server has no secret to encrypt the key with - add KALSHI_CREDS_SECRET in Railway first."
     pem = _kcreds.clean_pem(pem_text)
@@ -11910,13 +11917,13 @@ def _kalshi_key_save(key_id, pem_text):
     except Exception as e:
         msg = str(e)
         if "401" in msg or "403" in msg:
-            return False, "Kalshi rejected that key (check the key ID matches this private key, and the key is active)."
-        return False, "Couldn't reach Kalshi to check the key: " + msg[:120]
+            return False, "The market rejected that key (check the key ID matches this private key, and the key is active)."
+        return False, "Couldn't reach the market to check the key: " + msg[:120]
     _kcreds.save(key_id, pem)
     with _live_lock:
         _live_client = None                     # next order uses the new key
     print(f"[kalshi key] saved key ...{key_id[-4:]} (balance ${bal:,.2f})")
-    return True, f"Kalshi key saved and working - balance ${bal:,.2f}."
+    return True, f"Market key saved and working - balance ${bal:,.2f}."
 
 
 def _kalshi_key_remove():
@@ -11930,7 +11937,7 @@ def _kalshi_key_remove():
             _live_protect_armed[a] = False
     _save_live_trading_state()
     print("[kalshi key] removed - all auto-buy switched off")
-    return True, "Kalshi key removed. Auto-buy is switched off for every coin."
+    return True, "Market key removed. Auto-buy is switched off for every coin."
 
 
 # ================================================================ link preview card (2026-10-20)
@@ -11984,7 +11991,7 @@ def og_desc():
             continue
         px = f"${c['price']:,.4f}" if a == "XRP" else f"${c['price']:,.2f}"
         k = c["kalshi_up"]
-        parts.append(f"{a} {px}" + (f" - Kalshi UP {round(k * 100)}% / DOWN {100 - round(k * 100)}%" if k is not None else ""))
+        parts.append(f"{a} {px}" + (f" - market UP {round(k * 100)}% / DOWN {100 - round(k * 100)}%" if k is not None else ""))
     return (" | ".join(parts) + ". Live 15-minute rounds on BRAIN.") if parts else ""
 
 

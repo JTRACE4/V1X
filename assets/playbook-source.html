@@ -52,6 +52,10 @@ b, strong { color:var(--cream); }
 .cover .sub { font-size:15pt; color:#efe6df; margin-top:12px; max-width:5.6in; }
 .cover .bottom { position:absolute; left:0.8in; right:0.8in; bottom:0.7in; }
 .cover .ed { font-size:9pt; letter-spacing:2.5px; color:var(--taupe); font-weight:800; text-transform:uppercase; }
+.chip { display:inline-block; width:19px; height:19px; line-height:19px; border-radius:50%; text-align:center; font-weight:900; font-size:9pt; vertical-align:middle; }
+.c-up { background:rgba(61,214,156,.22); color:var(--up); box-shadow:inset 0 0 0 1px rgba(61,214,156,.6); }
+.c-dn { background:rgba(240,84,84,.22); color:var(--down); box-shadow:inset 0 0 0 1px rgba(240,84,84,.6); }
+.big { font-size:20pt; font-weight:900; color:var(--cream); line-height:1.1; }
 .toc { columns:2; column-gap:18px; font-size:10pt; }
 .toc div { break-inside:avoid; padding:4px 0; border-bottom:1px solid rgba(74,60,67,.5); display:flex; justify-content:space-between; }
 </style></head><body>
@@ -62,37 +66,38 @@ b, strong { color:var(--cream); }
   <div class="in">
     <img class="logo" src="logo.png" alt="BRAIN">
     <h1>BRAIN<br>Playbook</h1>
-    <div class="sub">How to read BRAIN's live market data for Kalshi's 15-minute Bitcoin and XRP rounds.</div>
+    <div class="sub">How to read BRAIN's live market data for 15-minute Bitcoin and XRP prediction-market rounds.</div>
   </div>
   <div class="bottom">
-    <div class="ed">Edition 1 &middot; October 2026 &middot; brainswatch.com</div>
+    <div class="ed">Edition 2 &middot; October 2026 &middot; brainswatch.com</div>
     <p class="note" style="margin-top:8px;color:#d6cac4">Information and education only. Not financial advice. BRAIN gathers and displays market data; it never tells anyone to trade or what to do with their money.</p>
   </div>
 </section>
 
 <!-- 2 WHAT BRAIN IS -->
-<section class="page">
+<section class="page tight">
   <div class="kick">Start here</div>
   <h2>What BRAIN is (and isn't)</h2>
   <p class="lead">BRAIN is an information service. Its software watches public market data around the clock, measures it, and shows you what it sees, live.</p>
   <div class="two">
     <div class="card"><h3><span class="ico i-check"></span>What BRAIN does</h3>
-      <p>Gathers prices, trades and order books from the exchanges that matter, plus Kalshi's own market prices.</p>
-      <p>Runs that data through its models and shows the readings: calls, confidence, flips, whale activity, statistics.</p>
-      <p>Grades every reading against how the round really settled, and keeps the full record visible.</p></div>
+      <p>Gathers prices, trades and order books from the exchanges that matter, plus the prediction market's own prices.</p>
+      <p>Shows its readings live and grades every one against how the round really settled.</p></div>
     <div class="card"><h3><span class="ico i-x"></span>What BRAIN doesn't do</h3>
-      <p>It doesn't give financial, investment or trading advice, or recommend anything.</p>
-      <p>It doesn't tell anyone to buy, sell, hold or place money anywhere. Every decision is yours.</p>
-      <p>It doesn't know your finances or goals, and it doesn't place trades for members.</p></div>
+      <p>It doesn't give financial advice or tell anyone to buy, sell, hold or place money anywhere.</p>
+      <p>It doesn't know your finances and doesn't trade for members. Every decision is yours.</p></div>
   </div>
-  <h3 style="margin-top:18px"><span class="ico i-clock"></span>How a 15-minute round works</h3>
+  <h3 style="margin-top:12px"><span class="ico i-clock"></span>How a 15-minute round works</h3>
   <div class="glass">
     <table>
       <tr><th style="width:26%">Piece</th><th>What it means</th></tr>
-      <tr><td><b>The line (target)</b></td><td>The price Kalshi sets when the round opens. The question is simply: will the price be above or below this line when the round ends?</td></tr>
+      <tr><td><b>The line (target)</b></td><td>The price the market sets when the round opens. The question is simply: will the price be above or below this line when the round ends?</td></tr>
       <tr><td><b>UP / DOWN</b></td><td><span class="up">UP</span> = settles above the line. <span class="down">DOWN</span> = settles below it.</td></tr>
-      <tr><td><b>The market %</b></td><td>Kalshi's own price for a side, read as the crowd's odds. 72% on UP means UP costs about 72&cent; and pays $1 if right.</td></tr>
-      <tr><td><b>Settlement</b></td><td>Rounds settle on a CF Benchmarks index built from Coinbase, Kraken, Bitstamp, Gemini, Crypto.com, Bullish and LMAX (Gemini isn't in XRP's index). It's an <b>average over the last 60 seconds</b>, so a spike in the final seconds barely moves it.</td></tr>
+      <tr><td><b>The market %</b></td><td>The market's own price for a side, read as the crowd's odds. 72% on UP means UP costs about 72&cent; and pays $1 if right.</td></tr>
+      <tr><td><b>Settlement</b></td><td>Rounds settle on an independent index of major exchanges, <b>averaged over the last 60 seconds</b>, so a spike in the final seconds barely moves it.</td></tr>
+      <tr><td><b>Payout</b></td><td>A correct side pays $1 per contract at settlement; a wrong side pays $0. Buying at 72&cent; means 28&cent; profit if right and 72&cent; lost if wrong, before fees.</td></tr>
+      <tr><td><b>Fees</b></td><td>The market charges a trading fee, largest near 50&cent; and smallest near 1&cent; or 99&cent;. Fees mean a side can be right most of the time and still lose money overall.</td></tr>
+      <tr><td><b>Before the end</b></td><td>Prices move all round. A position can be sold before settlement at whatever the market is paying at that moment, which may be more or less than it cost.</td></tr>
       <tr><td><b>The clock</b></td><td>15 minutes per round. BRAIN reads it at the 4:00 and 8:00 marks and counts down continuously.</td></tr>
     </table>
   </div>
@@ -113,23 +118,72 @@ b, strong { color:var(--cream); }
   <h3 style="margin-top:16px">Two numbers on every call</h3>
   <div class="glass"><table>
     <tr><th style="width:30%">Line in the box</th><th>What it tells you</th></tr>
-    <tr><td><b>BRAIN confidence: 84%</b></td><td>How strongly BRAIN's own blend of readings leans to that side at the lock (price vs the line, order flow, the market's price, candle and trend reads).</td></tr>
-    <tr><td><b>Market at lock: 72%</b></td><td>What Kalshi was charging for that side at the exact moment the call locked. Comparing the two shows whether BRAIN and the crowd agreed.</td></tr>
-    <tr><td><b>Market agrees &middot; 70%</b></td><td>Kalshi's price for that side right now. "Agrees" means the market still favors BRAIN's side; "disagrees" means it has swung the other way.</td></tr>
+    <tr><td><b>BRAIN confidence: 84%</b></td><td>How strongly BRAIN's own models lean to that side at the lock.</td></tr>
+    <tr><td><b>Market at lock: 72%</b></td><td>What the market was charging for that side at the exact moment the call locked. Comparing the two shows whether BRAIN and the crowd agreed.</td></tr>
+    <tr><td><b>Market agrees &middot; 70%</b></td><td>The market's price for that side right now. "Agrees" means the market still favors BRAIN's side; "disagrees" means it has swung the other way.</td></tr>
   </table></div>
   <h3>Confidence tiers</h3>
   <div class="glass"><table>
     <tr><th style="width:20%">Tier</th><th style="width:22%">Confidence</th><th>Notes</th></tr>
-    <tr><td><span class="pill p-super">SUPER</span></td><td>80% or more</td><td>Strongest readings. Flow pointing the other way drops it a level.</td></tr>
-    <tr><td><span class="pill p-good">GOOD</span></td><td>65% or more</td><td>Clear lean. Three or more line crosses drop it a level.</td></tr>
-    <tr><td><span class="pill p-weak">WEAK</span></td><td>below 65%</td><td>A lean, but close. Near 50/50 BRAIN waits up to 60 seconds before deciding.</td></tr>
+    <tr><td><span class="pill p-super">SUPER</span></td><td>Highest</td><td>The strongest readings, backed by a strong record from similar rounds.</td></tr>
+    <tr><td><span class="pill p-good">GOOD</span></td><td>Clear lean</td><td>A clear lean. A choppy round or mixed signals can lower a reading's tier.</td></tr>
+    <tr><td><span class="pill p-weak">WEAK</span></td><td>Close</td><td>A lean, but close. This is where most misses happen (see the scorecard on page 5).</td></tr>
   </table></div>
   <h3><span class="ico i-star"></span>Tags you may see</h3>
-  <p style="font-size:9.6pt;margin:0"><span class="gold">80% SETUP</span>: the round matches a filter that won 80%+ on rounds the backtest had never seen. <span class="amber">REVERSAL</span>: the reading sides with the underdog because flip risk, RSI and momentum line up. <span class="pink">Top traders agree</span>: verified high-record traders were on the same side (sealed call only, never changes the direction).</p>
+  <p style="font-size:9.6pt;margin:0"><span class="gold">80% SETUP</span>: the round matches a pattern that scored 80%+ on rounds it was never built from. <span class="amber">REVERSAL</span>: the reading sides with the underdog because several signals point to a turn. <span class="pink">Top traders agree</span>: verified high-record traders were on the same side (sealed call only, never changes the direction). <span class="sage">Held the early call</span>: the 8:00 reading kept the 4:00 side because switching at that confidence has lost more often than it won (page 4).</p>
   <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>3</span></div>
 </section>
 
-<!-- 4 READING THE ROUND -->
+<!-- 4 HOW BRAIN LEARNS -->
+<section class="page tight">
+  <div class="kick">Under the hood</div>
+  <h2>How BRAIN learns</h2>
+  <p class="lead">BRAIN doesn't just read the round in front of it. It checks how every past round from the same spot actually ended, wins and losses, and keeps updating.</p>
+  <div class="card"><h3><span class="ico i-clock"></span>Price-target history</h3>
+    <p>At 4:00 and 8:00 BRAIN looks at where price sits against the line and what the market is doing, then checks how past rounds in a similar spot actually ended. The reason under the call shows it in plain words, e.g. <i>"38 of 45 rounds from this spot ended UP (84%) with the trend up."</i></p>
+    <p class="note">A few lucky rounds can't swing a reading on their own; it takes a real record.</p></div>
+  <div class="two">
+    <div class="card"><h3><span class="ico i-flame"></span>Trend</h3>
+      <p>BRAIN reads the short-term trend as <span class="up">up</span>, <span class="down">down</span> or flat.</p>
+      <p>If readings that go against a running trend keep losing, BRAIN learns that and leans with the trend instead.</p></div>
+    <div class="card"><h3><span class="ico i-x"></span>Learning from losses</h3>
+      <p>Recent rounds count more than older ones, so this week's misses reshape the next reading quickly.</p>
+      <p>It refreshes several times a day, and changes only go live after they prove themselves on rounds they were never built from.</p></div>
+  </div>
+  <div class="glass"><h3 style="margin-top:0"><span class="ico i-lock"></span>Early vs sealed: the flip check</h3>
+    <p>Sometimes the 8:00 reading disagrees with the 4:00 reading. BRAIN studies every past round where that happened and learns how sure the 8:00 reading has to be before switching sides has actually paid off. Below that level, the sealed reading <b>holds the early side</b> and says so on screen.</p>
+    <p class="note" style="margin:0">This rule is tested the same way and only used when it has produced more correct readings, not fewer.</p></div>
+  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>4</span></div>
+</section>
+
+<!-- 5 SCORECARD -->
+<section class="page tight">
+  <div class="kick">By the numbers</div>
+  <h2>4:00 vs 8:00: the scorecard</h2>
+  <p class="lead">How each reading has scored in BRAIN's backtest of 1,992 Bitcoin rounds over 21 days (October 2026), graded against how each round settled.</p>
+  <div class="two">
+    <div class="card"><div class="kick">Early &middot; 4:00</div><div class="big">68.7%</div><p class="note" style="margin:0">right overall &middot; side cost about 69&cent; on average</p></div>
+    <div class="card"><div class="kick">Sealed &middot; 8:00</div><div class="big">78.4%</div><p class="note" style="margin:0">right overall &middot; side cost about 78&cent; on average</p></div>
+  </div>
+  <h3>By confidence tier</h3>
+  <div class="glass"><table>
+    <tr><th style="width:22%">Tier</th><th>Early 4:00</th><th>Sealed 8:00</th></tr>
+    <tr><td><span class="pill p-super">SUPER</span></td><td class="sage">86.1% <span class="note">(423 rounds)</span></td><td class="sage">89.4% <span class="note">(603 rounds)</span></td></tr>
+    <tr><td><span class="pill p-good">GOOD</span></td><td>70.2% <span class="note">(734)</span></td><td>78.7% <span class="note">(633)</span></td></tr>
+    <tr><td><span class="pill p-weak">WEAK</span></td><td class="amber">57.1% <span class="note">(718)</span></td><td class="amber">68.2% <span class="note">(670)</span></td></tr>
+  </table></div>
+  <h3>What the record shows</h3>
+  <div class="card">
+    <p><b>Later is more often right, but costs more.</b> By 8:00 price has usually moved, so the 8:00 reading is right more often, but the market already prices that in. The leading side cost about 78&cent; at 8:00 vs 69&cent; at 4:00, so each correct reading is worth less.</p>
+    <p><b>Tier matters more than timing.</b> A 4:00 SUPER reading (86.1%) has scored nearly as well as an 8:00 SUPER (89.4%), and far better than any WEAK reading.</p>
+    <p><b>WEAK is where the misses are.</b> Close rounds stay close; 57&ndash;68% isn't far from a coin flip.</p>
+    <p style="margin:0"><b>Fees change the picture.</b> In the $100 simulation (page 9), after the market's fee and a cent of slippage, most readings came out near break-even. 4:00 SUPER readings were slightly positive (+0.7% per dollar).</p>
+  </div>
+  <p class="note">Past and simulated results don't predict future results. These numbers update as the backtest reruns; the live record is always on the dashboard.</p>
+  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>5</span></div>
+</section>
+
+<!-- 6 READING THE ROUND -->
 <section class="page">
   <div class="kick">The gauges</div>
   <h2>Reading the round</h2>
@@ -140,33 +194,33 @@ b, strong { color:var(--cream); }
     <tr><td><b>Market favorite won at 8:00</b></td><td class="sage">82.6%</td><td>76.9%</td><td>70.9%</td><td>67.5%</td><td class="amber">62.8%</td></tr>
   </table><p class="note" style="margin:6px 0 0">From BRAIN's 21-day backtest of 1,992 Bitcoin rounds (1-minute candles). Each extra cross has meant a less settled round. Box labels: CLEAN 0&ndash;1 &middot; SOME CHOP 2 &middot; CHOPPY 3+.</p></div>
   <h3>RSI (14): momentum</h3>
-  <div class="glass"><p>BRAIN shows two ways of computing RSI: <b>TradingView</b> (Wilder's standard) and <b>Webull</b> (a simple average), plus their average. The starred one is whichever read rounds better in the daily backtest.</p>
+  <div class="glass"><p>BRAIN shows RSI the way <b>TradingView</b> and <b>Webull</b> compute it, so it matches the charts you already use. The starred one is whichever has read rounds better lately.</p>
   <table><tr><th>Method</th><th>RSI above/below 50 matched the round at 8:00</th><th>At extremes (70+ / 30&minus;)</th></tr>
   <tr><td><b>TradingView</b></td><td>73.2%</td><td>91.9% (160 rounds)</td></tr>
   <tr><td>Webull</td><td>72.3%</td><td>85.0% (453 rounds)</td></tr></table>
   <p class="note" style="margin:6px 0 0">By 8:00 price has often already moved, so RSI partly confirms the move rather than predicting it.</p></div>
   <div class="two">
     <div class="card"><h3>Projected settlement</h3><p>In the final minute BRAIN averages the index second by second, the way the round settles, and shows what the remaining seconds would need to average to flip it.</p></div>
-    <div class="card"><h3>Flip radar</h3><p>A 0&ndash;99% estimate of how likely the round is to cross back, from opposing flow, cushion from the line, crosses, order-book walls and pace.</p></div>
+    <div class="card"><h3>Flip radar</h3><p>A 0&ndash;99% estimate of how likely the round is to cross back to the other side.</p></div>
   </div>
   <div class="card"><h3>Price-target history</h3><p>At the bottom of each coin: the last three rounds whose line was this one or closest to it (within 5%), how each ended, and whether BRAIN's sealed reading matched.</p></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>4</span></div>
+  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>6</span></div>
 </section>
 
-<!-- 5 ALERTS -->
+<!-- 7 ALERTS -->
 <section class="page">
   <div class="kick">Live alerts</div>
   <h2>Flip watch, sounds and voice</h2>
   <p class="lead">Alerts describe a change in the data the moment it happens.</p>
   <h3>Flip watch pills</h3>
   <div class="glass">
-    <p>After a confirmed flip (radar held 70%+ for 3 seconds, or the other side jumped from 30% or less to 45%+), a slim pill floats at the top of the page:</p>
+    <p>After a confirmed flip, a slim pill floats at the top of the page:</p>
     <table>
       <tr><th style="width:34%">You see</th><th>It means</th></tr>
       <tr><td><span class="sage">&#9650; UP with call 74%</span></td><td>Price is moving the same way as the call.</td></tr>
       <tr><td><span class="amber">&#9660; DOWN against call 53%</span></td><td>Price is moving against the call (amber text).</td></tr>
       <tr><td><span class="pill p-hold"><span class="ico i-hold" style="color:var(--sage)"></span>HOLDING</span></td><td>The market is back on the call's side.</td></tr>
-      <tr><td><span class="pill p-rev"><span class="ico i-rev" style="color:#f6ece5"></span>REVERSAL</span></td><td>The market has turned 60%+ against the call.</td></tr>
+      <tr><td><span class="pill p-rev"><span class="ico i-rev" style="color:#f6ece5"></span>REVERSAL</span></td><td>The market has turned clearly against the call.</td></tr>
     </table></div>
   <div class="two">
     <div class="card"><h3><span class="ico i-cash"></span>Cash-out level note</h3><p>When the called side reaches 90%+ on the market with 2+ minutes left, the voice says <i>"Some traders cash out here."</i> It describes the market; it's not a suggestion.</p></div>
@@ -179,10 +233,10 @@ b, strong { color:var(--cream); }
     <tr><td><b>Chime + spoken call</b></td><td>An early, sealed or late call just locked, with BRAIN's confidence and the market's price.</td></tr>
     <tr><td><b>Voices</b></td><td>Ava, Jenny, Aria, Emma, Michelle, Tony (New York style) or Sarge (drill sergeant). Pick one in Sound settings; sound needs one tap to switch on in each browser session.</td></tr>
   </table></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>5</span></div>
+  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>7</span></div>
 </section>
 
-<!-- 6 WHALES + RADAR -->
+<!-- 8 WHALES + RADAR -->
 <section class="page">
   <div class="kick">Big money</div>
   <h2>Whales, exchanges and Trader Radar</h2>
@@ -190,43 +244,49 @@ b, strong { color:var(--cream); }
   <h3>Exchange trust tiers</h3>
   <div class="glass"><table>
     <tr><th style="width:22%">Tier</th><th style="width:40%">Exchanges</th><th>Why</th></tr>
-    <tr><td><span class="sage">Index</span></td><td>Coinbase, Kraken, Bitstamp, Gemini, Crypto.com</td><td>They feed the index Kalshi settles on, so their trades move the settlement price directly.</td></tr>
-    <tr><td><b>Big global</b></td><td>Binance, OKX, Bybit, Bitfinex, major futures markets</td><td>Lead price discovery but don't count toward settlement.</td></tr>
+    <tr><td><span class="sage">Index</span></td><td>The exchanges the settlement index is built from</td><td>They feed the index the round settles on, so their trades move the settlement price directly.</td></tr>
+    <tr><td><b>Big global</b></td><td>The largest global exchanges and futures markets</td><td>Lead price discovery but don't count toward settlement.</td></tr>
     <tr><td class="note">Low-trust</td><td class="note">Dropped from BRAIN</td><td class="note">Offshore venues with enforcement history or thin volume aren't read at all.</td></tr>
   </table></div>
   <h3>Whale impact score (0&ndash;100)</h3>
-  <div class="card"><p>Each big print is sized against live volume using a standard price-impact rule of thumb (impact grows with the square root of size vs volume), weighted by the exchange's tier, then compared with how far price is from the line, the time left and the market's odds. A large buy when the round is a toss-up and price sits right on the line scores high; the same buy when the market is already at 97% scores low.</p>
-  <p class="note">Sixty seconds after every alert BRAIN checks whether price actually moved the whale's way, and keeps a running hit rate per tier, so the score's accuracy is measured, not assumed.</p></div>
+  <div class="card"><p>Each big trade is scored on how much it could actually move this round, not just its size. A large buy when the round is a toss-up and price sits right on the line scores high; the same buy when the market is already at 97% scores low.</p>
+  <p class="note">After every alert BRAIN checks whether price really moved the whale's way and keeps a running hit rate, so the score's accuracy is measured, not assumed.</p></div>
   <h3><span class="ico i-radar"></span>Trader Radar</h3>
-  <div class="card"><p>Tracks positions that well-known Kalshi traders show publicly, only from accounts locked as the real ones. Lookalike names (M0GS, mogs_, letters from other alphabets) are ignored as impostors. Records are kept by round, hour, day and 7 days.</p></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>6</span></div>
+  <div class="card"><p>Tracks positions that well-known prediction-market traders show publicly, only from accounts locked as the real ones. Lookalike names (M0GS, mogs_, letters from other alphabets) are ignored as impostors. Records are kept by round, hour, day and 7 days.</p></div>
+  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>8</span></div>
 </section>
 
-<!-- 7 RECORD -->
+<!-- 9 RECORD -->
 <section class="page">
   <div class="kick">Accountability</div>
   <h2>The record</h2>
   <p class="lead">Every reading is graded against how the round actually settled. Wins and losses both stay on the screen.</p>
   <div class="two">
-    <div class="card"><h3><span class="ico i-flame"></span>Streaks</h3><p>The current run of right or wrong sealed readings, the best and worst runs, and the last eight results. Wins are gold and losses lavender, never green or red, so they're never confused with UP / DOWN.</p></div>
-    <div class="card"><h3>Round history</h3><p>Tap the badge at the top right for today, this week and all time: win rate per call, by tier, and every graded round.</p></div>
+    <div class="card"><h3><span class="ico i-flame"></span>Streaks &amp; scoreboard</h3><p>The current run of right or wrong readings, the best and worst runs, today's record and the latest results as small circles.</p></div>
+    <div class="card"><h3>Round history</h3><p>Tap the badge at the top right for today, this week and all time: win rate per call, by tier, how readings did <b>with vs against the trend</b>, and every graded round.</p></div>
   </div>
+  <h3>Reading the result circles</h3>
+  <div class="glass"><p>Two things in one circle: the <b>color</b> is how the round ended (<span class="up">green = UP</span>, <span class="down">red = DOWN</span>), and the <b>letter</b> is whether BRAIN's reading was right.</p>
+  <table>
+    <tr><td style="width:12%"><span class="chip c-dn">W</span></td><td>Read DOWN, ended DOWN</td><td style="width:12%"><span class="chip c-up">W</span></td><td>Read UP, ended UP</td></tr>
+    <tr><td><span class="chip c-up">L</span></td><td>Read DOWN, but ended UP</td><td><span class="chip c-dn">L</span></td><td>Read UP, but ended DOWN</td></tr>
+  </table></div>
   <h3>The $100-a-trade example</h3>
-  <div class="glass"><p>To show what a reading's record looks like in dollars, BRAIN replays every graded call as if $100 had been placed at the market's price at the moment of the call, held to settlement, with Kalshi's fee and a cent of slippage included.</p>
+  <div class="glass"><p>To show what a reading's record looks like in dollars, BRAIN replays every graded call as if $100 had been placed at the market's price at the moment of the call, held to settlement, with the market's fee and a cent of slippage included.</p>
   <p class="note" style="margin:0"><b>This is a simulation.</b> It uses past data, assumes fills at the price shown, and doesn't reflect real trading. Past and hypothetical results never predict future results, and nothing here suggests placing $100, or any amount, on anything.</p></div>
-  <h3>The daily backtest</h3>
-  <div class="card"><p>Every day BRAIN rebuilds 21 days of Bitcoin rounds from public data and replays its rules to check which readings, filters and indicators held up. The screens above use those results (for example the line-cross and RSI tables).</p></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>7</span></div>
+  <h3>The backtest</h3>
+  <div class="card"><p>Several times a day BRAIN replays recent Bitcoin rounds to check which readings held up and where they lost, and refreshes what it has learned (page 4).</p></div>
+  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>9</span></div>
 </section>
 
-<!-- 8 RESPONSIBLE USE + GLOSSARY -->
+<!-- 10 RESPONSIBLE USE + GLOSSARY -->
 <section class="page">
   <div class="kick">Before you go</div>
   <h2>Risk, and a quick glossary</h2>
   <div class="disc" style="margin:12px 0 14px">
     <p style="margin:0 0 6px"><b>Read this.</b> BRAIN is an information and data service. Nothing in BRAIN or in this Playbook is financial, investment, trading, legal or tax advice, a recommendation, or an instruction to buy, sell, hold or trade anything, or to do anything with your money.</p>
     <p style="margin:0 0 6px">Calls, tiers, percentages, badges, alerts, records and backtests describe what the data and models show. They can be wrong, data can be late or missing, and the service can go down without warning.</p>
-    <p style="margin:0">Prediction markets carry a high risk of loss, including everything you put in. Any decision to trade is yours alone. Only use money you can afford to lose, and talk to a licensed professional if you want advice. BRAIN isn't affiliated with Kalshi, CF Benchmarks or any exchange.</p>
+    <p style="margin:0">Prediction markets carry a high risk of loss, including everything you put in. Any decision to trade is yours alone. Only use money you can afford to lose, and talk to a licensed professional if you want advice. BRAIN isn't affiliated with any prediction market, index provider or exchange.</p>
   </div>
   <div class="glass"><table>
     <tr><th style="width:26%">Term</th><th>Meaning</th></tr>
@@ -236,10 +296,13 @@ b, strong { color:var(--cream); }
     <tr><td><b>Flow</b></td><td>Whether buyers or sellers are taking more volume across the exchanges.</td></tr>
     <tr><td><b>Order-book wall</b></td><td>A large resting order that can slow price at a level.</td></tr>
     <tr><td><b>Settlement average</b></td><td>The 60-second index average the round settles on.</td></tr>
+    <tr><td><b>Trend</b></td><td>The short-term direction: up, down or flat.</td></tr>
+    <tr><td><b>Spot</b></td><td>Where a round stands at a reading, used to compare it with similar past rounds.</td></tr>
+    <tr><td><b>Flip check</b></td><td>The rule for when the 8:00 reading may switch away from the 4:00 side.</td></tr>
     <tr><td><b>Whale</b></td><td>A trade large enough to show up against normal volume (the size threshold adapts to the market).</td></tr>
     <tr><td><b>Pass</b></td><td>Your access period to the live dashboard. Passes are one-time and never renew on their own.</td></tr>
   </table></div>
   <p class="note" style="margin-top:12px">Questions: support@brainswatch.com &middot; Full terms: brainswatch.com/terms &middot; &copy; 2026 BrainsWatch</p>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>8</span></div>
+  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>10</span></div>
 </section>
 </body></html>

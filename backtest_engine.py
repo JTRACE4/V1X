@@ -159,7 +159,7 @@ def fetch_coinbase(start, end):
                   "end": dt.datetime.fromtimestamp(t2, dt.timezone.utc).isoformat()})
         for r in j or []:
             out[int(r[0])] = [float(r[3]), float(r[2]), float(r[1]), float(r[4]), float(r[5])]
-        STATE["progress"] = f"Coinbase candles {len(out):,}"
+        STATE["progress"] = f"price candles {len(out):,}"
         t = t2
         time.sleep(0.25)
     return out
@@ -180,7 +180,7 @@ def fetch_binance(start, end):
                 for r in j:
                     out[int(r[0] // 1000)] = [float(r[5]), float(r[9])]
                 t = int(j[-1][0]) + 60_000
-                STATE["progress"] = f"Binance flow {len(out):,} minutes"
+                STATE["progress"] = f"order flow {len(out):,} minutes"
                 time.sleep(0.15)
             if out:
                 return out
@@ -748,7 +748,7 @@ def run(days=LOOKBACK_DAYS):
         since = now - days * 86400
         markets = fetch_markets(since)
         if not markets:
-            raise RuntimeError("Kalshi returned no settled rounds")
+            raise RuntimeError("the market returned no settled rounds")
         STATE["stage"] = "kalshi prices"
         kcache = _load("kalshi_paths.json", {})
         for i, m in enumerate(markets):
@@ -760,7 +760,7 @@ def run(days=LOOKBACK_DAYS):
                 time.sleep(0.12)
                 if i % 100 == 0:
                     _save("kalshi_paths.json", kcache)
-            STATE["progress"] = f"Kalshi prices {i + 1}/{len(markets)}"
+            STATE["progress"] = f"market prices {i + 1}/{len(markets)}"
         _save("kalshi_paths.json", kcache)
         STATE["stage"] = "BTC candles"
         start = markets[0]["open"] - 130 * 60
@@ -852,7 +852,7 @@ def summary_text(r=None):
     roi = lambda x: "-" if x is None else f"{x * 100:+.1f}%"
     L = [f"BACKTEST {r['days']} days, {r['rounds']} rounds ({r['from']} .. {r['to']}), holdout = newest {r['holdout_rounds']}",
          f"data: {r['price_minutes']:,} price minutes, {r['flow_minutes']:,} flow minutes, strike missing on {r['strike_missing']} rounds",
-         "ROI = profit per $1 staked at Kalshi's price at that minute + 1c slippage + taker fee"]
+         "ROI = profit per $1 staked at the market's price at that minute + 1c slippage + taker fee"]
     for k in ("early", "sealed"):
         s = r["stages"][k]
         L.append(f"\n== {k.upper()} ({'4:00' if k == 'early' else '8:00'})")

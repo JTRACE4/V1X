@@ -120,7 +120,7 @@ def watch(name, note=""):
             return False, f"{name} is already on the list."
         _reg["traders"][name] = {"account_id": name.lower(), "added": _now(), "note": note[:80]}
         _save_reg()
-    return True, f"Watching {name} (locked to the Kalshi profile handle '{name.lower()}')."
+    return True, f"Watching {name} (locked to the market profile handle '{name.lower()}')."
 
 
 def unwatch(name):

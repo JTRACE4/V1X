@@ -68,9 +68,9 @@ def og_tags():
         desc = (OG["desc"]() if OG.get("desc") else "") or ""
     except Exception:
         desc = ""
-    desc = desc or "Live BTC and XRP prices with Kalshi's 15-minute odds - BRAIN's read on every round."
+    desc = desc or "Live BTC and XRP prices with 15-minute market odds - BRAIN's read on every round."
     img = f"{base}/og.png?t={int(time.time() // 60)}"
-    t = "BRAIN - live BTC & XRP odds on Kalshi"
+    t = "BRAIN - live BTC & XRP market odds"
     return (f'<meta name="description" content="{E(desc)}">'
             '<meta property="og:type" content="website"><meta property="og:site_name" content="BRAIN">'
             f'<meta property="og:title" content="{E(t)}"><meta property="og:description" content="{E(desc)}">'
@@ -78,7 +78,7 @@ def og_tags():
             f'<meta property="og:image" content="{E(img)}"><meta property="og:image:secure_url" content="{E(img)}">'
             '<meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200">'
             '<meta property="og:image:height" content="630">'
-            '<meta property="og:image:alt" content="BRAIN - live BTC and XRP prices with Kalshi UP / DOWN odds">'
+            '<meta property="og:image:alt" content="BRAIN - live BTC and XRP prices with market UP / DOWN odds">'
             '<meta name="twitter:card" content="summary_large_image">'
             f'<meta name="twitter:title" content="{E(t)}"><meta name="twitter:description" content="{E(desc)}">'
             f'<meta name="twitter:image" content="{E(img)}">')
@@ -470,7 +470,7 @@ def pricing_page(user, plans, until_text=None, active=False):
                   + "<ul>" + "".join(f"<li>{E(x)}</li>" for x in PLAN_FEATURES) + "</ul>" + btn + "</div>")
     body = ((app_tabs(user, "pricing") if user else
              '<div class="top" style="padding:10px 16px"><a class="brand" href="/">' + brain_logo(34, "p") + '<b>BRAIN</b></a></div>')
-            + '<div class="pr"><h1>Get BRAIN</h1><p class="lead">Live market intelligence for Kalshi\'s 15-minute BTC and XRP rounds.</p>'
+            + '<div class="pr"><h1>Get BRAIN</h1><p class="lead">Live market intelligence for 15-minute BTC and XRP rounds.</p>'
             + status + f'<div class="grid">{cards}</div>'
             + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Passes are one-time payments and never '
               'renew on their own - we email you 2 days before yours ends. <b>All sales are final, no refunds.</b> Accounts that misuse '
@@ -486,21 +486,21 @@ def kalshi_key_card(k):
     if k.get("set") or k.get("env"):
         src = f'key ending <b>{E(k.get("key_tail") or "")}</b>' if k.get("set") else "key from the Railway settings"
         if k.get("error"):
-            status = f'<div class="err">Saved, but Kalshi didn\'t accept it just now ({src}): {E(k["error"])}</div>'
+            status = f'<div class="err">Saved, but the market didn\'t accept it just now ({src}): {E(k["error"])}</div>'
         else:
             bal = k.get("balance")
-            status = (f'<div class="ok">Connected to Kalshi - {src}'
+            status = (f'<div class="ok">Connected to the market - {src}'
                       + (f' &middot; balance <b>${bal:,.2f}</b>' if bal is not None else "") + '</div>')
     else:
-        status = '<div class="err">No Kalshi key yet - auto-buy can\'t place orders until you add one.</div>'
+        status = '<div class="err">No market key yet - auto-buy can\'t place orders until you add one.</div>'
     if not k.get("can_store", True):
         status += '<div class="err">The server needs a secret to encrypt the key: add KALSHI_CREDS_SECRET in Railway.</div>'
-    remove = ('<form method="post" action="/admin" onsubmit="return confirm(\'Remove the Kalshi key? Auto-buy will switch off.\')">'
+    remove = ('<form method="post" action="/admin" onsubmit="return confirm(\'Remove the market key? Auto-buy will switch off.\')">'
               '<button class="b no" name="a" value="kalshi_remove">Remove key</button></form>') if k.get("set") else ""
-    return ('<section class="card"><h3>KALSHI API KEY (AUTO-BUY)</h3>' + status
-            + '<p class="mute small">On Kalshi: Account &amp; security &rarr; API keys &rarr; Create key. Copy the Key ID and download the '
+    return ('<section class="card"><h3>MARKET API KEY (AUTO-BUY)</h3>' + status
+            + '<p class="mute small">On the market site: Account &amp; security &rarr; API keys &rarr; Create key. Copy the Key ID and download the '
               'private key file, open it in a text editor and paste everything below, including the BEGIN and END lines. '
-              'BRAIN checks it with Kalshi, then stores it encrypted on the server. It is never shown again.</p>'
+              'BRAIN checks it with the market, then stores it encrypted on the server. It is never shown again.</p>'
             + '<form method="post" action="/admin" autocomplete="off">'
               '<label class="mute small" for="kk-id">API key ID</label>'
               '<input id="kk-id" name="key_id" required autocomplete="off" spellcheck="false" placeholder="e.g. a1b2c3d4-...">'
@@ -534,7 +534,7 @@ GUIDE = [
         ("Streak", "Sealed-call wins or losses in a row."),
         ("Win-rate badge", "Your win rate and streak. Tap it to see every past round."),
         ("Buy pressure", "Whether buyers or sellers are more active right now."),
-        ("Kalshi row", "White = the market agrees with the call. Black = the market disagrees."),
+        ("Market row", "White = the market agrees with the call. Black = the market disagrees."),
     ]),
     ("Alerts", [
         ("Whale", "Someone just made a very large trade."),
@@ -568,7 +568,7 @@ def guide_html(user):
 
 TERMS = [
     ("What BRAIN is: an information and data service", "BRAIN is an automated information service. Its software gathers "
-     "public market data (prices, trades, order books, Kalshi market prices and similar), watches it, and shows what that data "
+     "public market data (prices, trades, order books, prediction-market prices and similar), watches it, and shows what that data "
      "and BRAIN's own models are reading - charts, statistics, model estimates, labels and alerts. That is all BRAIN does: it "
      "collects, measures and displays information, for informational and educational purposes."),
     ("Not financial advice. No recommendations. No instructions.", "Nothing on BRAIN is financial, investment, trading, legal "
@@ -582,7 +582,7 @@ TERMS = [
      "Hypothetical and backtested results are simulated, use past data, and do not reflect real trading."),
     ("No adviser relationship", "BRAIN, its owner and staff are not registered investment advisers, commodity trading advisors, "
      "brokers, dealers, financial planners or fiduciaries, and using BRAIN does not create any adviser, client or fiduciary "
-     "relationship. BRAIN is not affiliated with, endorsed by or connected to Kalshi, CF Benchmarks or any exchange shown."),
+     "relationship. BRAIN is not affiliated with, endorsed by or connected to any prediction market, index provider or exchange."),
     ("Your decisions, your risk", "Prediction markets and trading carry a high risk of loss, including losing everything you "
      "put in. Every decision to trade, how much, and when, is yours alone, made on your own judgment, and you are fully "
      "responsible for it and its results. Only trade money you can afford to lose. If you want advice, talk to a licensed "

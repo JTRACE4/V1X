@@ -158,7 +158,7 @@ class KalshiClient:
         pc = _provided_credentials()
         self.key_id = pc[0] if pc else os.environ.get("KALSHI_API_KEY_ID")
         if not self.key_id:
-            raise RuntimeError("No Kalshi API key yet - add it on the Admin page (Kalshi API key).")
+            raise RuntimeError("No market API key yet - add it on the Admin page (market API key).")
         self.private_key = _load_private_key()
 
     def _headers(self, method, path):

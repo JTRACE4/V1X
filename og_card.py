@@ -173,7 +173,7 @@ def render_png(data):
     title_f = _font("fraunces-800.ttf", 92)
     d.text((58, 40), "BRAIN", font=title_f, fill=CREAM)
     tag_f = _font("fraunces-600i.ttf", 30)
-    d.text((62, 146), "Live crypto odds on Kalshi, every 15 minutes", font=tag_f, fill=TAN)
+    d.text((62, 146), "Live crypto market odds, every 15 minutes", font=tag_f, fill=TAN)
     live_f = _font("nunito-900.ttf", 22)
     lx = 58 + _text_w(d, "BRAIN", title_f) + 22
     d.ellipse((lx, 84, lx + 14, 98), fill=ROSE)
@@ -199,7 +199,7 @@ def render_png(data):
         d.text((x0 + 28, y0 + 78), _money(c.get("price"), asset), font=price_f, fill=CREAM)
 
         k = c.get("kalshi_up")
-        d.text((x0 + 30, y0 + 168), "KALSHI 15-MIN ROUND", font=lab_f, fill=MUTE)
+        d.text((x0 + 30, y0 + 168), "15-MIN MARKET ROUND", font=lab_f, fill=MUTE)
         if k is not None:
             up = max(0, min(100, round(k * 100)))
             dn = 100 - up

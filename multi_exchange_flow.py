@@ -60,6 +60,16 @@ VENUES = {
 DISABLED_VENUES = {"kucoin", "gate", "bitget", "bitget_perp", "bitmex", "binanceus"}
 for _dv in DISABLED_VENUES:
     VENUES.pop(_dv, None)
+# 2026-10-22 (user): never show exchange names on the site - the buy / sell data stays, the venues are anonymous.
+# Index venues = the ones the settlement index is built from; global = big spot venues outside it; futures = perps.
+ANON_LABELS = {
+    "coinbase": "Index venue 1", "kraken": "Index venue 2", "bitstamp": "Index venue 3", "gemini": "Index venue 4",
+    "cryptocom": "Index venue 5", "binance": "Global venue 1", "okx": "Global venue 2", "bybit": "Global venue 3",
+    "bitfinex": "Global venue 4", "binance_perp": "Futures venue 1", "okx_perp": "Futures venue 2",
+    "bybit_perp": "Futures venue 3", "hyperliquid": "Futures venue 4", "deribit": "Futures venue 5",
+}
+for _k in list(VENUES):
+    VENUES[_k] = (ANON_LABELS.get(_k, "Other venue"), VENUES[_k][1])
 _VENUE_LABELS.update({k: v[0] for k, v in VENUES.items()})
 DEDUP_KEEP = 60_000          # trade ids remembered per exchange (minutes of history even on the busiest venue)
 

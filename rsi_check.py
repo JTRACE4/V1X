@@ -120,5 +120,5 @@ def read(asset, live_price=None, composite_rsi1=None):
         "pick_why": ("TradingView's version is Wilder's standard RSI with a full warm-up - the textbook definition, and it "
                      "is steadier. The Webull-style simple average jumps more on single candles."),
         "agree": gap_wb is not None and gap_wb < 5,
-        "source": f"Coinbase {PRODUCTS[asset]}",
+        "source": f"Index venue 1 {PRODUCTS[asset]}",
     }
