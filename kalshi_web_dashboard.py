@@ -6441,9 +6441,9 @@ function _voiceBudgetOk(item) {
   const used = voiceSaid.reduce((a, x) => a + x[1], 0);
   return item.prio || used + item.words <= VOICE_WORDS_PER_MIN;
 }
-function _voicePush(text, urgent, ttlMs) {
+function _voicePush(text, urgent, ttlMs, mustSay) {
   const t = _marketWords(text);
-  const item = { text: t, until: Date.now() + (ttlMs || 20000), prio: !!urgent, words: t.split(/\s+/).filter(Boolean).length };
+  const item = { text: t, until: Date.now() + (ttlMs || 20000), prio: !!(urgent || mustSay), words: t.split(/\s+/).filter(Boolean).length };
   if (urgent) voiceQ.unshift(item); else voiceQ.push(item);
   _voiceNext();
 }
@@ -7151,7 +7151,7 @@ function showLockToast(name, call, kp) {
 // leaves the zone at 28 / 72 so a wobble around 25 or 75 does not re-alert. Information only - never used for buying.
 // 2026-10-22 (user: "give a voice read for when RSI is overbought and oversold"): same 70 / 30 levels the RSI box shows;
 // it leaves the zone at 67 / 33 so a wobble around the line doesn't repeat, and the same coin won't repeat within 2 minutes.
-const RSI_LOW = 30, RSI_HIGH = 70, RSI_BACK_LOW = 33, RSI_BACK_HIGH = 67, RSI_VOICE_GAP_MS = 120000;
+const RSI_LOW = 30, RSI_HIGH = 70, RSI_BACK_LOW = 33, RSI_BACK_HIGH = 67, RSI_VOICE_GAP_MS = 300000;   // once per 5 min per coin + zone
 const rsiSpokeAt = {};
 const rsiZone = {};
 const rsiDismissed = {};
@@ -7193,9 +7193,9 @@ function checkRsiAlerts() {
         rsiSpokeAt[name + z] = Date.now();
         playRsiAlert(z);
         const coin = name === 'BTC' ? 'Bitcoin' : name;
-        speakDelayed(coin + ' RSI ' + Math.round(v) + '. ' + (z === 'under'
-          ? 'Oversold. Sellers have pushed hard and may be running out of steam.'
-          : 'Overbought. Buyers have pushed hard and may be running out of steam.'), 600);
+        // 2026-10-22 (user: "make sure it announces when RSI is oversold, but don't overdo it"): short, always heard
+        setTimeout(() => { if (voiceAlertsEnabled && soundEnabled) _voicePush(coin + ' RSI ' + Math.round(v) + ', '
+          + (z === 'under' ? 'oversold.' : 'overbought.'), false, 15000, true); }, 600);
       }
     }
     if (z && !rsiDismissed[name]) live[name] = {z: z, v: v};
@@ -11755,7 +11755,7 @@ _TTS_VOICES = {"ava": "en-US-AvaNeural", "jenny": "en-US-JennyNeural", "aria": "
                # delivery, every line rewritten in the persona's words (_persona below), and a compressor + boost in the page.
                "tony": "en-US-RogerNeural",
                "sarge": "en-US-ChristopherNeural"}
-_TTS_STYLE = {"tony": {"rate": "+22%", "pitch": "-4Hz", "volume": "+40%"},
+_TTS_STYLE = {"tony": {"rate": "+12%", "pitch": "-11Hz", "volume": "+40%"},      # older, heavier, more serious (2026-10-22)
               "sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"}}
 _NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b", "'bout"), (r"\bAlright\b", "Awright"),
              (r"\b(go|head|mov|flipp|hold|look|build|com|tell|buy|sell|runn|push|turn|hang|watch|bring|happen|mak|stay|get|tak|break)ing\b", r"\1in'"),
@@ -11773,7 +11773,32 @@ _SARGE_CAUTION = ("Stay sharp, I got your six!", "Eyes up! Stay frosty!", "Hold 
 _CAUTION = re.compile(r"(?i)flip|against|overbought|oversold|warning|lost|reversal|coin flip|careful|incoming")
 
 
-def _persona(text, key):
+# ---- 2026-10-22 (user: "make the New Yorker sound older, more serious, mean but friendly - a real strong New York accent").
+# No free voice has a real NYC accent. When an ElevenLabs key and a voice ID are set in Railway, Tony (and optionally Sarge)
+# are spoken by that voice instead - pick a consented New York-accent voice from the ElevenLabs Voice Library:
+#   ELEVENLABS_API_KEY, ELEVENLABS_TONY_VOICE_ID, (optional) ELEVENLABS_SARGE_VOICE_ID
+# The real accent then does the work, so Tony's lines are NOT respelled ("goin'", "shuah") for that voice.
+def _eleven_voice(key):
+    if not os.environ.get("ELEVENLABS_API_KEY"):
+        return None
+    return {"tony": os.environ.get("ELEVENLABS_TONY_VOICE_ID"), "sarge": os.environ.get("ELEVENLABS_SARGE_VOICE_ID")}.get(key) or None
+
+
+def _eleven_mp3(text, voice_id, key):
+    import requests as _rq
+    st = {"tony": {"stability": 0.38, "similarity_boost": 0.85, "style": 0.55, "use_speaker_boost": True},
+          "sarge": {"stability": 0.30, "similarity_boost": 0.80, "style": 0.75, "use_speaker_boost": True}}.get(key, {})
+    r = _rq.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128",
+                 headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json"},
+                 json={"text": text, "model_id": os.environ.get("ELEVENLABS_MODEL", "eleven_turbo_v2_5"), "voice_settings": st},
+                 timeout=12)
+    r.raise_for_status()
+    if len(r.content) < 500:
+        raise RuntimeError("empty audio")
+    return r.content
+
+
+def _persona(text, key, respell=True):
     """Rewrite a plain alert line in Tony's or Sarge's words. Same line always gets the same sign-off (so it caches)."""
     if key not in ("tony", "sarge"):
         return text
@@ -11791,7 +11816,7 @@ def _persona(text, key):
     else:
         for pat, rep in _NY_START:
             t = re.sub(pat, rep, t)
-        for pat, rep in _NY_WORDS:
+        for pat, rep in (_NY_WORDS if respell else ()):
             t = re.sub(pat, rep, t)
         pass
         ends = _NY_CAUTION if _CAUTION.search(text) else _NY_END
@@ -11817,6 +11842,22 @@ def _tts_mp3(text, voice_key):
         return None
     voice = _TTS_VOICES.get(voice_key, _TTS_VOICES["ava"])
     style = _TTS_STYLE.get(voice_key, {})
+    _ev = _eleven_voice(voice_key)
+    if _ev:
+        _t11 = _persona(text, voice_key, respell=False).replace("XRP", "X R P")
+        fp11 = os.path.join(_TTS_DIR, "11-" + hashlib.sha1(f"{_ev}|{_t11}".encode()).hexdigest() + ".mp3")
+        if os.path.isfile(fp11):
+            with open(fp11, "rb") as f_:
+                return f_.read()
+        try:
+            audio = _eleven_mp3(_t11, _ev, voice_key)
+            os.makedirs(_TTS_DIR, exist_ok=True)
+            with open(fp11 + ".part", "wb") as f_:
+                f_.write(audio)
+            os.replace(fp11 + ".part", fp11)
+            return audio
+        except Exception as e:
+            print(f"[tts] ElevenLabs {voice_key} failed, using the free voice: {e!r}")
     text = _persona(text, voice_key)
     rate, pitch, volume = style.get("rate", "+4%"), style.get("pitch", "+0Hz"), style.get("volume", "+0%")
     key = hashlib.sha1(f"{voice}|{rate}|{pitch}|{volume}|{text}".encode()).hexdigest()
