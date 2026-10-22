@@ -829,6 +829,7 @@ def run(days=LOOKBACK_DAYS):
         markets = fetch_markets(since)
         if not markets:
             raise RuntimeError("the market returned no settled rounds")
+        _save("markets.json", markets)        # 2026-10-22: kept for the dashboard's price-target history
         STATE["stage"] = "kalshi prices"
         kcache = _load("kalshi_paths.json", {})
         for i, m in enumerate(markets):
@@ -901,6 +902,16 @@ def run(days=LOOKBACK_DAYS):
         print(f"[backtest] FAILED: {e!r}")
     finally:
         STATE["running"] = False
+
+
+_mk_cache = [0.0, []]
+
+
+def settled_markets():
+    """Settled BTC 15-minute rounds from the last backtest pull: [{ticker, open, close, strike, result}], cached 10 min."""
+    if time.time() - _mk_cache[0] > 600:
+        _mk_cache[0], _mk_cache[1] = time.time(), _load("markets.json", [])
+    return _mk_cache[1]
 
 
 def load_saved():

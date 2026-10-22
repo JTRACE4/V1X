@@ -6083,7 +6083,10 @@ body.has-flip-watch { padding-top:0; }
 .sk-chips i.ok.cu, .sc-chips i.ok.cu, .sk-chips i.ok.cd, .sc-chips i.ok.cd, .sk-chips i.ok.w, .sc-chips i.ok.w { color:#ffffff !important; }
 .sc-legend { font-size:10px; margin-top:4px; }
 /* 2026-10-22: live chart (same as the free page) */
-.lw-box { margin-top:6px; }
+.lw-win { display:block; width:100%; margin:14px 0 6px; }
+.lw-win .pat-win-head { margin-bottom:4px; }
+.lw-slot { display:block; width:100%; }
+.lw-box { margin-top:6px; width:100%; }
 .lw-tabs { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px; }
 .lw-tabs button { background:rgba(255,255,255,0.05); color:#e9ded8; border:1px solid rgba(255,255,255,0.12); border-radius:999px; padding:4px 11px; font:inherit; font-size:12px; font-weight:800; cursor:pointer; }
 .lw-tabs button.on { background:rgba(233,165,187,0.20); border-color:#e9a5bb; color:#fbf4ec; }
@@ -6099,16 +6102,12 @@ body.has-flip-watch { padding-top:0; }
 .lw-pat { padding:6px 8px; border-radius:10px; background:rgba(42,34,38,0.55); border:1px solid rgba(255,255,255,0.06); margin-bottom:5px; font-size:13px; }
 .lw-pat summary { cursor:pointer; }
 .lw-pat .hint { margin-top:4px; font-size:12px; }
-/* 2026-10-22 (user: "make sure the top screen is centered on all versions"): header and coin cards centered at every
-   width, and no card is ever wider than the screen (the 640px minimum pushed phones off-center) */
+/* 2026-10-22 (user): the BTC / XRP cards are centered at every width and never wider than the screen (the 640px
+   minimum pushed phones off-center). The header keeps its original layout. */
 html, body { overflow-x:hidden; }
-.g-top { justify-content:center !important; text-align:center; }
-.g-brand, .g-tag { justify-content:center; }
-.view-bar { justify-content:center; flex-wrap:wrap; }
 #content { justify-content:center; }
 .card { min-width:0 !important; max-width:min(1180px, 100%) !important; box-sizing:border-box; margin-left:auto !important; margin-right:auto !important; }
 @media (max-width:760px) { body { padding-left:10px !important; padding-right:10px !important; } .card { flex-basis:100% !important; } }
-@media (min-width:761px) { .g-top { padding:0 150px; } .g-top .snd-toggle { position:absolute !important; right:0; top:50%; transform:translateY(-50%); margin:0 !important; } }
 
 .rv-watch { margin-top:8px; padding:7px 9px; border-radius:10px; font-size:11.5px; line-height:1.35; border:1px solid rgba(255,255,255,0.10); background:rgba(154,90,68,0.10); }
 .rv-watch b { letter-spacing:.5px; }
@@ -8656,7 +8655,7 @@ def build_pattern_window(asset_name):
     """2026-10-22 (user): the same zoomable live chart as the free page, with RSI + MACD read in its corner and, under it,
     only the patterns that are 80%+ formed or finished AND have a proven track record. The chart is drawn in the browser
     and kept between the page's 1-second refreshes, so zoom / scroll survive. Information only."""
-    return (f'<div class="row lw-win" data-asset="{asset_name}"><div class="pat-win-head"><b>{asset_name} LIVE CHART</b></div>'
+    return (f'<div class="lw-win" data-asset="{asset_name}"><div class="pat-win-head"><b>{asset_name} LIVE CHART</b></div>'
             f'<div class="lw-slot" data-asset="{asset_name}"><span class="hint">loading chart...</span></div></div>')
 
 
@@ -12280,43 +12279,112 @@ def radar_html(name, ticker):
 TARGET_MATCH_PCT = 0.05       # "the same price target" = exact, or within 5%
 
 
+TARGET_RECENT_PCT = 0.01       # 2026-10-22 (user): first look at the most recent day for targets within 1%
+_tgt_cache = {}
+
+
+def _target_touches(name, line):
+    """When did price last trade AT this target (a candle whose low-high range contains it), or come closest, using the
+    live 1-minute candles first, then hourly, then daily for older history. Returns [(ts, tf, exact, price, move_after)]."""
+    sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
+    if _mtf is None or not sym:
+        return []
+    out, seen_tf = [], set()
+    for tf in ("1m", "1h", "1d"):
+        cs = (_mtf.windows.get(sym) or {}).get(tf) or []
+        if len(cs) < 3:
+            continue
+        hit = None
+        for i in range(len(cs) - 2, -1, -1):              # newest closed candle first
+            c = cs[i]
+            if c[3] <= line <= c[2]:
+                after = cs[min(len(cs) - 1, i + {"1m": 15, "1h": 1, "1d": 1}[tf])][4]
+                hit = (c[0], tf, True, line, (after - line) / line)
+                break
+        if hit is None:                                   # never touched in this window: the closest candle instead
+            i = min(range(len(cs) - 1), key=lambda k: min(abs(cs[k][2] - line), abs(cs[k][3] - line)))
+            c = cs[i]
+            near = c[2] if abs(c[2] - line) < abs(c[3] - line) else c[3]
+            hit = (c[0], tf, False, near, None)
+        out.append(hit)
+        seen_tf.add(tf)
+        if hit[2]:
+            break                                         # exact touch found - no need to look further back
+    return out
+
+
 def target_history_html(name, d):
-    """2026-10-22: the last 3 rounds whose price target was this one or closest to it (within 5%), exact matches first:
-    where the round ended and whether BRAIN's sealed call got it right."""
+    """2026-10-22 (user): rounds from the most recent day whose target was within 1% (closest first), filled with the next
+    closest if there aren't enough; then the last time price actually traded AT this target on the chart (or closest)."""
     line = d.get("target_price")
     if not line:
         return ""
+    ck = (name, round(line, 6))
+    hit = _tgt_cache.get(ck)
+    if hit and time.time() - hit[0] < 30:
+        return hit[1]
     dec = d.get("price_decimals", 2)
     cur = d.get("ticker", "")
     et = ZoneInfo("America/New_York")
-    cands = []
+    now = time.time()
+    rounds = {}
     for h in _history.get(name, []):
         st, act = h.get("strike"), h.get("actual_side")
-        if not st or act not in ("YES", "NO") or h.get("ticker") == cur:
-            continue
-        diff = abs(st - line) / line
-        if diff <= TARGET_MATCH_PCT:
+        if st and act in ("YES", "NO") and h.get("ticker") != cur:
             t = _window_close_utc(h.get("ticker"))
-            cands.append((0 if abs(st - line) < 10 ** -dec else 1, diff, -(t.timestamp() if t else 0), h, t))
-    if not cands:
-        return (f'<div class="tgt-hist"><div class="th-h">Last times the target was near {fmt_price(line, dec)}</div>'
-                f'<div class="hint">No past rounds near this target yet.</div></div>')
-    cands.sort(key=lambda x: (x[0], x[1], x[2]))
+            rounds[h["ticker"]] = {"strike": st, "up": act == "YES", "ts": t.timestamp() if t else 0, "h": h}
+    if name == "BTC":
+        try:
+            for m in _bt.settled_markets():
+                if m.get("strike") and m["ticker"] not in rounds and m["ticker"] != cur:
+                    rounds[m["ticker"]] = {"strike": m["strike"], "up": m["result"] == "yes", "ts": m["close"], "h": None}
+        except Exception:
+            pass
+    rs = list(rounds.values())
+    for r in rs:
+        r["diff"] = abs(r["strike"] - line) / line
+    recent = sorted((r for r in rs if now - r["ts"] <= 86400 and r["diff"] <= TARGET_RECENT_PCT), key=lambda r: (r["diff"], -r["ts"]))[:3]
+    if len(recent) < 3:
+        used = {id(r) for r in recent}
+        recent += sorted((r for r in rs if id(r) not in used), key=lambda r: (round(r["diff"], 4), -r["ts"]))[:3 - len(recent)]
     rows = ""
-    for exact, diff, _t, h, t in cands[:3]:
-        up = h["actual_side"] == "YES"
-        sc = h.get("sealed_call")
-        ok = h.get("sealed_correct")
-        call_txt = (f'BRAIN said {"UP" if sc == "YES" else "DOWN"} <b class="{"th-ok" if ok else "th-bad"}">{"<i class=ico data-i=check></i>" if ok else "<i class=ico data-i=x></i>"}</b>'
-                    if sc else '<span class="hint">no sealed call</span>')
-        fin = h.get("final_price")
-        rows += (f'<div class="th-row"><span class="hint">{t.astimezone(et):%b %d %-I:%M %p}</span> '
-                 f'target {fmt_price(h["strike"], dec)}{" (exact)" if exact == 0 else f" ({fmt_price(abs(h['strike'] - line), dec)} off)"} &rarr; '
-                 f'<b class="{"up" if up else "down"}">ended {"UP" if up else "DOWN"}</b>'
-                 f'{f" at {fmt_price(fin, dec)}" if fin else ""} &middot; {call_txt}</div>')
-    ups = sum(1 for c in cands[:3] if c[3]["actual_side"] == "YES")
-    return (f'<div class="tgt-hist"><div class="th-h">Last {min(3, len(cands))} times the target was at or near {fmt_price(line, dec)} '
-            f'<span class="hint">({ups} up, {min(3, len(cands)) - ups} down)</span></div>{rows}</div>')
+    for r in recent:
+        h = r["h"] or {}
+        sc, ok = h.get("sealed_call"), h.get("sealed_correct")
+        call_txt = (f' &middot; BRAIN {"UP" if sc == "YES" else "DOWN"} <b class="{"th-ok" if ok else "th-bad"}">{"<i class=ico data-i=check></i>" if ok else "<i class=ico data-i=x></i>"}</b>'
+                    if sc else "")
+        off = abs(r["strike"] - line)
+        when = dt.datetime.fromtimestamp(r["ts"], et)
+        rows += (f'<div class="th-row"><span class="hint">{when:%b %d %-I:%M %p}</span> target {fmt_price(r["strike"], dec)} '
+                 f'<span class="hint">({"exact" if off < 10 ** -dec else (f"{fmt_price(off, dec)} off" if r["diff"] < 0.0005 else f"{r["diff"] * 100:.2f}% off")})</span> &rarr; '
+                 f'<b class="{"up" if r["up"] else "down"}">ended {"UP" if r["up"] else "DOWN"}</b>{call_txt}</div>')
+    touch = ""
+    try:
+        for ts, tf, exact, px, mv in _target_touches(name, line):
+            when = dt.datetime.fromtimestamp(ts, et)
+            lab = {"1m": "1-min", "1h": "hourly", "1d": "daily"}[tf]
+            if exact:
+                touch = (f'<div class="th-row"><b>On the chart:</b> price last traded at {fmt_price(line, dec)} on '
+                         f'{when:%b %d %-I:%M %p} <span class="hint">({lab} candle)</span>'
+                         + (f' &rarr; <b class="{"up" if mv >= 0 else "down"}">{"up" if mv >= 0 else "down"} {abs(mv) * 100:.2f}%</b> '
+                            f'<span class="hint">{"15 min" if tf == "1m" else ("1 hour" if tf == "1h" else "1 day")} later</span>' if mv is not None else "")
+                         + '</div>')
+                break
+            touch = (f'<div class="th-row"><b>On the chart:</b> closest was {fmt_price(px, dec)} on {when:%b %d %-I:%M %p} '
+                     f'<span class="hint">({lab} candle, {abs(px - line) / line * 100:.2f}% away)</span></div>')
+    except Exception as _te:
+        print(f"[target history] chart search: {_te!r}")
+    if not rows and not touch:
+        html = (f'<div class="tgt-hist"><div class="th-h">Past rounds near {fmt_price(line, dec)}</div>'
+                f'<div class="hint">No past rounds near this target yet.</div></div>')
+    else:
+        ups = sum(1 for r in recent if r["up"])
+        html = (f'<div class="tgt-hist"><div class="th-h">Past rounds near {fmt_price(line, dec)} '
+                f'<span class="hint">({ups} up, {len(recent) - ups} down)</span></div>{rows}{touch}</div>')
+    _tgt_cache[ck] = (time.time(), html)
+    if len(_tgt_cache) > 50:
+        _tgt_cache.clear()
+    return html
 
 
 def radar_admin_html():
