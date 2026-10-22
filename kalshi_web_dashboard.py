@@ -6408,8 +6408,10 @@ function _voiceNext() {
   if (voiceBusy) return;
   const now = Date.now();
   while (voiceQ.length && voiceQ[0].until < now) voiceQ.shift();  // too old to still be useful - drop it
-  const item = voiceQ.shift();
+  let item = voiceQ.shift();
+  while (item && !_voiceBudgetOk(item)) item = voiceQ.shift();      // over the word budget - skip routine chatter
   if (!item) return;
+  voiceSaid.push([Date.now(), item.words]);
   voiceBusy = true;
   let finished = false;
   const done = () => { if (finished) return; finished = true; voiceBusy = false; setTimeout(_voiceNext, 120); };
@@ -6429,8 +6431,19 @@ function _voiceNext() {
 function _marketWords(t) {
   return String(t).replace(/on Kalshi\b/g, 'on the market').replace(/(^|[.!?] )Kalshi\b/g, '$1Market').replace(/\bKalshi\b/g, 'market');
 }
+// 2026-10-22 (user): keep it to about 30 spoken words a minute. Routine lines that would go over are dropped; urgent
+// ones (calls locking, flip alerts, the 10-second check-in, test buttons) always play.
+const VOICE_WORDS_PER_MIN = 30;
+const voiceSaid = [];          // [time, words]
+function _voiceBudgetOk(item) {
+  const now = Date.now();
+  while (voiceSaid.length && now - voiceSaid[0][0] > 60000) voiceSaid.shift();
+  const used = voiceSaid.reduce((a, x) => a + x[1], 0);
+  return item.prio || used + item.words <= VOICE_WORDS_PER_MIN;
+}
 function _voicePush(text, urgent, ttlMs) {
-  const item = { text: _marketWords(text), until: Date.now() + (ttlMs || 20000) };
+  const t = _marketWords(text);
+  const item = { text: t, until: Date.now() + (ttlMs || 20000), prio: !!urgent, words: t.split(/\s+/).filter(Boolean).length };
   if (urgent) voiceQ.unshift(item); else voiceQ.push(item);
   _voiceNext();
 }
@@ -6677,7 +6690,8 @@ function checkBuildingAlerts() {
     if (why === 'crit') flipFired.add(key + '::jump');
     if (!soundEnabled || assetSoundEnabled[name] === false) return;
     const coin = name === 'BTC' ? 'Bitcoin' : name;
-    speakUrgent(why === 'crit' ? 'A flip is happening on ' + coin + '.' : 'Heads up: a flip might be happening on ' + coin + '.', 0);
+    if (why === 'crit') speakUrgent('A flip is happening on ' + coin + '.', 0);
+    else speak('Heads up: a flip might be happening on ' + coin + '.', false, 12000);      // budgeted (2026-10-22)
   });
 }
 
@@ -6702,7 +6716,7 @@ function updateFlipWatch() {
     let w = flipWatch[name];
     if (w && w.key !== roundKey) { delete flipWatch[name]; w = null; }           // new round: start fresh
     const confirmed = flipFired.has(key + '::crit');
-    if (!w && confirmed && left > 20) { w = flipWatch[name] = { key: roundKey, since: now, lastSpoke: now }; }   // first update 45s after the alert
+    if (!w && confirmed && left > 20) { w = flipWatch[name] = { key: roundKey, since: now, lastSpoke: now, lastState: null, said90: false, said10: false }; }
     if (w && left <= 5) { delete flipWatch[name]; w = null; }
     if (!w) return;
     const hasK = !isNaN(kup) && kup >= 0;
@@ -6711,16 +6725,25 @@ function updateFlipWatch() {
     const real = (callName === 'sealed' || callName === 'early' || callName === 'bot') && (call === 'YES' || call === 'NO');
     const withCall = real ? ((call === 'YES') === goingUp) : null;
     live[name] = { name, goingUp, strength, withCall, callName, left, pct };
-    if (soundEnabled && assetSoundEnabled[name] !== false && now - w.lastSpoke >= WATCH_EVERY_MS) {
-      w.lastSpoke = now;
+    // 2026-10-22 (user: "no need for 5 updates all saying the same thing"): speak only when the direction or
+    // with/against changes (at most every 45s), plus ONE check-in at 90 seconds left and ONE at 10 seconds left.
+    if (soundEnabled && assetSoundEnabled[name] !== false) {
       const coin = name === 'BTC' ? 'Bitcoin' : name;
-      const mins = Math.floor(left / 60), secs = left % 60;
-      const tl = mins ? mins + (secs >= 30 ? ' and a half minutes' : (mins === 1 ? ' minute' : ' minutes')) + ' left' : secs + ' seconds left';
       const callWord = callName === 'sealed' ? 'the sealed call' : (callName === 'early' ? 'the early call' : 'the call');
-      speak(coin + ' flip update: heading ' + (goingUp ? 'up' : 'down')
-        + (withCall === null ? '' : (withCall ? ', with ' + callWord : ', against ' + callWord))
-        + (strength !== null ? '. ' + (sw => sw.charAt(0).toUpperCase() + sw.slice(1))(_strengthWord(strength)) + ', ' + Math.round(strength * 100) + ' percent on the market' : '')
-        + '. ' + tl + '.', false, 20000);
+      const state = (goingUp ? 'U' : 'D') + (withCall === null ? '' : (withCall ? 'w' : 'a'));
+      const rel = withCall === null ? '' : (withCall ? ', with ' + callWord : ', against ' + callWord);
+      if (!w.said10 && left <= 10) {
+        w.said10 = true; w.lastSpoke = now; w.lastState = state;
+        speak(coin + ', ten seconds' + (withCall === true ? ', still with ' + callWord : rel) + '.', true, 8000);
+      } else if (!w.said90 && left <= 90 && left > 15) {
+        w.said90 = true; w.lastSpoke = now; w.lastState = state;
+        speak(coin + ', ninety seconds, heading ' + (goingUp ? 'up' : 'down') + rel + '.', false, 15000);
+      } else if (state !== w.lastState && withCall !== true && now - w.lastSpoke >= WATCH_EVERY_MS) {
+        w.lastSpoke = now; w.lastState = state;
+        speak(coin + ' now heading ' + (goingUp ? 'up' : 'down') + rel + '.', false, 15000);
+      } else if (w.lastState === null) {
+        w.lastState = state;                       // the flip alert itself already said this
+      }
     }
   });
   let bar = document.getElementById('flip-watch');
@@ -7231,7 +7254,7 @@ function checkIncomingAlerts() {
       el.getAttribute('data-venues') + ' exchanges (biggest: ' + el.getAttribute('data-top') + ') - ahead of the chart');
     if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       playWhaleSound(side); playWallAlert(side);
-      speakUrgent(name + '. Incoming ' + side + '. ' + spokenUsd(usd) + '.');
+      speak(name + '. Incoming ' + side + '. ' + spokenUsd(usd) + '.', false, 12000);      // budgeted (2026-10-22)
     }
   });
 }
@@ -11738,15 +11761,14 @@ _NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b
              (r"\b(go|head|mov|flipp|hold|look|build|com|tell|buy|sell|runn|push|turn|hang|watch|bring|happen|mak|stay|get|tak|break)ing\b", r"\1in'"),
              (r"\byour\b", "ya"), (r"\byou\b", "ya"), (r"\bsure\b", "shuah"), (r"\bhere\b", "heah"), (r"\bover\b", "ovah"),
              (r"\bthere\b", "theah"), (r"\bListen\b", "Lissen"), (r"\btalk\b", "tawk"), (r"\bthem\b", "'em"))
-_NY_START = ((r"^Heads up: ", "Ay, heads up! "), (r"^A flip is happening", "Ay ay ay, a flip is happenin'"),
-             (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"Awright, lissen to me. \1 \2 call: "),
+_NY_START = ((r"^Heads up: ", "Ay, heads up! "), (r"^A flip is happening", "Ay, a flip is happenin'"),
+             (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"Awright. \1 \2 call: "),
              (r"^(Bitcoin|XRP) flip update: ", r"\1, check it out: "))
-_NY_END = ("I'm tellin' ya.", "Fuhgeddaboudit.", "Trust me on this one.", "Ya doin' great, kid.")
+_NY_END = ("I'm tellin' ya.", "Trust me.", "Fuhgeddaboudit.")
 _NY_CAUTION = ("Keep ya eyes open, awright?", "Don't sweat it, I got ya.", "Watch it, I'm lookin' out for ya.", "Easy now, stay with me.")
-_SARGE_START = ((r"^Heads up: a", "Attention! A"), (r"^A flip is happening", "Incoming! Incoming! A flip is happening"),
-                (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"Listen up! \1! \2 call! Going "),
-                (r"^(Bitcoin|XRP) flip update: ", r"Sitrep! \1! "), (r"whale (buy|sell) on (Bitcoin|XRP)", r"whale \1 on \2! Heavy artillery"))
-_SARGE_END = ("Outstanding! Keep it tight!", "You got this, soldier!", "Hooah! Proud of you!", "Move with purpose! Good work!")
+_SARGE_START = ((r"^Heads up: a", "Attention! A"), (r"^A flip is happening", "Incoming! A flip is happening"),
+                (r"^(Bitcoin|XRP) (early|sealed|late) call: ", r"\1! \2 call! Going "))
+_SARGE_END = ("Outstanding!", "Hooah!", "Good work!")
 _SARGE_CAUTION = ("Stay sharp, I got your six!", "Eyes up! Stay frosty!", "Hold the line! I believe in you!", "Steady! We do this together!")
 _CAUTION = re.compile(r"(?i)flip|against|overbought|oversold|warning|lost|reversal|coin flip|careful|incoming")
 
@@ -11771,9 +11793,13 @@ def _persona(text, key):
             t = re.sub(pat, rep, t)
         for pat, rep in _NY_WORDS:
             t = re.sub(pat, rep, t)
-        t = re.sub(r"\bpercent shuah\b", "percent shuah, no joke", t)
+        pass
         ends = _NY_CAUTION if _CAUTION.search(text) else _NY_END
         end = ends[pick % len(ends)]
+    # 2026-10-22 (user: "the military voice guy is overtalking with too many corny tag lines"): sign-offs only on a call
+    # locking, and only about one call in three. Warnings, updates and alerts stay short and plain.
+    if not re.search(r"(?i)\b(early|sealed|late) call\b", text) or pick % 3:
+        end = ""
     out = (t + " " + end).strip()
     return out if len(out) <= 220 else t[:220]
 
