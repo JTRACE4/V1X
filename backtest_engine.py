@@ -207,6 +207,18 @@ def _rsi(closes, n=14):
     return 100 - 100 / (1 + ag / al)
 
 
+def _rsi_simple(closes, n=14):
+    """Webull-style RSI: plain average of the last 14 up / down moves (no carry-over smoothing)."""
+    if len(closes) < n + 1:
+        return None
+    w = closes[-(n + 1):]
+    ag = sum(max(w[i] - w[i - 1], 0.0) for i in range(1, len(w))) / n
+    al = sum(max(w[i - 1] - w[i], 0.0) for i in range(1, len(w))) / n
+    if al == 0:
+        return 100.0 if ag > 0 else 50.0
+    return 100 - 100 / (1 + ag / al)
+
+
 def _lerp(x, x0, x1, y0, y1):
     if x is None:
         return y0
@@ -265,6 +277,8 @@ def features(m, mark, cb, bn, kpath, line_fallback=None):
         if sd:
             side = sd
     r1 = _rsi(closes[-60:])
+    r1_tv = _rsi(closes[-120:])             # TradingView / Wilder with a long warm-up (what the live box shows)
+    r1_wb = _rsi_simple(closes)             # Webull-style simple average
     c5 = [closes[i] for i in range(len(closes) - 1, -1, -5)][::-1]
     r5 = _rsi(c5[-30:]) if len(c5) >= 16 else None
     trend = 0
@@ -281,7 +295,7 @@ def features(m, mark, cb, bn, kpath, line_fallback=None):
            "trend": trend}
     toward_fav = closes[-1] - closes[-2]
     return {"T": T, "spot": spot, "line": line, "dist": dist, "kp": kp, "f1": f1, "f2": f2, "fr": fr, "pace": pace,
-            "crosses": crosses, "events": events, "r1": r1, "r5": r5, "trend": trend, "sig": sig, "last_move": toward_fav,
+            "crosses": crosses, "events": events, "r1": r1, "r5": r5, "r1_tv": r1_tv, "r1_wb": r1_wb, "trend": trend, "sig": sig, "last_move": toward_fav,
             "closes": closes[-5:]}
 
 
@@ -490,10 +504,42 @@ def evaluate(rounds):
         ra = out["stages"][key]["reversal"]
         rev_ok[key] = bool(ra["n"] >= MIN_HOLD_N and ra["roi"] is not None and ra["roi"] > 0
                            and (rh["n"] < 8 or (rh["roi"] is not None and rh["roi"] > -0.05)))
+    # ---- 2026-10-22: which RSI reads the round better, and are the line-cross zones right? ----
+    out["rsi_check"] = {}
+    out["cross_check"] = {}
+    for key, mark in (("early", 240), ("sealed", 480)):
+        rs = [r for r in rounds if r["f"].get(mark)]
+        rc = {}
+        for meth, fld in (("tradingview", "r1_tv"), ("webull", "r1_wb")):
+            mom = [((r["f"][mark][fld] >= 50) == (r["m"]["result"] == "yes")) for r in rs
+                   if r["f"][mark].get(fld) is not None and abs(r["f"][mark][fld] - 50) >= 0.5]
+            hi = [r for r in rs if r["f"][mark].get(fld) is not None and r["f"][mark][fld] >= 70]
+            lo = [r for r in rs if r["f"][mark].get(fld) is not None and r["f"][mark][fld] <= 30]
+            ext_mom = sum(1 for r in hi if r["m"]["result"] == "yes") + sum(1 for r in lo if r["m"]["result"] == "no")
+            rc[meth] = {"n": len(mom), "acc": (sum(mom) / len(mom)) if mom else None,
+                        "ext_n": len(hi) + len(lo), "ext_acc": (ext_mom / (len(hi) + len(lo))) if (hi or lo) else None}
+        tv, wb = rc["tradingview"]["acc"] or 0, rc["webull"]["acc"] or 0
+        # stay on TradingView (the textbook RSI) unless Webull is CLEARLY better - 2+ points over 200+ rounds - so the shown
+        # number doesn't flip back and forth on noise
+        rc["pick"] = "webull" if (wb - tv >= 0.02 and rc["webull"]["n"] >= 200) else "tradingview"
+        rc["avg_gap"] = (sum(abs(r["f"][mark]["r1_tv"] - r["f"][mark]["r1_wb"]) for r in rs
+                             if r["f"][mark].get("r1_tv") is not None and r["f"][mark].get("r1_wb") is not None)
+                         / max(1, sum(1 for r in rs if r["f"][mark].get("r1_tv") is not None and r["f"][mark].get("r1_wb") is not None)))
+        out["rsi_check"][key] = rc
+        buckets = {}
+        for r in rs:
+            c = min(r["f"][mark]["crosses"], 4)
+            fav_yes = r["f"][mark]["kp"] >= 0.5
+            win = fav_yes == (r["m"]["result"] == "yes")
+            b = buckets.setdefault(c, [0, 0])
+            b[0] += 1
+            b[1] += win
+        out["cross_check"][key] = {str(c): {"n": b[0], "fav_win": b[1] / b[0]} for c, b in sorted(buckets.items())}
     out["decisions"] = {
         "reversal_enabled": rev_ok,
         "rule80": {k: (out["stages"][k]["rule80"].get("best_profit") or out["stages"][k]["rule80"].get("most_rounds"))
                    for k in ("early", "sealed")},
+        "rsi_pick": out["rsi_check"]["sealed"]["pick"],
     }
     for k in ("early", "sealed"):
         r = out["decisions"]["rule80"][k]
@@ -641,6 +687,17 @@ def summary_text(r=None):
                      f"covers {pk['coverage'] * 100:.0f}% of rounds")
         if not s["rule80"]:
             L.append("  80% rule: no filter reached 82% on the training rounds with 40+ trades")
+    for k in ("early", "sealed"):
+        rc = (r.get("rsi_check") or {}).get(k)
+        if rc:
+            L.append(f"\nRSI CHECK {k.upper()} (RSI>50 = up, scored against the round): "
+                     + " | ".join(f"{m}: {pct(rc[m]['acc'])} of {rc[m]['n']}, extremes (70+/30-) {pct(rc[m]['ext_acc'])} of {rc[m]['ext_n']}"
+                                  for m in ("tradingview", "webull"))
+                     + f" -> more accurate: {rc['pick'].upper()}, avg gap {rc['avg_gap']:.1f} pts")
+        cc = (r.get("cross_check") or {}).get(k)
+        if cc:
+            L.append(f"LINE CROSS CHECK {k.upper()} (1-min closes; market favorite's win rate by crosses so far): "
+                     + " | ".join(f"{c}{'+' if c == '4' else ''}: {pct(x['fav_win'])} of {x['n']}" for c, x in cc.items()))
     d = r.get("decisions") or {}
     L.append(f"\nLIVE DECISIONS: reversal calls enabled = {d.get('reversal_enabled')}; "
              f"80% tag early = {'on' if (d.get('rule80') or {}).get('early') else 'off'}, sealed = {'on' if (d.get('rule80') or {}).get('sealed') else 'off'}")

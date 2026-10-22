@@ -4419,6 +4419,7 @@ def poll_loop():
                             hist[-1][f"{_sk}_sitout"] = bool(_c.get("sitout"))
                             hist[-1][f"{_sk}_payout"] = _c.get("rev_payout")
                             hist[-1][f"{_sk}_radar"] = _c.get("radar_agree")      # True / False / None - for later checks
+                            hist[-1][f"{_sk}_crosses"] = _c.get("crosses")        # live line crosses at the lock (2026-10-22)
                         _lt = _sc_prev.get("late") or {}
                         if _lt.get("call"):
                             hist[-1]["decided_call"] = _lt["call"]
@@ -5925,6 +5926,8 @@ body { background:#15110f !important; }
 .snd-toggle.on { border-color:#3dd69c; background:rgba(61,214,156,0.16); color:#c9f7e6; }
 .snd-toggle + .wr-badge { margin-left:8px; }
 .sb-conf b, .sb-klock b { font-size:1.08em; }
+.tgt-hist { margin:10px 0 4px; padding:10px 12px; border-radius:12px; background:rgba(251,244,236,0.05); border:1px solid #4a3c43; font-size:13px; }
+.th-h { font-weight:800; margin-bottom:6px; } .th-row { padding:3px 0; } .th-ok { color:#f2c46b; } .th-bad { color:#c9a6e8; }
 .radar-box { margin:8px 0; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid #4a3c43; }
 .rd-h { font-weight:800; letter-spacing:1px; margin-bottom:6px; }
 .rd-bar { display:flex; height:10px; border-radius:6px; overflow:hidden; background:#352b30; margin:4px 0; }
@@ -5942,13 +5945,16 @@ body { background:#15110f !important; }
 .bt100 .hint { margin-top:6px; }
 #flip-watch { position:fixed; top:0; left:0; right:0; z-index:100003; display:flex; flex-direction:column; gap:0;
   padding-top:env(safe-area-inset-top, 0px); box-shadow:0 6px 18px rgba(0,0,0,0.45); }
+/* 2026-10-22: pink-cream banner to match the theme (green read as "UP"); words turn ORANGE when price is moving against the
+   call; a badge says HOLD YOUR POSITION or REVERSAL CONFIRMED. No timer here - the round clock is already on the page. */
 .fw-item { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; padding:9px max(16px, env(safe-area-inset-right, 0px)) 9px max(16px, env(safe-area-inset-left, 0px));
-  font:700 14px 'Nunito', 'Inter', sans-serif; color:#fbf4ec; background:#2a2226; border-bottom:2px solid #8a7a72; }
+  font:700 14px 'Nunito', 'Inter', sans-serif; color:#3a2a2f; background:linear-gradient(90deg, #f6e1df, #f3dccf 70%, #efd3d8);
+  border-bottom:2px solid #e9a5bb; }
 .fw-item b { font-weight:900; letter-spacing:1px; }
 .fw-dir, .fw-rel { font-weight:900; }
-.fw-t { margin-left:auto; font-variant-numeric:tabular-nums; color:#eee2d7; }
-.fw-with { background:linear-gradient(90deg, rgba(61,214,156,0.28), #2a2226 70%); border-bottom-color:#3dd69c; } .fw-with .fw-rel { color:#7be0b0; }
-.fw-against { background:linear-gradient(90deg, rgba(240,84,84,0.30), #2a2226 70%); border-bottom-color:#f05454; } .fw-against .fw-rel { color:#ff9a9a; }
+.fw-against { border-bottom-color:#e8742a; } .fw-against .fw-dir, .fw-against .fw-rel, .fw-against .fw-st { color:#d9601a; }
+.fw-badge { margin-left:auto; padding:3px 10px; border-radius:999px; font-weight:900; letter-spacing:1px; font-size:12.5px; white-space:nowrap; }
+.fw-hold { background:#3a2a2f; color:#fbf4ec; } .fw-rev { background:#e8742a; color:#fff7ef; }
 body.has-flip-watch { padding-top:46px; }
 @media (max-width:760px) { .fw-item { font-size:13px; } body.has-flip-watch { padding-top:64px; } }
 @media (max-width:760px) { #sound-reminder { bottom:calc(72px + env(safe-area-inset-bottom, 0px)) !important; max-width:calc(100vw - 32px); } }
@@ -6583,9 +6589,12 @@ function updateFlipWatch() {
     const callWord = v.callName === 'sealed' ? 'sealed call' : (v.callName === 'early' ? 'early call' : 'call');
     const rel = v.withCall === null ? '' : (v.withCall ? 'WITH the ' + callWord : 'AGAINST the ' + callWord);
     const st = v.strength !== null ? _strengthWord(v.strength) + ' &middot; ' + Math.round(v.strength * 100) + '% on Kalshi' : '';
-    const t = Math.floor(v.left / 60) + ':' + String(v.left % 60).padStart(2, '0');
+    // badge: market back on the call's side -> HOLD; market 60%+ the other way -> the reversal is confirmed
+    let badge = '';
+    if (v.withCall === true) badge = '<span class="fw-badge fw-hold">&#9995; HOLD YOUR POSITION</span>';
+    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev">&#8634; REVERSAL CONFIRMED</span>';
     return '<div class="fw-item ' + cls + '"><b>' + n + ' FLIP WATCH</b><span class="fw-dir">' + (v.goingUp ? '&#9650; heading UP' : '&#9660; heading DOWN') + '</span>'
-      + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span>' + st + '</span>' : '') + '<span class="fw-t">' + t + ' left</span></div>';
+      + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span class="fw-st">' + st + '</span>' : '') + badge + '</div>';
   }).join('');
 }
 
@@ -9363,6 +9372,15 @@ def build_rsi_box(name, d):
     candle included), cross-checked against a Webull-style simple-average RSI and BRAIN's all-exchange composite."""
     rm = d.get("rsi_multi") or {}
     r = rm.get("rsi1")
+    # 2026-10-22: show whichever method the daily backtest found reads the round better (default TradingView)
+    _ck0 = rm.get("check") or {}
+    try:
+        _rcb = ((_bt.load_saved() or {}).get("rsi_check") or {}).get("sealed") or {}
+    except Exception:
+        _rcb = {}
+    _pick = _rcb.get("pick") or "tradingview"
+    if _pick == "webull" and _ck0.get("wb1") is not None:
+        r = _ck0["wb1"]
     if r is None:
         return '<div class="rs-tile rsi-box"><div class="rs-title">RSI (14)</div><div class="rsi-num flat">--</div><div class="rsi-zone flat">warming up</div></div>'
     if r >= 70:
@@ -9387,12 +9405,19 @@ def build_rsi_box(name, d):
                    else f'<span class="rc-off">&#9888; {gap:.0f} pts apart</span>' if gap is not None else "")
         tip = (f'Big number = TradingView RSI(14), {ck.get("source")} 1-min, live candle included ({ck.get("bars1")} candles). '
                f'5-min: TradingView {_n(ck.get("tv5"))} / Webull-style {_n(ck.get("wb5"))}. ' + (ck.get("pick_why") or ""))
+        _acc = lambda m: (_rcb.get(m) or {}).get("acc")
+        _tv_acc, _wb_acc = _acc("tradingview"), _acc("webull")
+        _star_tv = "&#9733; " if _pick == "tradingview" else ""
+        _star_wb = "&#9733; " if _pick == "webull" else ""
+        _avg = ((ck.get("tv1") + ck.get("wb1")) / 2) if (ck.get("tv1") is not None and ck.get("wb1") is not None) else None
+        _bt_line = (f'backtest: TradingView {_tv_acc * 100:.0f}% vs Webull {_wb_acc * 100:.0f}% right'
+                    if (_tv_acc is not None and _wb_acc is not None) else "backtest pending")
         chk = (f'<div class="rsi-check" title="{_html_attr(tip)}">'
-               f'<div class="rc-row rc-pick"><span>&#9733; TradingView</span><b>{_n(ck.get("tv1"))}</b></div>'
-               f'<div class="rc-row"><span>Webull-style</span><b>{_n(ck.get("wb1"))}</b></div>'
-               f'<div class="rc-row"><span>All exchanges</span><b>{_n(ck.get("all1"))}</b></div>'
-               f'<div class="rc-verdict">{verdict} &middot; showing TradingView</div></div>')
-    src = "TradingView method" if ck else "all exchanges"
+               f'<div class="rc-row{" rc-pick" if _pick == "tradingview" else ""}"><span>{_star_tv}TradingView</span><b>{_n(ck.get("tv1"))}</b></div>'
+               f'<div class="rc-row{" rc-pick" if _pick == "webull" else ""}"><span>{_star_wb}Webull</span><b>{_n(ck.get("wb1"))}</b></div>'
+               f'<div class="rc-row"><span>Average of both</span><b>{_n(_avg)}</b></div>'
+               f'<div class="rc-verdict">{verdict} &middot; {_bt_line}</div></div>')
+    src = ("TradingView method" if _pick == "tradingview" else "Webull method") if ck else "all exchanges"
     return (f'<div class="rs-tile rsi-box {c}"><div class="rs-title">RSI (14)</div><div class="rsi-num">{r:.0f}</div>'
             f'<div class="rsi-zone">{z}</div><div class="rsi-sub">1-min{f" &middot; 5-min {r5:.0f}" if r5 is not None else ""} &middot; {src}</div>{chk}'
             f'<span class="rsi-marker" data-rsi-name="{name}" data-rsi="{r:.1f}" style="display:none;"></span></div>')
@@ -9408,7 +9433,7 @@ def build_streak_box(name, d):
         res = [bool(h[field]) for h in hist if h.get(field) is not None]
         runs[key] = (res, _streak_stats(res) if res else (None, 0, 0, 0))
     sres, (st, sn, sbw, sbl) = runs["sealed"]
-    eres, (et_, en, _ebw, _ebl) = runs["early"]
+    eres, (et_, en, ebw, _ebl) = runs["early"]
     if not sres and not eres:
         return ('<div class="rs-tile sk-box"><div class="rs-title">STREAK</div><div class="sk-num flat">--</div>'
                 '<div class="sk-zone flat">no graded rounds yet</div><div class="sk-sub">first grade when this round settles</div></div>')
@@ -9419,7 +9444,8 @@ def build_streak_box(name, d):
     else:
         cls, big, zone = ("sk-win", f"{en}W", "EARLY &middot; WIN") if et_ else ("sk-loss", f"{en}L", "EARLY &middot; LOSS")
     early = (f'early <b class="{"skw" if et_ else "skl"}">{en}{"W" if et_ else "L"}</b>' if eres and sres else "")
-    best = f'best <b class="skw">{sbw}W</b> &middot; worst <b class="skl">{sbl}L</b>' if sres else ""
+    best = (f'best <b class="skw">{sbw}W</b> &middot; worst <b class="skl">{sbl}L</b>' if sres else "") + (
+        f' &middot; early best <b class="skw">{ebw}W</b>' if eres and sres else "")
     chips = "".join(f'<i class="{"w" if r_ else "l"}">{"W" if r_ else "L"}</i>' for r_ in (sres or eres)[-8:])
     sub = " &middot; ".join(x for x in (early, best) if x)
     return (f'<div class="rs-tile sk-box {cls}"><div class="rs-title">STREAK</div><div class="sk-num">{big}</div>'
@@ -9876,8 +9902,18 @@ def build_cross_box(name, d):
         return '<div class="rs-tile lx-box"><div class="rs-title">LINE CROSSES</div><div class="lx-num flat">--</div><div class="lx-zone flat">waiting</div></div>'
     n = ls.get("crosses", 0)
     cls, zone = ("lx-clean", "CLEAN") if n <= 1 else (("lx-some", "SOME CHOP") if n == 2 else ("lx-chop", "CHOPPY"))
+    # 2026-10-22: the backtest's market-favorite win rate for each cross count (21 days, 1-minute closes) under the box
+    _chk = ""
+    try:
+        _cc = ((_bt.load_saved() or {}).get("cross_check") or {}).get("sealed") or {}
+        if _cc:
+            _bits = [f'{c}{"+" if c == "4" else ""}: {x["fav_win"] * 100:.0f}%' for c, x in _cc.items() if x["n"] >= 15]
+            if _bits:
+                _chk = f'<div class="lx-sub hint" title="How often the market favorite won at 8:00, by line crosses so far (backtest, 1-minute closes)">favorite won: {" &middot; ".join(_bits)}</div>'
+    except Exception:
+        pass
     return (f'<div class="rs-tile lx-box {cls}"><div class="rs-title">LINE CROSSES</div><div class="lx-num">{n}</div>'
-            f'<div class="lx-zone">{zone}</div><div class="lx-sub">&#9650; {ls.get("up", 0)} up &middot; &#9660; {ls.get("down", 0)} down</div></div>')
+            f'<div class="lx-zone">{zone}</div><div class="lx-sub">&#9650; {ls.get("up", 0)} up &middot; &#9660; {ls.get("down", 0)} down</div>{_chk}</div>')
 
 
 @_never_break
@@ -11407,6 +11443,7 @@ def render_html():
           </details><!--/OWNER-->
           <!--OWNER-->{live_pull_html}<!--/OWNER-->
           <!--OWNER-->{radar_html(name, d.get("ticker", ""))}{radar_admin_html() if name == LIVE_ASSETS[-1] else ""}<!--/OWNER-->
+          {target_history_html(name, d)}
         </div>''')
 
     return "".join(parts) if parts else "<p>Waiting for first poll...</p>"
@@ -11529,14 +11566,17 @@ def backtest_100(name, call, lo=None, hi=None, stake=BT100_STAKE):
         trades.append((_window_close_utc(h.get("ticker")), bool(ok), float(kp)))
     trades.sort(key=lambda x: x[0] or dt.datetime.min.replace(tzinfo=dt.timezone.utc))
     bal = peak = dd = 0.0
+    run = best_run = 0
     for _t, ok, kp in trades:
         bal += _bt.pnl(ok, kp) * stake
         peak = max(peak, bal)
         dd = max(dd, peak - bal)
+        run = run + 1 if ok else 0
+        best_run = max(best_run, run)
     n = len(trades)
     w = sum(1 for t in trades if t[1])
     return {"n": n, "w": w, "pnl": bal, "spent": n * stake, "roi": (bal / (n * stake) * 100) if n else None,
-            "dd": dd, "first": trades[0][0] if n else None, "last": trades[-1][0] if n else None}
+            "dd": dd, "best_run": best_run, "first": trades[0][0] if n else None, "last": trades[-1][0] if n else None}
 
 
 def _refresh_bt100(force=False):
@@ -11609,8 +11649,8 @@ def bt100_widget_html(name):
     return (f'<div class="bt100"><div class="bt100-h">If you had put <b>$100 on each</b> {name} call it buys '
             f'(bought at {lo * 100:.0f}-{hi * 100:.0f}&cent;, held to settlement, Kalshi fee included)</div>'
             f'<table class="bt100-t"><tr><th>Call</th><th>Trades</th><th>Profit</th><th>Return</th></tr>{rows}</table>'
-            f'<div class="hint">&#9733; = the call auto-buy follows ({auto}). Worst drop along the way '
-            f'${b["dd"]:,.0f}{(" &middot; " + span) if span else ""}. Uses the price Kalshi showed at the moment of '
+            f'<div class="hint">&#9733; = the call auto-buy follows ({auto}). Best winning streak {b.get("best_run", 0)} in a row &middot; '
+            f'worst drop along the way ${b["dd"]:,.0f}{(" &middot; " + span) if span else ""}. Uses the price Kalshi showed at the moment of '
             f'the call; real fills can differ by a cent or two.</div></div>')
 
 
@@ -11667,6 +11707,48 @@ def radar_html(name, ticker):
                     for e in _radar.recent_trusted(30) if e["asset"] == name)
     return (f'<div class="radar-box"><div class="rd-h">&#128225; TRADER RADAR &middot; {name} '
             f'<span class="hint">verified accounts only</span></div>{bar}{rows}{fakes}{tabs}{marks}</div>')
+
+
+TARGET_MATCH_PCT = 0.05       # "the same price target" = exact, or within 5%
+
+
+def target_history_html(name, d):
+    """2026-10-22: the last 3 rounds whose price target was this one or closest to it (within 5%), exact matches first:
+    where the round ended and whether BRAIN's sealed call got it right."""
+    line = d.get("target_price")
+    if not line:
+        return ""
+    dec = d.get("price_decimals", 2)
+    cur = d.get("ticker", "")
+    et = ZoneInfo("America/New_York")
+    cands = []
+    for h in _history.get(name, []):
+        st, act = h.get("strike"), h.get("actual_side")
+        if not st or act not in ("YES", "NO") or h.get("ticker") == cur:
+            continue
+        diff = abs(st - line) / line
+        if diff <= TARGET_MATCH_PCT:
+            t = _window_close_utc(h.get("ticker"))
+            cands.append((0 if abs(st - line) < 10 ** -dec else 1, diff, -(t.timestamp() if t else 0), h, t))
+    if not cands:
+        return (f'<div class="tgt-hist"><div class="th-h">Last times the target was near {fmt_price(line, dec)}</div>'
+                f'<div class="hint">No settled rounds within 5% of this target on record yet.</div></div>')
+    cands.sort(key=lambda x: (x[0], x[1], x[2]))
+    rows = ""
+    for exact, diff, _t, h, t in cands[:3]:
+        up = h["actual_side"] == "YES"
+        sc = h.get("sealed_call")
+        ok = h.get("sealed_correct")
+        call_txt = (f'BRAIN said {"UP" if sc == "YES" else "DOWN"} <b class="{"th-ok" if ok else "th-bad"}">{"&#10003;" if ok else "&#10007;"}</b>'
+                    if sc else '<span class="hint">no sealed call</span>')
+        fin = h.get("final_price")
+        rows += (f'<div class="th-row"><span class="hint">{t.astimezone(et):%b %d %-I:%M %p}</span> '
+                 f'target {fmt_price(h["strike"], dec)}{" (exact)" if exact == 0 else f" ({diff * 100:.2f}% off)"} &rarr; '
+                 f'<b class="{"up" if up else "down"}">ended {"UP" if up else "DOWN"}</b>'
+                 f'{f" at {fmt_price(fin, dec)}" if fin else ""} &middot; {call_txt}</div>')
+    ups = sum(1 for c in cands[:3] if c[3]["actual_side"] == "YES")
+    return (f'<div class="tgt-hist"><div class="th-h">Last {min(3, len(cands))} times the target was at or near {fmt_price(line, dec)} '
+            f'<span class="hint">({ups} up, {min(3, len(cands)) - ups} down)</span></div>{rows}</div>')
 
 
 def radar_admin_html():
