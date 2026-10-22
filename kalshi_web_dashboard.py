@@ -4015,6 +4015,10 @@ def poll_loop():
     while True:
         _t_loop = time.time()
         _reconcile_pending_grades()
+        try:
+            _refresh_bt100()
+        except Exception as _be:
+            print(f"[BACKTEST $100] failed: {_be!r}")
         snapshot = {}
         for asset in DASHBOARD_ASSETS:
             _t_asset = time.time()
@@ -4633,7 +4637,8 @@ def poll_loop():
                 # starts once the wait is over.
                 # 2026-10-21: auto-buy follows the SEALED (8:00) call - the most profitable call on record - not the old
                 # 'locked first call'. Delay is counted from the moment the sealed call locked.
-                _lb_sc = (locked.get("stage_calls") or {}).get("sealed") or {}
+                _lb_which = _autobuy_call_for(asset["name"], active["ticker"])   # 2026-10-22: early or sealed, per record
+                _lb_sc = (locked.get("stage_calls") or {}).get(_lb_which) or {}
                 _lb_call = _lb_sc.get("call")
                 _lb_delay_s = _live_buy_delay_candles.get(asset["name"], 0) * 60
                 _lb_waited = (_lb_sc.get("seconds_left") is None
@@ -5741,6 +5746,14 @@ body { background:#15110f !important; }
   font:800 14px 'Nunito', 'Inter', sans-serif; cursor:pointer; white-space:nowrap; min-height:40px; -webkit-tap-highlight-color:transparent; }
 .snd-toggle.on { border-color:#3dd69c; background:rgba(61,214,156,0.16); color:#c9f7e6; }
 .snd-toggle + .wr-badge { margin-left:8px; }
+.bt100 { margin:6px 0 10px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid #4a3c43; }
+.bt100-h { font-size:13px; margin-bottom:6px; color:#eee2d7; }
+.bt100-t { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+.bt100-t th { text-align:left; font-weight:700; color:#bcaaa1; padding:3px 6px; border-bottom:1px solid #4a3c43; }
+.bt100-t td { padding:4px 6px; }
+.bt100-t tr.bt100-pick td { background:rgba(61,214,156,0.10); }
+.bt100-t tr.bt100-any td { font-size:12px; opacity:0.8; }
+.bt100 .hint { margin-top:6px; }
 #flip-watch { position:fixed; top:0; left:0; right:0; z-index:100003; display:flex; flex-direction:column; gap:0;
   padding-top:env(safe-area-inset-top, 0px); box-shadow:0 6px 18px rgba(0,0,0,0.45); }
 .fw-item { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; padding:9px max(16px, env(safe-area-inset-right, 0px)) 9px max(16px, env(safe-area-inset-left, 0px));
@@ -6010,7 +6023,7 @@ function updateVoiceToggleButton() {
 // no longer cut each other off.
 // Only these alerts make sound now: flip warnings, the early + sealed calls, whale trades (cha-ching / denied).
 const LEGACY_SOUNDS = false;
-const NEURAL_VOICES = { ava: 'Ava', jenny: 'Jenny', aria: 'Aria', emma: 'Emma', michelle: 'Michelle' };
+const NEURAL_VOICES = { ava: 'Ava', jenny: 'Jenny', aria: 'Aria', emma: 'Emma', michelle: 'Michelle', tony: 'Tony' };
 let neuralVoice = 'ava';
 try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VOICES || nv === 'device')) neuralVoice = nv; } catch (e) {}
 function setNeuralVoice(v) {
@@ -6941,60 +6954,62 @@ function checkRegimeAlerts() {
 // whale BUY, drops for a whale SELL, so you can tell direction by ear.
 function playWhaleSound(side) { if (side === 'buy') playChaChingBig(); else playDenied(); }   // test buttons / old callers
 // 2026-10-20 (b): BIG cash-register cha-ching - drawer slam, bright bell, then a spill of coins
+// 2026-10-22: a CASH REGISTER, not a bell - key clack, drawer rolling out with a thunk, a short bright "ching" that
+// stops quickly, then a few coins. Plays for a whale BUY.
 function playChaChingBig() {
   try {
     const ctx = ensureAudioCtx();
     const now = ctx.currentTime;
     const out = ctx.createGain(); out.gain.value = 1; out.connect(ctx.destination);
-    const noise = (t, dur, f, type, amp) => {
+    const noise = (t, dur, f, type, amp, q) => {
       const len = Math.floor(ctx.sampleRate * dur);
       const buf = ctx.createBuffer(1, len, ctx.sampleRate);
       const d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
       const src = ctx.createBufferSource(); src.buffer = buf;
-      const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f;
+      const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; if (q) fl.Q.value = q;
       const g = ctx.createGain(); g.gain.value = vol(amp);
       src.connect(fl); fl.connect(g); g.connect(out); src.start(t);
     };
-    // "cha" - the drawer: a scrape and a solid thunk
-    noise(now, 0.12, 3000, 'bandpass', 0.55);
-    noise(now + 0.10, 0.10, 400, 'lowpass', 0.9);
-    // "ching" - a loud bell with bright overtones and a long ring
-    [[1568, 0.55, 1.6], [3136, 0.35, 1.2], [4699, 0.22, 0.9], [2349, 0.30, 1.4], [6272, 0.10, 0.5]].forEach(([f, a, len]) => {
+    // "cha": two quick register-key clacks, then the drawer rolling out and hitting its stop
+    noise(now, 0.03, 2500, 'bandpass', 0.7, 3);
+    noise(now + 0.05, 0.03, 2200, 'bandpass', 0.7, 3);
+    noise(now + 0.10, 0.16, 1200, 'bandpass', 0.45, 0.8);
+    noise(now + 0.25, 0.07, 180, 'lowpass', 1.0);
+    // "ching": short metallic hit - inharmonic partials, gone in about 0.4s (no long ring)
+    const t1 = now + 0.27;
+    [[2093, 0.38], [2793, 0.26], [3951, 0.20], [5274, 0.12]].forEach(([f, a]) => {
       const o = ctx.createOscillator(); const g = ctx.createGain();
-      o.type = 'sine'; o.frequency.setValueAtTime(f, now + 0.18);
-      g.gain.setValueAtTime(0.0001, now + 0.18);
-      g.gain.linearRampToValueAtTime(vol(a), now + 0.185);
-      g.gain.exponentialRampToValueAtTime(0.0006, now + 0.18 + len);
-      o.connect(g); g.connect(out); o.start(now + 0.18); o.stop(now + 0.2 + len);
+      o.type = 'sine'; o.frequency.setValueAtTime(f, t1);
+      g.gain.setValueAtTime(0.0001, t1);
+      g.gain.linearRampToValueAtTime(vol(a), t1 + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0005, t1 + 0.42);
+      o.connect(g); g.connect(out); o.start(t1); o.stop(t1 + 0.45);
     });
-    // coins spilling
-    for (let i = 0; i < 9; i++) {
-      const t = now + 0.35 + i * 0.055 + Math.random() * 0.03;
-      const f = 3500 + Math.random() * 2500;
+    // coins dropping into the drawer
+    for (let i = 0; i < 6; i++) {
+      const t = now + 0.42 + i * 0.05 + Math.random() * 0.025;
       const o = ctx.createOscillator(); const g = ctx.createGain();
-      o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
-      g.gain.setValueAtTime(vol(0.18), t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.12);
-      o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.14);
+      o.type = 'triangle'; o.frequency.setValueAtTime(4200 + Math.random() * 2200, t);
+      g.gain.setValueAtTime(vol(0.14), t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.08);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.1);
     }
   } catch (e) { /* audio blocked until the page is clicked once */ }
 }
-// 2026-10-20 (b): "denied" - the low two-buzz "can't go through" sound
+// 2026-10-22: "denied" is now a quick electronic double beep ("eh-eh", like a card declined). Plays for a whale SELL.
 function playDenied() {
   try {
     const ctx = ensureAudioCtx();
     const now = ctx.currentTime;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.connect(ctx.destination);
-    [[0, 0.20], [0.27, 0.34]].forEach(([t, len]) => {
-      [110, 116.5].forEach(f => {                                   // two slightly-off tones = a harsh buzz
-        const o = ctx.createOscillator(); const g = ctx.createGain();
-        o.type = 'sawtooth'; o.frequency.setValueAtTime(f, now + t);
-        g.gain.setValueAtTime(0.0001, now + t);
-        g.gain.linearRampToValueAtTime(vol(0.42), now + t + 0.012);
-        g.gain.setValueAtTime(vol(0.42), now + t + len - 0.03);
-        g.gain.linearRampToValueAtTime(0.0001, now + t + len);
-        o.connect(g); g.connect(lp); o.start(now + t); o.stop(now + t + len + 0.02);
-      });
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; lp.connect(ctx.destination);
+    [[0, 0.13], [0.19, 0.13]].forEach(([t, len]) => {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'square'; o.frequency.setValueAtTime(392, now + t);          // G4, same pitch both times
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.linearRampToValueAtTime(vol(0.26), now + t + 0.006);
+      g.gain.setValueAtTime(vol(0.26), now + t + len - 0.015);
+      g.gain.linearRampToValueAtTime(0.0001, now + t + len);
+      o.connect(g); g.connect(lp); o.start(now + t); o.stop(now + t + len + 0.02);
     });
   } catch (e) {}
 }
@@ -7051,10 +7066,11 @@ function checkWhaleAlerts() {
         showIncomingBanner(name, wside, wusd, 'HUGE ' + wside.toUpperCase() + ' PRINT', fmtUsdShort(wusd) + ' just went through on ' + (el.getAttribute('data-whale-venue') || 'an exchange'));
       }
       if (soundEnabled && assetSoundEnabled[name] !== false) {
-        // WITH the move (or a buy when there is no clear move yet) = cha-ching; AGAINST the move = denied
+        // 2026-10-22: a whale BUY = cash-register cha-ching, a whale SELL = denial double beep (the voice still says
+        // whether it's against the move)
         const trend = el.getAttribute('data-whale-trend') || '';
         const withMove = trend ? ((wside === 'buy') === (trend === 'up')) : wside === 'buy';
-        if (withMove) playChaChingBig(); else playDenied();
+        if (wside === 'buy') playChaChingBig(); else playDenied();
         const wcoin = name === 'BTC' ? 'Bitcoin' : name;
         const amt = wusd >= 1e6 ? (wusd / 1e6).toFixed(1) + ' million dollar ' : (wusd >= 1e3 ? Math.round(wusd / 1e3) + ' thousand dollar ' : '');
         speakDelayed(amt.charAt(0).toUpperCase() + amt.slice(1) + (amt ? 'whale ' : 'Whale ') + wside + ' on ' + wcoin + (withMove ? '.' : ', against the move.'), 1300);
@@ -7623,7 +7639,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <label style="color:#bcaaa1; font-size:13px; margin:0 6px 0 4px;">Voice
         <select id="voice-pick" onchange="setNeuralVoice(this.value)" style="background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit;">
           <option value="ava">Ava (natural)</option><option value="jenny">Jenny (natural)</option><option value="aria">Aria (natural)</option>
-          <option value="emma">Emma (natural)</option><option value="michelle">Michelle (natural)</option><option value="device">This device's voice</option>
+          <option value="emma">Emma (natural)</option><option value="michelle">Michelle (natural)</option>
+          <option value="tony">Tony (guy, New York style)</option><option value="device">This device's voice</option>
         </select></label>
       <br>
       <button onclick="speakRaw('Heads up: a flip might be happening on Bitcoin.')">Test flip warning</button>
@@ -7631,8 +7648,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure. Good confidence.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure. Super confidence.'),650)">Test sealed call</button>
       <button onclick="speakRaw('Bitcoin flip update: heading down, against the sealed call. Solid, 78 percent on Kalshi. 3 and a half minutes left.')">Test flip update</button>
-      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('2.4 million dollar whale buy on Bitcoin.'),1300)">Test whale WITH the move</button>
-      <button onclick="playDenied(); setTimeout(()=>speakRaw('850 thousand dollar whale sell on XRP, against the move.'),1300)">Test whale AGAINST the move</button>
+      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('2.4 million dollar whale buy on Bitcoin.'),1300)">Test whale BUY (cha-ching)</button>
+      <button onclick="playDenied(); setTimeout(()=>speakRaw('850 thousand dollar whale sell on XRP, against the move.'),1300)">Test whale SELL (double beep)</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
         the early (4:00) and sealed (8:00) calls, and whale trades - a cha-ching when the whale pushes price further the way it is
         already going, a "denied" buzz when it trades against the move.</div>
@@ -10783,7 +10800,7 @@ def render_html():
                 css = "up" if w["total"] >= 0 else "down"
                 return (f'<span class="{css}">{w["pct"]:+.1f}% ({w["total"]:+,.2f}, {w["n"]} trades, '
                         f'${w["volume"]:,.2f} volume)</span>')
-            live_trading_html = f'''
+            live_trading_html = bt100_widget_html(name) + f'''
           <div class="row live-trading-row">
             <span class="label">Real-money auto-buy ({size_label}, {f'sells at {main_sell_price:.0%}' if main_sell_price else 'buy &amp; hold'}, skips over {main_max_price:.0%}){main_hold_html}</span>
             <span class="value">
@@ -11095,7 +11112,14 @@ def render_html():
 # the edge-tts package - no key needed) and cached on the data volume, so a line like "Bitcoin sealed call: up, 84 percent
 # sure." is generated once and then served instantly. If anything fails the page falls back to the browser's own voice.
 _TTS_VOICES = {"ava": "en-US-AvaNeural", "jenny": "en-US-JennyNeural", "aria": "en-US-AriaNeural",
-               "emma": "en-US-EmmaNeural", "michelle": "en-US-MichelleNeural"}
+               "emma": "en-US-EmmaNeural", "michelle": "en-US-MichelleNeural",
+               # 2026-10-22: male "New York style" option. Microsoft's neural voices have no real NYC accent, so this is a
+               # male voice read faster and a touch deeper, with a little New York phrasing (_NY_STYLE below).
+               "tony": "en-US-GuyNeural"}
+_TTS_STYLE = {"tony": {"rate": "+14%", "pitch": "-3Hz"}}
+_NY_STYLE = ((r"^Heads up:", "Yo, heads up:"), (r"^A flip is happening", "Ay, a flip is happening"),
+             (r" flip update: ", " flip update, listen: "), (r" Super confidence\.$", " Super confidence. Fuggedaboutit."),
+             (r"^(Bitcoin|XRP) sealed call: ", r"Alright, \1 sealed call: "))
 _TTS_DIR = os.path.join(_DATA_ROOT, "tts_cache")
 _TTS_OK = re.compile(r"^[A-Za-z0-9 .,:;'!?%$&()\-]{1,220}$")
 _tts_locks = {}
@@ -11108,7 +11132,12 @@ def _tts_mp3(text, voice_key):
     if not _TTS_OK.match(text):
         return None
     voice = _TTS_VOICES.get(voice_key, _TTS_VOICES["ava"])
-    key = hashlib.sha1(f"{voice}|{text}".encode()).hexdigest()
+    style = _TTS_STYLE.get(voice_key, {})
+    if voice_key == "tony":
+        for _pat, _rep in _NY_STYLE:
+            text = re.sub(_pat, _rep, text)
+    rate, pitch = style.get("rate", "+4%"), style.get("pitch", "+0Hz")
+    key = hashlib.sha1(f"{voice}|{rate}|{pitch}|{text}".encode()).hexdigest()
     fp = os.path.join(_TTS_DIR, key + ".mp3")
     if os.path.isfile(fp):
         with open(fp, "rb") as f_:
@@ -11128,7 +11157,7 @@ def _tts_mp3(text, voice_key):
             tmp = fp + ".part"
 
             async def _gen():
-                await edge_tts.Communicate(text.replace("XRP", "X R P"), voice, rate="+4%").save(tmp)
+                await edge_tts.Communicate(text.replace("XRP", "X R P"), voice, rate=rate, pitch=pitch).save(tmp)
             asyncio.run(asyncio.wait_for(_gen(), timeout=12))
             if os.path.getsize(tmp) < 500:
                 raise RuntimeError("empty audio")
@@ -11158,6 +11187,121 @@ def _tts_trim_cache(keep=3000):
 
 # ================================================================ Kalshi API key on the Admin page (2026-10-21)
 from cryptography.hazmat.primitives import serialization
+
+
+# ---- 2026-10-22: "$100 a trade" record for the auto-buy widget, and which call auto-buy follows.
+# Every graded round stores, per call (early 4:00 / sealed 8:00), the call, whether it won, and Kalshi's price for the
+# called side at the moment of the call (*_kp). This replays all of them at $100 a trade, holding to settlement, with the
+# same Kalshi taker fee + 1c slippage the backtest engine uses. For the coins in AUTO_PICK_ASSETS, auto-buy follows
+# whichever call made more money inside that coin's buy band (needs AUTO_PICK_MIN_TRADES of each; otherwise sealed).
+AUTO_PICK_ASSETS = ("BTC",)
+AUTO_PICK_MIN_TRADES = 20
+AUTO_PICK_REFRESH_S = 3600
+BT100_STAKE = 100.0
+_autobuy_call = {a: "sealed" for a in LIVE_ASSETS}
+_autobuy_call_by_ticker = {}     # ticker -> call it started following, so a mid-round re-pick never mixes sides
+_bt100 = {"t": 0.0, "res": {}}
+
+
+def _buy_band(name):
+    return LIVE_MIN_LOCK_ENTRY_PRICE, _live_max_entry_by_asset.get(name, _live_max_entry_price)
+
+
+def backtest_100(name, call, lo=None, hi=None, stake=BT100_STAKE):
+    """Replay every graded `call` for `name` at `stake` dollars a trade, bought at the recorded Kalshi price."""
+    trades = []
+    for h in list(_history.get(name, [])):
+        c, ok, kp = h.get(f"{call}_call"), h.get(f"{call}_correct"), h.get(f"{call}_kp")
+        if not c or ok is None or kp is None:
+            continue
+        if (lo is not None and kp < lo) or (hi is not None and kp > hi):
+            continue
+        trades.append((_window_close_utc(h.get("ticker")), bool(ok), float(kp)))
+    trades.sort(key=lambda x: x[0] or dt.datetime.min.replace(tzinfo=dt.timezone.utc))
+    bal = peak = dd = 0.0
+    for _t, ok, kp in trades:
+        bal += _bt.pnl(ok, kp) * stake
+        peak = max(peak, bal)
+        dd = max(dd, peak - bal)
+    n = len(trades)
+    w = sum(1 for t in trades if t[1])
+    return {"n": n, "w": w, "pnl": bal, "spent": n * stake, "roi": (bal / (n * stake) * 100) if n else None,
+            "dd": dd, "first": trades[0][0] if n else None, "last": trades[-1][0] if n else None}
+
+
+def _refresh_bt100(force=False):
+    """Recompute the $100 record (at most hourly) and re-pick which call auto-buy follows."""
+    if not force and time.time() - _bt100["t"] < AUTO_PICK_REFRESH_S:
+        return _bt100["res"]
+    res = {}
+    for name in LIVE_ASSETS:
+        lo, hi = _buy_band(name)
+        r = {"band": (lo, hi)}
+        for call in ("early", "sealed"):
+            r[call] = {"band": backtest_100(name, call, lo, hi), "any": backtest_100(name, call)}
+        pick = _autobuy_call.get(name, "sealed")
+        if name in AUTO_PICK_ASSETS:
+            e, sl = r["early"]["band"], r["sealed"]["band"]
+            if e["n"] >= AUTO_PICK_MIN_TRADES and sl["n"] >= AUTO_PICK_MIN_TRADES:
+                pick = "early" if e["pnl"] > sl["pnl"] else "sealed"
+        r["pick"] = pick
+        res[name] = r
+        if _autobuy_call.get(name) != pick:
+            print(f"[auto-buy] {name} now follows the {pick.upper()} call (better $100-a-trade record in its band)")
+        _autobuy_call[name] = pick
+        for call in ("early", "sealed"):
+            for k in ("band", "any"):
+                b = r[call][k]
+                print(f"[BACKTEST $100] {name} {call:6s} {('%d-%dc' % (lo * 100, hi * 100)) if k == 'band' else 'any price':9s}: "
+                      f"{b['n']} trades, {b['w']} won ({(b['w'] / b['n'] * 100) if b['n'] else 0:.0f}%), "
+                      f"P&L {'+' if b['pnl'] >= 0 else '-'}${abs(b['pnl']):,.0f} on ${b['spent']:,.0f} "
+                      f"({(b['roi'] or 0):+.1f}%), worst drop ${b['dd']:,.0f}"
+                      + (f", {b['first']:%b %d} - {b['last']:%b %d %H:%M} UTC" if b['n'] else ""))
+        print(f"[BACKTEST $100] {name}: auto-buy follows {pick.upper()}")
+    _bt100.update(t=time.time(), res=res)
+    return res
+
+
+def _autobuy_call_for(name, ticker):
+    """Which stage call auto-buy follows on this round - fixed per round once chosen."""
+    c = _autobuy_call_by_ticker.get(ticker)
+    if c is None:
+        c = _autobuy_call_by_ticker[ticker] = _autobuy_call.get(name, "sealed")
+        if len(_autobuy_call_by_ticker) > 200:
+            for k in list(_autobuy_call_by_ticker)[:100]:
+                _autobuy_call_by_ticker.pop(k, None)
+    return c
+
+
+def bt100_widget_html(name):
+    """Owner-only box inside the auto-buy widget: what $100 a trade would have made, early vs sealed."""
+    r = (_bt100["res"] or {}).get(name)
+    if not r:
+        return '<div class="bt100"><div class="hint">$100-a-trade record: calculating...</div></div>'
+    lo, hi = r["band"]
+
+    def cell(b):
+        if not b["n"]:
+            return '<td colspan="3" class="flat">no graded calls yet</td>'
+        cls = "up" if b["pnl"] >= 0 else "down"
+        return (f'<td>{b["n"]} <span class="hint">({b["w"] / b["n"] * 100:.0f}% won)</span></td>'
+                f'<td class="{cls}"><b>{"+" if b["pnl"] >= 0 else "-"}${abs(b["pnl"]):,.0f}</b></td>'
+                f'<td class="{cls}">{b["roi"]:+.1f}%</td>')
+    rows = ""
+    for call, lab in (("early", "Early 4:00"), ("sealed", "Sealed 8:00")):
+        star = ' &#9733;' if r["pick"] == call else ""
+        rows += (f'<tr class="{"bt100-pick" if r["pick"] == call else ""}"><td><b>{lab}</b>{star}</td>{cell(r[call]["band"])}</tr>'
+                 f'<tr class="bt100-any"><td class="hint">&nbsp;&nbsp;any price</td>{cell(r[call]["any"])}</tr>')
+    b = r[r["pick"]]["band"]
+    span = (f'{b["first"].astimezone(ZoneInfo("America/New_York")):%b %d} - '
+            f'{b["last"].astimezone(ZoneInfo("America/New_York")):%b %d}') if b["n"] else ""
+    auto = "picked automatically by the better record" if name in AUTO_PICK_ASSETS else "fixed"
+    return (f'<div class="bt100"><div class="bt100-h">If you had put <b>$100 on each</b> {name} call it buys '
+            f'(bought at {lo * 100:.0f}-{hi * 100:.0f}&cent;, held to settlement, Kalshi fee included)</div>'
+            f'<table class="bt100-t"><tr><th>Call</th><th>Trades</th><th>Profit</th><th>Return</th></tr>{rows}</table>'
+            f'<div class="hint">&#9733; = the call auto-buy follows ({auto}). Worst drop along the way '
+            f'${b["dd"]:,.0f}{(" &middot; " + span) if span else ""}. Uses the price Kalshi showed at the moment of '
+            f'the call; real fills can differ by a cent or two.</div></div>')
 
 
 def _kalshi_key_status():
@@ -12275,6 +12419,13 @@ def main():
     total = sum(len(v) for v in _history.values())
     if total:
         print(f"Loaded {total} past graded windows from disk ({HISTORY_FILE}).")
+    try:
+        _ks = _kcreds.info()
+        _env_key = bool(os.environ.get("KALSHI_API_KEY_ID"))
+        print(f"[kalshi key] at startup: {'saved key present' if _ks.get('set') else 'NO saved key'}"
+              f"{' + env key' if _env_key else ''}; armed: {dict(_live_armed)}")
+    except Exception as _ke:
+        print(f"[kalshi key] status check failed: {_ke!r}")
     threading.Thread(target=_coinbase_ws_run_forever, daemon=True).start()
     threading.Thread(target=_kraken_ws_run_forever, daemon=True).start()
     threading.Thread(target=_coinbase_l2_run_forever, daemon=True).start()
