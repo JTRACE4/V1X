@@ -299,7 +299,7 @@ class FlowHub:
             for v, x in b.get(s, {}).items():
                 venues[v] = venues.get(v, 0.0) + (x[0] if side == "buy" else x[1])
         top = max(venues, key=venues.get) if venues else ""
-        ev = {"side": side, "usd": abs(net), "venues": sum(1 for x in venues.values() if x > 0),
+        ev = {"side": side, "usd": abs(net), "buy_usd": bu, "sell_usd": se, "venues": sum(1 for x in venues.values() if x > 0),
               "top": VENUES.get(top, (top, ""))[0], "ts": time.time(), "price": self.last_price.get(("coinbase", asset))}
         with self.lock:
             self._last_incoming[asset] = (now, side)

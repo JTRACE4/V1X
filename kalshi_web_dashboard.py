@@ -4131,9 +4131,18 @@ def _push_dashboard_alerts(asset, v):
                        cooldown_key=("sweep1m", name), cooldown=60)
     inc = v.get("incoming_ev")
     if inc:
-        _eng.add_alert(name, "burst", inc["side"], f"{'BUYING' if inc['side'] == 'buy' else 'SELLING'} SURGE: {_u(inc['usd'])} in 10 seconds",
-                       f"Mostly {'buyers' if inc['side'] == 'buy' else 'sellers'} across {inc['venues']} exchanges "
-                       f"(the most on {inc['top']}). This often shows up before the chart moves.", usd=inc["usd"], sev=3, sound=False)
+        # 2026-10-22 (user: "clarify the selling surge - is it an additional buy or just the total of the buys it already
+        # logged?"): it is NOT a new order. It is the NET of ALL trades on every exchange in the last 10 seconds
+        # (sold minus bought), so it overlaps the whale buys / sells already listed. Say exactly that.
+        _b, _s = inc.get("buy_usd"), inc.get("sell_usd")
+        _a = _eng.add_alert(name, "burst", inc["side"],
+                            f"{'BUYERS' if inc['side'] == 'buy' else 'SELLERS'} OUT-TRADED {'SELLERS' if inc['side'] == 'buy' else 'BUYERS'} BY {_u(inc['usd'])}",
+                            f"Not a new order - this is the total of ALL trades on {inc['venues']} exchanges in the last 10 seconds"
+                            + (f": {_u(_s)} sold vs {_u(_b)} bought" if (_b is not None and _s is not None) else "")
+                            + f", so it already includes any whale buys / sells listed above. A one-sided rush like this often shows up "
+                            f"before the chart moves.", usd=inc["usd"], sev=3, sound=False)
+        if _a is not None and _b is not None and _s is not None:
+            _a.update({"buy_usd": _b, "sell_usd": _s})
     bw = v.get("book_walls") or {}
     if bw.get("alert_side"):
         w = bw.get("ask_wall") if bw["alert_side"] == "sell" else bw.get("bid_wall")
@@ -9720,6 +9729,12 @@ def _alert_line(a, dec):
     where = " &middot; ".join(x for x in (ven, ("@ " + px) if px else "") if x)
     if k == "whale":
         return f"WHALE {bs} {usd}", where
+    if k == "burst":
+        b_, s_ = a.get("buy_usd"), a.get("sell_usd")
+        net_side = "BUYERS" if sd == "buy" else "SELLERS"
+        return (f"{net_side} OUT-TRADED {'SELLERS' if sd == 'buy' else 'BUYERS'} BY {usd}",
+                "last 10 sec, all exchanges" + (f" &middot; {_usd_short(s_)} sold vs {_usd_short(b_)} bought" if (b_ is not None and s_ is not None) else "")
+                + " &middot; <i>total of all trades, not a new order</i>")
     if k == "sweep":
         return f"BIG {bs} {usd}", where + " &middot; moved the price"
     if k == "liq":
