@@ -6483,6 +6483,11 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 @media (max-width:900px) { .sb-jump { top:10px; right:10px; padding:4px 8px 4px 6px; font-size:11px; } .sb-jump svg { width:16px; height:16px; } }
 @keyframes sbFlash { 0% { box-shadow:0 0 0 0 rgba(233,165,187,0.55); } 100% { box-shadow:0 0 0 18px rgba(233,165,187,0); } }
 .card .scoreboard.sb-flash { animation:sbFlash 1.1s ease-out 2; border-radius:14px; }
+/* 2026-10-22 (user): market-trend buttons were wrapping ("15 / m", "Dail / y") - one line, sized to fit */
+.lx-mkt .mkt-btns { display:flex !important; flex-wrap:nowrap !important; justify-content:center; gap:2px !important; margin:0 -3px; }
+.lx-mkt .mkt-btns button, .card .lx-mkt .mkt-btns button { white-space:nowrap !important; overflow:hidden; font-family:var(--br-bold) !important;
+  font-weight:800 !important; font-size:10px !important; letter-spacing:-.3px !important; padding:4px 3px !important; min-width:0 !important; flex:1 1 auto !important; line-height:1.2 !important; overflow:visible !important; }
+.lx-mkt .mkt-pane { font-size:11.5px !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -10909,7 +10914,7 @@ def build_time_until_call(name, d):
             f'<div class="tuc-what">{what}</div></div>')
 
 
-_MKT_TFS = (("1m", "1m"), ("5m", "5m"), ("15m", "15m"), ("1h", "1h"), ("1d", "Daily"))
+_MKT_TFS = (("1m", "1m"), ("5m", "5m"), ("15m", "15m"), ("1h", "1h"), ("1d", "1D"))
 _MKT_SPAN = {"1m": "20 min", "5m": "100 min", "15m": "5 hours", "1h": "20 hours", "1d": "20 days"}
 
 
