@@ -6462,6 +6462,13 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .lw-patwrap > summary span { font-family:var(--br-sans); font-weight:400; letter-spacing:0; text-transform:none; color:var(--br-mute); margin-left:6px; }
 .lw-patwrap > summary span b { color:#fbf4ec; }
 .lw-key { margin-bottom:0 !important; }
+/* 2026-10-22 (user): chart RSI / MACD readings - no fill, no box; they float on the chart (soft shadow keeps them readable) */
+.lw-chip, .lw-chip.c-up, .lw-chip.c-dn, .lw-chip.c-nt, .lw-chip.c-os, .lw-chip.c-ob {
+  background:none !important; border:0 !important; border-image:none !important; box-shadow:none !important;
+  -webkit-backdrop-filter:none !important; backdrop-filter:none !important; padding:0 6px !important; min-width:0 !important; }
+.lw-chip i, .lw-chip b, .lw-chip > span { text-shadow:0 1px 3px rgba(20,15,18,0.95), 0 0 8px rgba(20,15,18,0.8) !important; }
+.lw-chip.c-ob i, .lw-chip.c-ob > span { text-shadow:none !important; filter:drop-shadow(0 1px 2px rgba(20,15,18,0.95)); }
+.lw-chips { gap:12px !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
