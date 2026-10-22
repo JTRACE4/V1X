@@ -6439,6 +6439,13 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
   background:linear-gradient(90deg, #e9a5bb 0%, #f3c6b4 50%, #dcbb91 100%) !important; -webkit-background-clip:text !important; background-clip:text !important;
   color:transparent !important; -webkit-text-fill-color:transparent; font-family:var(--br-label) !important; font-weight:900 !important;
   font-size:15px !important; letter-spacing:2px !important; }
+.lw-patwrap { margin:4px 2px; border-top:1px solid rgba(255,255,255,0.08); padding-top:6px; }
+.lw-patwrap > summary { cursor:pointer; list-style:none; font-family:var(--br-label); font-weight:800; font-size:12px; letter-spacing:1.4px; text-transform:uppercase; color:var(--br-tan); }
+.lw-patwrap > summary::-webkit-details-marker { display:none; }
+.lw-patwrap > summary::before { content:"\25B8  "; color:var(--br-blush); } .lw-patwrap[open] > summary::before { content:"\25BE  "; }
+.lw-patwrap > summary span { font-family:var(--br-sans); font-weight:400; letter-spacing:0; text-transform:none; color:var(--br-mute); margin-left:6px; }
+.lw-patwrap > summary span b { color:#fbf4ec; }
+.lw-key { margin-bottom:0 !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8727,10 +8734,16 @@ async function lwPatterns(o) {
     }).join('') + '</div>';
   });
   const openNow = new Set([...o.pats.querySelectorAll('details[open] > summary')].map(x => x.textContent));
-  o.pats.innerHTML = '<div class="hint lw-pat-head">Formed in the last hour (double tops / bottoms, wedges, AMD, head and shoulders, hanging man and more)</div>'
+  // 2026-10-22 (user): keep it clean under the chart - patterns live in a closed dropdown until tapped
+  const wasOpen = !!(o.pats.querySelector('.lw-patwrap') || {}).open;
+  const nRec = (rec.match(/class="lw-rec"/g) || []).length, nNow = (items.match(/class="lw-pat"/g) || []).length;
+  o.pats.innerHTML = '<details class="lw-patwrap"' + (wasOpen ? ' open' : '') + '><summary>Chart patterns <span>' + nRec + ' formed in the last hour'
+    + (nNow ? ' &middot; <b>' + nNow + ' forming now</b>' : '') + '</span></summary>'
+    + '<div class="hint lw-pat-head">Formed in the last hour</div>'
     + (rec || '<div class="hint">Nothing important formed in the last hour.</div>')
-    + '<div class="hint lw-pat-head">Forming now: 80%+ built, proven on this coin and timeframe</div>'
-    + (items || '<div class="hint">Nothing reliable forming right now.</div>') + (worked ? '<div class="hint lw-pat-head">Recently worked</div>' + worked : '');
+    + '<div class="hint lw-pat-head">Forming now (80%+ built, proven on this coin)</div>'
+    + (items || '<div class="hint">Nothing reliable forming right now.</div>') + (worked ? '<div class="hint lw-pat-head">Recently worked</div>' + worked : '')
+    + '</details>';
   o.pats.querySelectorAll('details > summary').forEach(x => { if (openNow.has(x.textContent)) x.parentNode.open = true; });
 }
 function lwAttach() {
