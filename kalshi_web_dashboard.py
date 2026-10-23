@@ -6021,6 +6021,8 @@ h1 { display:none; }
 .lx-num { font-family:var(--br-serif); font-size:30px; line-height:1.05; }
 .lx-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
 .lx-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
+.lx-quiet { margin-top:5px; padding-top:5px; border-top:1px solid rgba(255,255,255,0.12); font-size:11px; color:#d6cac4; display:grid; gap:2px; }
+.lx-quiet > b { font-size:11.5px; letter-spacing:.5px; color:#efe6df; }
 .lx-clean { border-color:#3dd69c !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:#3dd69c; }
 .lx-some { border-color:#dcbb91 !important; } .lx-some .lx-num, .lx-some .lx-zone { color:#dcbb91; }
 .lx-chop { border-color:#f05454 !important; } .lx-chop .lx-num, .lx-chop .lx-zone { color:#f05454; }
@@ -12366,8 +12368,33 @@ def build_cross_box(name, d):
                 _chk = f'<div class="lx-sub hint" title="How often the market favorite won at 8:00, by line crosses so far (backtest, 1-minute closes)">favorite won: {" &middot; ".join(_bits)}</div>'
     except Exception:
         pass
+    # 2026-10-23 (user): no cross for 5+ minutes -> say what that means: has the market DECIDED, is it STABILIZING, or is it just
+    # sitting on the line - plus how much it is moving (volatility from the last 5 minutes of the price path)
+    _quiet = ""
+    try:
+        el = d.get("elapsed_seconds")
+        ev = ls.get("events") or []
+        path = ls.get("path") or []
+        if el is not None and path:
+            since = el - (ev[-1][0] if ev else 0)
+            if since >= 300:
+                recent = [x[1] for x in path if x[0] >= el - 300] or [path[-1][1]]
+                swing = max(recent) - min(recent)             # % of the line, last 5 min
+                dist = path[-1][1]
+                way = "UP" if dist > 0 else "DOWN"
+                vol, vcls = (("LOW", "up") if swing < 0.05 else (("MEDIUM", "warn") if swing < 0.15 else ("HIGH", "down")))
+                if abs(dist) >= 0.06:
+                    verdict = f"MARKET DECIDED &middot; holding {way}"
+                elif abs(dist) >= 0.02:
+                    verdict = f"STABILIZING {way}"
+                else:
+                    verdict = "SITTING ON THE LINE"
+                _quiet = (f'<div class="lx-quiet"><b>{verdict}</b><span>No cross for {int(since // 60)} min &middot; volatility '
+                          f'<b class="{vcls}">{vol}</b></span></div>')
+    except Exception:
+        _quiet = ""
     return (f'<div class="rs-tile lx-box {cls}"><div class="rs-title">LINE CROSSES</div><div class="lx-num">{n}</div>'
-            f'<div class="lx-zone">{zone}</div><div class="lx-sub"><i class=va-u></i> {ls.get("up", 0)} up &middot; <i class=va-d></i> {ls.get("down", 0)} down</div>{_chk}</div>')
+            f'<div class="lx-zone">{zone}</div><div class="lx-sub"><i class=va-u></i> {ls.get("up", 0)} up &middot; <i class=va-d></i> {ls.get("down", 0)} down</div>{_quiet}{_chk}</div>')
 
 
 @_never_break
