@@ -9113,7 +9113,9 @@ function lwRead(a, o) {
     const word = flat ? 'FLAT' : (up ? 'UP' : 'DOWN');
     const sub = flat ? 'no push' : soon ? 'may flip' : fading ? 'slowing' : 'building';
     // 2026-10-22 (user): show the distance apart (MACD minus its signal line) with the arrow
-    const dpM = o.a === 'XRP' ? 5 : 2, gapTxt = (h0 >= 0 ? '+' : '\u2212') + Math.abs(h0).toFixed(dpM);
+    // decimals follow the coin's price: BTC $81k -> 2, NEAR $4.85 -> 4, XRP / DOGE under $2 -> 5-6
+    const _px = (o.bars[o.bars.length - 1] || {}).close || 1;
+    const dpM = _px >= 1000 ? 2 : _px >= 50 ? 3 : _px >= 2 ? 4 : _px >= 0.5 ? 5 : 6, gapTxt = (h0 >= 0 ? '+' : '\u2212') + Math.abs(h0).toFixed(dpM);
     // 2026-10-22 (user): the colored arrow sits with the word (building / slowing / may flip / no push); the gap is the number
     chips += '<span class="lw-chip c-' + mk + '"><i>MACD</i><b class="w mgap">' + gapTxt + '</b><span class="mk-sub">' + lwArrow(flat ? 0 : (up ? 1 : -1)) + ' ' + sub + '</span></span>';
     try {
@@ -9410,6 +9412,15 @@ setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o
   body.chart-left[data-view="BTC"] .card .lw-win, body.chart-left[data-view="XRP"] .card .lw-win {
     left:24px !important; right:auto !important; width:var(--half) !important; }
 }
+/* 2026-10-23 (user, phone check): the flip-watch pills move to the bottom (they covered the BRAIN logo), above the sound
+   button; the "Market Watcher" tagline steps aside on very narrow screens so the win-rate badge doesn't sit on it */
+@media (max-width:760px) {
+  #flip-watch { top:auto !important; bottom:calc(env(safe-area-inset-bottom, 0px) + 58px) !important; padding:0 10px !important;
+    flex-direction:column-reverse !important; }
+  #sound-reminder { bottom:calc(132px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+@media (max-width:560px) { .g-tag { display:none !important; } }
+@media (max-width:760px) { #snd-toggle { background:rgba(33,27,30,0.97) !important; box-shadow:0 6px 18px rgba(0,0,0,0.45) !important; } }
 /* 2026-10-23 (user): Charts tab - much wider on desktop (a strip of the BRAIN background still shows at the sides), sized for phones */
 .co-wrap { max-width:none !important; width:calc(100vw - var(--sbw, 0px) - 5vw); box-sizing:border-box; padding:6px 0 40px !important; }
 .co-win { box-sizing:border-box; padding:14px 16px !important; border-radius:18px; background:rgba(33,27,30,0.94);
@@ -9419,7 +9430,9 @@ setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o
   .co-wrap { width:100%; padding:4px 0 30px !important; }
   .co-win { padding:10px 8px !important; border-radius:14px; }
   .co-win .lw-chart { height:clamp(340px, 58vh, 520px) !important; }
-  .co-tabs { gap:4px; } .co-tabs button { padding:6px 11px; font-size:12.5px; }
+  .co-tabs { gap:4px; flex-wrap:nowrap !important; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+  .co-tabs::-webkit-scrollbar { display:none; }
+  .co-tabs button { padding:6px 11px; font-size:12.5px; flex:none; }
 }
 </style>
 </head><body>
@@ -10094,6 +10107,8 @@ CHART_ONLY_GET = {"/app", "/data", "/chart_patterns"}
 CHART_ONLY_CSS = """
 body.chart-only .view-bar, body.chart-only .sound-bar, body.chart-only #snd-toggle, body.chart-only #wr-badge,
 body.chart-only #wr-panel, body.chart-only #vol-warn, body.chart-only .app-foot { display:none !important; }
+body.chart-only .g-top { justify-content:flex-start !important; }
+body.chart-only #sound-reminder, body.chart-only #flip-watch { display:none !important; }
 .co-wrap { max-width:1100px; margin:0 auto; padding:8px 12px 40px; display:grid; gap:18px; }
 .co-note { color:#d6cac4; font-size:13.5px; padding:10px 14px; border-radius:14px; background:rgba(30,46,50,.42);
   border:1px solid rgba(255,255,255,.14); }
