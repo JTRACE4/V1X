@@ -349,32 +349,50 @@ def message_page(title, text, link="/", link_label="Back home", tone="ok"):
 # ------------------------------------------------------------------------------------------------ in-app tabs + admin
 TABS_CSS = r"""
 .app-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 10px;align-items:center}
-.app-tabs a{text-decoration:none;font:800 12.5px Montserrat,Arial,sans-serif;color:#eee2d7;padding:7px 12px;border-radius:999px;
- border:1px solid rgba(240,214,200,.2);background:rgba(56,45,50,.7)}
-.app-tabs a.on{background:#e9a5bb;color:#1a1218;border-color:#e9a5bb}
+.app-tabs .tg{display:inline-flex;gap:3px;padding:3px;border-radius:999px;background:rgba(30,46,50,.42);border:1px solid rgba(255,255,255,.14);
+ -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.app-tabs a{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font:800 13px Montserrat,Arial,sans-serif;color:#eee2d7;
+ padding:8px 15px;border-radius:999px;letter-spacing:.3px}
+.app-tabs a svg{width:16px;height:16px;flex:none}
+.app-tabs a.on{background:#e9a5bb;color:#1a1218}
+.app-tabs .tr{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
+.app-tabs .tr a{padding:6px 12px;font-size:12px;border:1px solid rgba(240,214,200,.2);background:rgba(56,45,50,.7)}
+.app-tabs .tr a.on{background:#e9a5bb;color:#1a1218;border-color:#e9a5bb}
 .app-tabs .nb{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:#ff6b81;color:#fff;font-size:11px;text-align:center}
-.app-tabs .who{margin-left:auto;font:700 12px Montserrat,Arial,sans-serif;color:#bcaaa1}
+.app-tabs .who{font:700 12px Montserrat,Arial,sans-serif;color:#bcaaa1}
+@media (max-width:520px){.app-tabs a{padding:8px 12px}.app-tabs .who .un{display:none}}
 """
 
 
+_ICO_GEAR = ('<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/>'
+             '<path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" '
+             'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>')
+_ICO_CHART = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M7 16V9M7 9V6M12 14V5M17 17v-6" fill="none" stroke="currentColor" '
+              'stroke-width="2" stroke-linecap="round"/><rect x="5.5" y="9" width="3" height="5" rx="1" fill="currentColor"/>'
+              '<rect x="15.5" y="11" width="3" height="4" rx="1" fill="currentColor"/></svg>')
+
+
 def app_tabs(user, active="live", pending=0):
-    # 2026-10-23 (user): every BRAIN pass includes the multi-coin Charts page; a Chart Only pass gets ONLY the Charts tab
+    """2026-10-23 (user): main tabs on the left - "Analysis" (the BRAIN bot dashboard, gear icon) and "Charts"; My pass / Admin and
+    the account on the right. "How to use" lives at the bottom of the Analysis page now. A Chart Only pass sees only Charts."""
     try:
         import billing as _b
-        full, chart_only = _b.has_access(user), _b.chart_only(user)
+        chart_only = _b.chart_only(user)
     except Exception:
-        full, chart_only = True, False
+        chart_only = False
     if chart_only and (user or {}).get("role") != "owner":
-        items = [("charts", "/app", "Charts")]
+        main = [("charts", "/app", _ICO_CHART + "Charts")]
     else:
-        items = [("live", "/app", "Live"), ("charts", "/app?view=charts", "Charts"), ("guide", "/guide", "How to use")]
+        main = [("live", "/app", _ICO_GEAR + "Analysis"), ("charts", "/app?view=charts", _ICO_CHART + "Charts")]
+    right = []
     if user and user.get("role") != "owner":
-        items.append(("pricing", "/pricing", "My pass"))
+        right.append(("pricing", "/pricing", "My pass"))
     if user and user.get("role") == "owner":
-        items.append(("admin", "/admin", "Admin" + (f'<span class="nb">{pending}</span>' if pending else "")))
-    links = "".join(f'<a href="{h}" class="{"on" if k == active else ""}">{lab}</a>' for k, h, lab in items)
-    return (f'<style>{TABS_CSS}</style><nav class="app-tabs">{links}'
-            f'<span class="who">{E(user["username"]) if user else ""} &middot; <a href="/logout" style="padding:3px 8px">Log out</a></span></nav>')
+        right.append(("admin", "/admin", "Admin" + (f'<span class="nb">{pending}</span>' if pending else "")))
+    lk = lambda items: "".join(f'<a href="{h}" class="{"on" if k == active else ""}">{lab}</a>' for k, h, lab in items)
+    return (f'<style>{TABS_CSS}</style><nav class="app-tabs"><div class="tg">{lk(main)}</div>'
+            f'<div class="tr">{lk(right)}<span class="who"><span class="un">{E(user["username"]) if user else ""} &middot; </span>'
+            f'<a href="/logout" style="padding:3px 8px;border:0;background:none">Log out</a></span></div></nav>')
 
 
 ADMIN_CSS = r"""
