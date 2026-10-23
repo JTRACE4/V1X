@@ -7518,7 +7518,9 @@ function updateFlipWatch() {
       } else if (state !== w.lastState && w.lastState !== null && now - w.lastSpoke >= WATCH_EVERY_MS) {
         w.lastSpoke = now; w.lastState = state;
         // the market really switched sides -> THIS is the only spoken "flip"
-        if (withCall === false) speakUrgent(coin + ' now ' + how + '.', 0);      // the market switched sides - plain fact, no drama
+        // 2026-10-23 (c, user): say "flipping" when it really flipped - the market has switched to the other side at a 60/40
+        // spread or wider, and not in the round's first minute. A 50/50 wobble says nothing.
+        if (withCall === false) { if (strength !== null && strength >= 0.60 && left <= 840) speakUrgent(coin + ' is flipping ' + how + '.', 0); }
         else speak(coin + ' going ' + how + '.', false, 15000);
       } else if (w.lastState === null) {
         w.lastState = state;                       // the flip alert itself already said this
