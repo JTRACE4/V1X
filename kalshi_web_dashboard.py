@@ -16828,6 +16828,17 @@ def main():
         _bt.configure(trend_read=trend_read, stage_decide=stage_decide, signal_consensus=signal_consensus)
         _bt.load_saved()
         _bt.start_background(delay=90, every_hours=6)     # 2026-10-22: refresh the price-vs-target history 4x a day
+
+        def _audit_loop():     # 2026-10-23 (user): flip + stay-out audit into the server log, once at start and daily
+            import flip_audit as _fa
+            time.sleep(240)
+            while True:
+                try:
+                    _fa.run({a: list(v) for a, v in _rounds.items()})
+                except Exception as _ae:
+                    print(f"[audit] failed: {_ae!r}")
+                time.sleep(86400)
+        threading.Thread(target=_audit_loop, daemon=True, name="audit").start()
     except Exception as _e:
         print(f"[flow] could not start: {_e!r}")
     global _mtf

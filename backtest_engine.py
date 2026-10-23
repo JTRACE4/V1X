@@ -998,6 +998,34 @@ def run(days=LOOKBACK_DAYS):
         STATE["running"] = False
 
 
+def cached_rounds():
+    """2026-10-23: the same replay as run() but from the cached data only (no downloads) - for audits. [] if nothing cached."""
+    markets = _load("markets.json", [])
+    kcache = _load("kalshi_paths.json", {})
+    cb = {int(k): v for k, v in _load("coinbase_1m.json", {}).items()}
+    bn = {int(k): v for k, v in _load("binance_1m.json", {}).items()}
+    rounds = []
+    for m in markets:
+        if m.get("result") not in ("yes", "no"):
+            continue
+        kp = kcache.get(m["ticker"]) or []
+        line_fb = None
+        if not m["strike"]:
+            o_min = int(m["open"] // 60 * 60)
+            line_fb = cb.get(o_min, [None] * 4)[0]
+        fs = {}
+        for mark in (240, 480):
+            try:
+                f = features(m, mark, cb, bn, kp, line_fb)
+            except Exception:
+                f = None
+            if f:
+                fs[mark] = f
+        if fs:
+            rounds.append({"m": m, "f": fs})
+    return rounds
+
+
 _mk_cache = [0.0, []]
 
 

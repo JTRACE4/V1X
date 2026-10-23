@@ -1,0 +1,53 @@
+BRAIN audit 2026-10-23 18:45 UTC
+backtest rounds available: 2800
+== STAY-OUT check, backtest EARLY 4:00 (30 days BTC) ==
+  all calls the rules make: 2800 rounds, won 66%, -4.6c per $1 (-128.7 units)
+  calls AGAINST the trend (live sits these out) - if taken anyway: 918 rounds, won 67%, -2.6c per $1 (-24.2 units)
+     ...same rounds, trend side instead: 918 rounds, won 33%, -12.0c per $1 (-110.3 units)
+  coin-flip skips - market favorite instead: none
+  coin-flip skips - trend side instead: none
+== STAY-OUT check, backtest SEALED 8:00 (30 days BTC) ==
+  all calls the rules make: 2800 rounds, won 66%, -4.1c per $1 (-116.2 units)
+  calls AGAINST the trend (live sits these out) - if taken anyway: 972 rounds, won 67%, -2.5c per $1 (-24.0 units)
+     ...same rounds, trend side instead: 972 rounds, won 33%, -11.7c per $1 (-113.6 units)
+  coin-flip skips - market favorite instead: none
+  coin-flip skips - trend side instead: none
+== STAY-OUT check, LIVE graded rounds ==
+== FLIPS at EARLY 4:00 (30 days BTC, 2800 rounds) ==
+  the favorite lost 915 times (33%)
+  favorite at 50-60c: 883 rounds, flipped 444 (50%) - underdog costs 0.45 on average
+  favorite at 60-70c: 836 rounds, flipped 280 (33%) - underdog costs 0.35 on average
+  favorite at 70-80c: 415 rounds, flipped 115 (28%) - underdog costs 0.25 on average
+  favorite at 80-90c: 443 rounds, flipped 66 (15%) - underdog costs 0.15 on average
+  favorite at 90-100c: 223 rounds, flipped 10 (4%) - underdog costs 0.07 on average
+  flipped vs held (average): dog 0.371 vs 0.285, ad 0.000502 vs 0.000485, cx 1.48 vs 1.5, votes 1.15 vs 1.18, score 54.8 vs 54.8, opp 0.494 vs 0.504, toward 0.242 vs 0.264, wrong 0.502 vs 0.493
+  current reversal (flip history), newest 30%: fired: 20 rounds, won 50%, +8.1c per $1 (+1.6 units); flips it did not call: 267
+  luck check: shuffled outcomes find 19 money rules on average vs 29 on the real data
+  underdog rules that made money on BOTH the older 70% and the newest 30% (29 found, best 8):
+    dog 0.15-0.30, |dist|<=1.0, crosses>=1, reads against>=2, radar>=0, already on the other side -> train 51 won 27% +6.6c | unseen 26 won 31% +24.3c
+    dog 0.15-0.30, |dist|<=1.0, crosses>=1, reads against>=2, radar>=45, already on the other side -> train 51 won 27% +6.6c | unseen 26 won 31% +24.3c
+    dog 0.40-0.50, |dist|<=1.0, crosses>=1, reads against>=0, radar>=0, moving at the line, already on the other side -> train 52 won 52% +9.1c | unseen 26 won 58% +21.1c
+    dog 0.40-0.50, |dist|<=1.0, crosses>=1, reads against>=0, radar>=45, moving at the line, already on the other side -> train 52 won 52% +9.1c | unseen 26 won 58% +21.1c
+    dog 0.40-0.50, |dist|<=0.0004, crosses>=1, reads against>=0, radar>=0 -> train 158 won 51% +5.7c | unseen 67 won 55% +15.4c
+    dog 0.40-0.50, |dist|<=0.0004, crosses>=0, reads against>=0, radar>=0 -> train 226 won 52% +8.4c | unseen 92 won 53% +11.6c
+    dog 0.40-0.50, |dist|<=0.0002, crosses>=1, reads against>=0, radar>=0 -> train 81 won 54% +14.0c | unseen 38 won 53% +10.4c
+    dog 0.40-0.50, |dist|<=0.0008, crosses>=0, reads against>=0, radar>=0, moving at the line, already on the other side -> train 56 won 57% +20.1c | unseen 29 won 52% +8.2c
+== FLIPS at SEALED 8:00 (30 days BTC, 2800 rounds) ==
+  the favorite lost 915 times (33%)
+  favorite at 50-60c: 883 rounds, flipped 444 (50%) - underdog costs 0.45 on average
+  favorite at 60-70c: 836 rounds, flipped 280 (33%) - underdog costs 0.35 on average
+  favorite at 70-80c: 415 rounds, flipped 115 (28%) - underdog costs 0.25 on average
+  favorite at 80-90c: 443 rounds, flipped 66 (15%) - underdog costs 0.15 on average
+  favorite at 90-100c: 223 rounds, flipped 10 (4%) - underdog costs 0.07 on average
+  flipped vs held (average): dog 0.371 vs 0.285, ad 0.000502 vs 0.000485, cx 1.52 vs 1.54, votes 1.16 vs 1.17, score 54.9 vs 54.4, opp 0.501 vs 0.504, toward 0.256 vs 0.255, wrong 0.502 vs 0.493
+  current reversal (flip history), newest 30%: fired: 57 rounds, won 44%, -7.2c per $1 (-4.1 units); flips it did not call: 252
+  luck check: shuffled outcomes find 11 money rules on average vs 19 on the real data
+  underdog rules that made money on BOTH the older 70% and the newest 30% (19 found, best 8):
+    dog 0.40-0.50, |dist|<=1.0, crosses>=3, reads against>=2, radar>=0 -> train 55 won 51% +6.8c | unseen 27 won 59% +26.5c
+    dog 0.40-0.50, |dist|<=0.0002, crosses>=2, reads against>=0, radar>=0 -> train 57 won 56% +18.7c | unseen 25 won 56% +20.8c
+    dog 0.40-0.50, |dist|<=0.0008, crosses>=3, reads against>=0, radar>=45 -> train 69 won 51% +7.2c | unseen 29 won 55% +16.5c
+    dog 0.40-0.50, |dist|<=0.0004, crosses>=2, reads against>=0, radar>=0 -> train 110 won 53% +11.3c | unseen 46 won 54% +14.8c
+    dog 0.40-0.50, |dist|<=1.0, crosses>=3, reads against>=0, radar>=45 -> train 90 won 51% +7.2c | unseen 39 won 54% +13.0c
+    dog 0.40-0.50, |dist|<=0.0004, crosses>=0, reads against>=0, radar>=0 -> train 226 won 52% +8.4c | unseen 92 won 53% +11.6c
+    dog 0.40-0.50, |dist|<=0.0004, crosses>=1, reads against>=0, radar>=0 -> train 162 won 51% +6.3c | unseen 70 won 51% +8.0c
+    dog 0.40-0.50, |dist|<=0.0004, crosses>=2, reads against>=0, radar>=45 -> train 60 won 52% +9.1c | unseen 29 won 52% +6.5c
