@@ -1,308 +1,480 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>BRAIN Playbook</title>
+<!-- BRAIN Playbook, edition 3 (2026-10-23). Rendered to assets/BRAIN-Playbook.pdf with headless Chromium (Letter, no margins).
+     Rules for this guide (user): plain-English market info, never instructions to trade; no exchange or charting-site names;
+     not detailed enough to rebuild BRAIN; BRAIN colors (brain pink, warm tan, gold) - green / red only for up / down and the
+     pressure bars. Images (logo.png, hero.jpg, ico-*.svg) come from static/. -->
 <style>
 @page { size: Letter; margin: 0; }
-:root { --bg:#1d1719; --panel:#2a2226; --line:#4a3c43; --cream:#fbf4ec; --text:#e9ded8; --mute:#bcaaa1; --taupe:#cdb6ad;
-  --pink:#e9a5bb; --gold:#f2c46b; --sage:#a9cfc1; --teal:#2f4a4f; --amber:#e7b882; --copper:#9a5a44; --up:#3dd69c; --down:#f05454; --lav:#c9a6e8; }
+:root {
+  --bg:#1b1517; --bg2:#231b1e; --cocoa:#2b2226; --line:rgba(240,214,200,.13); --line2:rgba(242,165,192,.28);
+  --cream:#fbf4ec; --text:#eee2d7; --mute:#bba79f; --dim:#8f7d77;
+  --pink:#f2a5c0; --blush:#e9a5bb; --rose:#e57fa6; --tan:#e3c29b; --caramel:#c99a6b; --brown:#8a5d45; --gold:#f2c46b;
+  --up:#3dd69c; --up2:#15a57d; --down:#f05454; --down2:#c8243a;
+  --brain:linear-gradient(90deg, #f2a5c0 0%, #f0b3b4 48%, #e3c29b 52%, #e8c9a2 100%);
+}
 * { box-sizing:border-box; }
-html, body { margin:0; background:var(--bg); color:var(--text); font-family:'Inter', sans-serif; font-size:10.6pt; line-height:1.5;
+html, body { margin:0; background:var(--bg); color:var(--text); font-family:'Inter', sans-serif; font-size:10.4pt; line-height:1.5;
   -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-.page { width:8.5in; height:11in; position:relative; overflow:hidden; page-break-after:always; padding:0.7in 0.72in 0.6in;
-  background:radial-gradient(900px 500px at 110% -10%, rgba(47,74,79,.55), transparent 60%), radial-gradient(700px 400px at -20% 110%, rgba(154,90,68,.18), transparent 60%), var(--bg); }
+.page { width:8.5in; height:11in; position:relative; overflow:hidden; page-break-after:always; padding:0.62in 0.7in 0.7in;
+  background:
+    radial-gradient(620px 380px at 104% -6%, rgba(242,165,192,.17), transparent 62%),
+    radial-gradient(560px 420px at -12% 108%, rgba(227,194,155,.13), transparent 62%),
+    linear-gradient(180deg, #1b1517 0%, #211a1d 55%, #261e21 100%); }
 .page:last-child { page-break-after:auto; }
-.tight td { padding:4px 8px; } .tight h3 { margin:10px 0 3px; } .tight .lead { margin-bottom:8px; } .tight .card p { margin:0; }
-h1, h2, h3 { font-family:'Inter Display', 'Inter', sans-serif; color:var(--cream); margin:0; letter-spacing:-.2px; }
-h2 { font-size:25pt; font-weight:800; margin:0 0 4px; }
-h3 { font-size:12.5pt; font-weight:800; margin:14px 0 4px; display:flex; align-items:center; gap:8px; }
-p { margin:0 0 8px; }
-.kick { font-size:8.5pt; font-weight:800; letter-spacing:2.5px; color:var(--taupe); text-transform:uppercase; margin-bottom:6px; }
-.lead { color:#d6cac4; font-size:11.5pt; margin-bottom:14px; }
-.card { background:rgba(42,34,38,.78); border:1px solid var(--line); border-radius:16px; padding:12px 14px; margin:10px 0; }
-.glass { background:rgba(30,46,50,.45); border:1px solid rgba(255,255,255,.16); border-radius:16px; padding:12px 14px; margin:10px 0;
-  box-shadow:0 0 14px rgba(255,255,255,.06); }
-.two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+/* faint brain watermark in the corner of inner pages */
+.page:not(.cover)::after { content:""; position:absolute; right:-0.55in; bottom:0.5in; width:2.6in; height:2.6in;
+  background:url(logo.png) center/contain no-repeat; opacity:.045; pointer-events:none; }
+h1, h2, h3 { font-family:'Inter Display', 'Inter', sans-serif; color:var(--cream); margin:0; }
+p { margin:0 0 7px; }
+b, strong { color:var(--cream); font-weight:700; }
+
+/* page header: big gradient number + kicker + title, with the split brain rule under it */
+.ph { display:flex; align-items:flex-end; gap:16px; margin-bottom:4px; }
+.ph .num { font-family:'Inter Display'; font-weight:900; font-size:46pt; line-height:.82; letter-spacing:-2px;
+  background:var(--brain); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.ph .kick { font-size:8pt; font-weight:800; letter-spacing:2.6px; text-transform:uppercase; color:var(--tan); margin-bottom:3px; }
+.ph h2 { font-size:24pt; font-weight:800; letter-spacing:-.4px; line-height:1.05; }
+.rule { height:3px; border-radius:3px; background:var(--brain); margin:10px 0 12px; width:100%; opacity:.9;
+  box-shadow:0 0 12px rgba(242,165,192,.35); }
+.lead { color:#e2d4cc; font-size:11.2pt; margin:0 0 12px; }
+
+/* cards */
+.card { position:relative; background:linear-gradient(180deg, rgba(52,41,46,.78), rgba(40,32,36,.78)); border:1px solid var(--line);
+  border-radius:16px; padding:12px 14px; margin:0 0 10px; }
+.card::before { content:""; position:absolute; left:14px; right:14px; top:-1px; height:1px;
+  background:linear-gradient(90deg, transparent, rgba(242,165,192,.75), rgba(227,194,155,.75), transparent); }
+.card h3 { font-size:12pt; font-weight:800; margin:0 0 5px; display:flex; align-items:center; gap:8px; }
+.card p:last-child { margin-bottom:0; }
+.glow { border-color:var(--line2); box-shadow:0 0 22px rgba(242,165,192,.10) inset, 0 0 18px rgba(242,165,192,.07); }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .three { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.sec { font-size:8pt; font-weight:800; letter-spacing:2.2px; text-transform:uppercase; color:var(--pink); margin:14px 0 7px;
+  display:flex; align-items:center; gap:8px; }
+.sec::after { content:""; flex:1; height:1px; background:linear-gradient(90deg, rgba(242,165,192,.45), transparent); }
+
+/* icons (masks so they take any color) */
 .ico { display:inline-block; width:15px; height:15px; background-color:currentColor; flex:none;
   -webkit-mask:var(--i) center/contain no-repeat; mask:var(--i) center/contain no-repeat; vertical-align:-2px; }
-.i-lock{--i:url(ico-lock.svg);color:var(--pink)} .i-radar{--i:url(ico-radar.svg);color:var(--pink)} .i-hold{--i:url(ico-hold.svg);color:var(--sage)}
-.i-rev{--i:url(ico-reversal.svg);color:var(--amber)} .i-star{--i:url(ico-star.svg);color:var(--gold)} .i-check{--i:url(ico-check.svg);color:var(--sage)}
-.i-x{--i:url(ico-x.svg);color:var(--lav)} .i-warn{--i:url(ico-warn.svg);color:var(--amber)} .i-flame{--i:url(ico-flame.svg);color:#f2a65a}
-.i-clock{--i:url(ico-clock.svg);color:var(--cream)} .i-sound{--i:url(ico-sound-on.svg);color:var(--sage)} .i-cash{--i:url(ico-cash.svg);color:var(--gold)}
-table { width:100%; border-collapse:collapse; font-size:9.6pt; }
-th { text-align:left; color:var(--taupe); font-weight:800; font-size:8.3pt; letter-spacing:1px; text-transform:uppercase; padding:6px 8px; border-bottom:1px solid var(--line); }
-td { padding:6px 8px; border-bottom:1px solid rgba(74,60,67,.6); vertical-align:top; }
+.i-lock{--i:url(ico-lock.svg);color:var(--pink)} .i-radar{--i:url(ico-radar.svg);color:var(--pink)} .i-hold{--i:url(ico-hold.svg)}
+.i-rev{--i:url(ico-reversal.svg);color:var(--gold)} .i-star{--i:url(ico-star.svg);color:var(--gold)} .i-check{--i:url(ico-check.svg);color:var(--tan)}
+.i-x{--i:url(ico-x.svg);color:var(--pink)} .i-warn{--i:url(ico-warn.svg);color:var(--gold)} .i-flame{--i:url(ico-flame.svg);color:var(--caramel)}
+.i-clock{--i:url(ico-clock.svg);color:var(--tan)} .i-sound{--i:url(ico-sound-on.svg);color:var(--pink)} .i-cash{--i:url(ico-cash.svg);color:var(--gold)}
+
+/* tables */
+table { width:100%; border-collapse:collapse; font-size:9.5pt; }
+th { text-align:left; color:var(--tan); font-weight:800; font-size:7.8pt; letter-spacing:1.3px; text-transform:uppercase; padding:5px 8px;
+  border-bottom:1px solid var(--line2); }
+td { padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
 tr:last-child td { border-bottom:0; }
-b, strong { color:var(--cream); }
-.up { color:var(--up); font-weight:800; } .down { color:var(--down); font-weight:800; } .gold { color:var(--gold); font-weight:800; }
-.sage { color:var(--sage); font-weight:800; } .amber { color:var(--amber); font-weight:800; } .pink { color:var(--pink); font-weight:800; }
-.pill { display:inline-flex; align-items:center; gap:6px; padding:3px 11px; border-radius:999px; font-weight:800; font-size:9pt; }
-.p-hold { background:rgba(47,74,79,.85); border:1px solid #6f9a8e; color:var(--cream); } .p-rev { background:rgba(154,90,68,.85); border:1px solid #c98a6a; color:#f6ece5; }
-.p-super { border:1px solid var(--gold); color:var(--gold); } .p-good { border:1px solid var(--sage); color:var(--sage); } .p-weak { border:1px dashed var(--mute); color:var(--mute); }
-.note { font-size:9pt; color:var(--mute); }
-.foot { position:absolute; left:0.72in; right:0.72in; bottom:0.32in; display:flex; justify-content:space-between; font-size:7.8pt; color:#8f7f79;
-  border-top:1px solid rgba(74,60,67,.6); padding-top:6px; }
-.disc { border:1px solid rgba(231,184,130,.45); background:rgba(154,90,68,.12); border-radius:14px; padding:10px 13px; font-size:9.2pt; color:#eadbd2; }
-/* cover */
-.cover { padding:0; background:#120e0f; }
-.cover .art { position:absolute; inset:0; background:url(hero.jpg) center 70%/cover no-repeat; }
-.cover .shade { position:absolute; inset:0; background:linear-gradient(180deg, rgba(11,16,22,.78) 0%, rgba(11,16,22,.15) 38%, rgba(11,16,22,.25) 60%, rgba(29,23,25,.96) 88%); }
-.cover .in { position:absolute; left:0.8in; right:0.8in; top:0.9in; }
-.cover .logo { width:78px; height:78px; border-radius:18px; }
-.cover h1 { font-size:54pt; font-weight:900; letter-spacing:-1px; margin-top:18px; line-height:1; }
-.cover .sub { font-size:15pt; color:#efe6df; margin-top:12px; max-width:5.6in; }
-.cover .bottom { position:absolute; left:0.8in; right:0.8in; bottom:0.7in; }
-.cover .ed { font-size:9pt; letter-spacing:2.5px; color:var(--taupe); font-weight:800; text-transform:uppercase; }
-.chip { display:inline-block; width:19px; height:19px; line-height:19px; border-radius:50%; text-align:center; font-weight:900; font-size:9pt; vertical-align:middle; }
-.c-up { background:rgba(61,214,156,.22); color:var(--up); box-shadow:inset 0 0 0 1px rgba(61,214,156,.6); }
-.c-dn { background:rgba(240,84,84,.22); color:var(--down); box-shadow:inset 0 0 0 1px rgba(240,84,84,.6); }
-.big { font-size:20pt; font-weight:900; color:var(--cream); line-height:1.1; }
-.toc { columns:2; column-gap:18px; font-size:10pt; }
-.toc div { break-inside:avoid; padding:4px 0; border-bottom:1px solid rgba(74,60,67,.5); display:flex; justify-content:space-between; }
+
+/* words */
+.up { color:var(--up); font-weight:800; } .down { color:var(--down); font-weight:800; }
+.pk { color:var(--pink); font-weight:800; } .tn { color:var(--tan); font-weight:800; } .gd { color:var(--gold); font-weight:800; }
+.note { font-size:8.6pt; color:var(--mute); }
+.tag { display:inline-flex; align-items:center; gap:5px; padding:2px 10px; border-radius:999px; font-weight:800; font-size:8.6pt; white-space:nowrap; }
+.t-super { color:#2a1a20; background:linear-gradient(90deg, #f6d27e, #f2c46b); box-shadow:0 0 10px rgba(242,196,107,.35); }
+.t-good { color:#2a1a20; background:linear-gradient(90deg, #f6c4d4, #f2a5c0); }
+.t-weak { color:var(--tan); border:1px dashed rgba(227,194,155,.6); }
+.t-pink { color:var(--pink); border:1px solid rgba(242,165,192,.55); background:rgba(242,165,192,.08); }
+.t-gold { color:var(--gold); border:1px solid rgba(242,196,107,.55); background:rgba(242,196,107,.08); }
+.t-tan { color:var(--tan); border:1px solid rgba(227,194,155,.5); background:rgba(227,194,155,.07); }
+
+/* ---------- mock screen pieces (drawn to look like the dashboard) ---------- */
+.mock { background:rgba(22,17,19,.72); border:1px solid rgba(240,214,200,.16); border-radius:14px; padding:10px 12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.35); }
+.mlabel { font-size:7.6pt; font-weight:900; letter-spacing:1.6px; text-transform:uppercase;
+  background:var(--brain); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.mhead { display:flex; justify-content:space-between; align-items:baseline; font-size:8.2pt; font-weight:900; letter-spacing:1.1px; color:var(--cream); }
+.mhead span { font-weight:600; letter-spacing:0; color:var(--mute); }
+.bar { display:flex; height:11px; border-radius:6px; overflow:hidden; margin:6px 0 5px; background:rgba(255,255,255,.06); }
+.bar .b { background:linear-gradient(90deg, var(--up2), var(--up)); box-shadow:0 0 10px rgba(61,214,156,.45); }
+.bar .s { background:linear-gradient(90deg, var(--down), var(--down2)); box-shadow:0 0 10px rgba(240,84,84,.4); }
+.bar .q { background:rgba(255,255,255,.10); }
+.mnums { display:flex; justify-content:space-between; font-size:8.2pt; font-weight:700; }
+.mnums .bb { color:var(--up); } .mnums .ss { color:var(--down); }
+.mnums em { font-style:normal; color:var(--mute); font-weight:500; }
+.state { display:grid; grid-template-columns:150px 1fr; gap:4px 12px; align-items:center; font-size:9.3pt; }
+.state .sw { height:9px; border-radius:5px; overflow:hidden; display:flex; }
+.radar-big { font-family:'Inter Display'; font-weight:900; font-size:22pt; line-height:1; margin:4px 0 2px; color:var(--gold); }
+.radar-big span { font-size:9pt; letter-spacing:1.5px; margin-left:6px; }
+.track { height:8px; border-radius:5px; background:rgba(255,255,255,.08); overflow:hidden; margin:5px 0 4px; }
+.track i { display:block; height:100%; border-radius:5px; }
+.scale { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:8px; }
+.scale div { border-radius:10px; padding:6px 8px; font-size:8.4pt; line-height:1.35; background:rgba(255,255,255,.035); border:1px solid var(--line); }
+.scale b { display:block; font-size:8.6pt; letter-spacing:1px; }
+.lx-num { font-family:'Inter Display'; font-weight:900; font-size:26pt; line-height:1; color:var(--cream); }
+.pillrow { display:flex; flex-direction:column; gap:7px; align-items:flex-start; }
+.fw { display:inline-flex; align-items:center; gap:9px; padding:5px 13px; border-radius:999px; font-weight:800; font-size:9pt; white-space:nowrap; }
+.fw .dot { font-weight:900; } .fw b { color:inherit; }
+.fw-with { color:#2a1a20; background:linear-gradient(90deg, #ffd6e4 0%, #f2a5c0 50%, #e57fa6 100%); box-shadow:0 0 14px rgba(242,165,192,.45); }
+.fw-agdn { color:#fff; background:linear-gradient(90deg, #c82434 0%, #de3e68 50%, #ec6096 100%); box-shadow:0 0 14px rgba(230,70,100,.4); text-shadow:0 1px 2px rgba(0,0,0,.4); }
+.fw-agup { color:#fff; background:linear-gradient(90deg, #d6343e 0%, #96468c 50%, #3a6ed2 100%); box-shadow:0 0 14px rgba(150,70,140,.4); text-shadow:0 1px 2px rgba(0,0,0,.4); }
+.fw .badge { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:999px; font-size:8pt; }
+.fw-with .badge { background:rgba(42,26,32,.85); color:#ffd6e4; }
+.fw-agdn .badge, .fw-agup .badge { background:rgba(30,16,16,.5); color:#fff; border:1px solid rgba(255,255,255,.45); }
+.chip { display:inline-block; width:20px; height:20px; line-height:20px; border-radius:50%; text-align:center; font-weight:900; font-size:9pt; vertical-align:middle; }
+.c-up { background:rgba(61,214,156,.22); color:var(--up); box-shadow:inset 0 0 0 1.2px rgba(61,214,156,.65); }
+.c-dn { background:rgba(240,84,84,.22); color:var(--down); box-shadow:inset 0 0 0 1.2px rgba(240,84,84,.65); }
+.whale { display:flex; justify-content:space-between; align-items:center; padding:5px 9px; border-radius:9px; margin:4px 0; font-size:8.8pt; font-weight:700; }
+.wb { color:#d8ffef; background:linear-gradient(90deg, rgba(21,165,125,.45), rgba(61,214,156,.12)); border-left:3px solid var(--up); }
+.ws { color:#ffe1e1; background:linear-gradient(90deg, rgba(200,36,58,.45), rgba(240,84,84,.12)); border-left:3px solid var(--down); }
+.wv { color:#f3eeea; background:rgba(255,255,255,.07); border-left:3px solid rgba(255,255,255,.6); }
+.wm { font-size:10pt; padding:7px 10px; box-shadow:0 0 14px rgba(61,214,156,.35); }
+.whale em { font-style:normal; font-weight:500; opacity:.75; font-size:8pt; }
+
+/* big stats */
+.stat { font-family:'Inter Display'; font-weight:900; font-size:30pt; line-height:1; letter-spacing:-1px;
+  background:var(--brain); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.disc { border:1px solid rgba(242,196,107,.4); background:linear-gradient(180deg, rgba(138,93,69,.20), rgba(138,93,69,.10)); border-radius:14px;
+  padding:10px 13px; font-size:9pt; color:#efe2d8; }
+.foot { position:absolute; left:0.7in; right:0.7in; bottom:0.32in; display:flex; justify-content:space-between; align-items:center;
+  font-size:7.6pt; color:var(--dim); padding-top:7px; border-top:1px solid var(--line); }
+.foot .pn { font-weight:800; color:var(--tan); }
+.foot img { width:13px; height:13px; vertical-align:-3px; margin-right:5px; }
+
+/* ---------- cover ---------- */
+.cover { padding:0; background:#120d0f; }
+.cover .art { position:absolute; inset:0; background:url(hero.jpg) center 78%/cover no-repeat; }
+.cover .shade { position:absolute; inset:0; background:
+  linear-gradient(180deg, rgba(18,12,14,.92) 0%, rgba(18,12,14,.55) 26%, rgba(18,12,14,.05) 46%, rgba(18,12,14,.10) 62%, rgba(27,21,23,.97) 86%),
+  radial-gradient(500px 260px at 50% 74%, rgba(242,165,192,.18), transparent 70%); }
+.cover .in { position:absolute; left:0.8in; right:0.8in; top:0.78in; }
+.cover .brandrow { display:flex; align-items:center; gap:12px; }
+.cover .brandrow img { width:58px; height:58px; filter:drop-shadow(0 0 14px rgba(242,165,192,.55)); }
+.cover .brandrow span { font-size:8.6pt; font-weight:800; letter-spacing:3px; color:var(--tan); text-transform:uppercase; }
+.cover h1 { font-weight:900; font-size:70pt; line-height:.92; letter-spacing:-2.5px; margin-top:18px;
+  background:var(--brain); -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 22px rgba(242,165,192,.35)); }
+.cover h1 small { display:block; font-size:30pt; letter-spacing:-.6px; color:var(--cream); -webkit-text-fill-color:var(--cream); margin-top:6px; }
+.cover .sub { font-size:13.5pt; color:#f1e6de; margin-top:14px; max-width:5.3in; line-height:1.45; }
+.cover .bottom { position:absolute; left:0.8in; right:0.8in; bottom:0.62in; }
+.cover .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.cover .ed { font-size:8.4pt; letter-spacing:2.6px; color:var(--tan); font-weight:800; text-transform:uppercase; }
+.toc { display:grid; grid-template-columns:1fr 1fr; gap:3px 22px; font-size:9.4pt; margin-top:6px; }
+.toc div { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--line); }
+.toc b { font-weight:600; color:var(--text); } .toc span { color:var(--pink); font-weight:800; }
 </style></head><body>
 
 <!-- 1 COVER -->
 <section class="page cover">
   <div class="art"></div><div class="shade"></div>
   <div class="in">
-    <img class="logo" src="logo.png" alt="BRAIN">
-    <h1>BRAIN<br>Playbook</h1>
-    <div class="sub">How to read BRAIN's live market data for 15-minute Bitcoin and XRP prediction-market rounds.</div>
+    <div class="brandrow"><img src="logo.png" alt=""><span>brainswatch.com</span></div>
+    <h1>BRAIN<small>Playbook</small></h1>
+    <div class="sub">Your guide to every screen on BRAIN: what the calls, gauges, pressure bars and alerts mean, in plain English.</div>
   </div>
   <div class="bottom">
-    <div class="ed">Edition 2 &middot; October 2026 &middot; brainswatch.com</div>
-    <p class="note" style="margin-top:8px;color:#d6cac4">Information and education only. Not financial advice. BRAIN gathers and displays market data; it never tells anyone to trade or what to do with their money.</p>
+    <div class="chips"><span class="tag t-pink">Calls</span><span class="tag t-tan">Pressure</span><span class="tag t-gold">Flip radar</span><span class="tag t-pink">Alerts &amp; voice</span><span class="tag t-tan">Charts</span><span class="tag t-gold">The record</span></div>
+    <div class="ed">Edition 3 &middot; October 2026 &middot; For members</div>
+    <p class="note" style="margin-top:7px;color:#d8cac2">Information and education only. Not financial advice. BRAIN gathers and displays market data; it never tells anyone to trade or what to do with their money.</p>
   </div>
 </section>
 
-<!-- 2 WHAT BRAIN IS -->
-<section class="page tight">
-  <div class="kick">Start here</div>
-  <h2>What BRAIN is (and isn't)</h2>
-  <p class="lead">BRAIN is an information service. Its software watches public market data around the clock, measures it, and shows you what it sees, live.</p>
+<!-- 2 START HERE -->
+<section class="page">
+  <div class="ph"><div class="num">01</div><div><div class="kick">Start here</div><h2>What BRAIN is, and how a round works</h2></div></div>
+  <div class="rule"></div>
+  <p class="lead">BRAIN watches live market data around the clock for Bitcoin and XRP, measures it, and shows you what it sees, second by second.</p>
   <div class="two">
     <div class="card"><h3><span class="ico i-check"></span>What BRAIN does</h3>
-      <p>Gathers prices, trades and order books from the exchanges that matter, plus the prediction market's own prices.</p>
-      <p>Shows its readings live and grades every one against how the round really settled.</p></div>
+      <p>Reads live prices, trades and order books from major, trusted sources, plus the prediction market's own prices.</p>
+      <p>Shows its readings live, and grades every one against how the round really ended.</p></div>
     <div class="card"><h3><span class="ico i-x"></span>What BRAIN doesn't do</h3>
-      <p>It doesn't give financial advice or tell anyone to buy, sell, hold or place money anywhere.</p>
-      <p>It doesn't know your finances and doesn't trade for members. Every decision is yours.</p></div>
+      <p>It never gives financial advice or tells anyone to buy, sell or hold anything.</p>
+      <p>It doesn't trade for members or know your finances. Every decision is yours.</p></div>
   </div>
-  <h3 style="margin-top:12px"><span class="ico i-clock"></span>How a 15-minute round works</h3>
-  <div class="glass">
-    <table>
-      <tr><th style="width:26%">Piece</th><th>What it means</th></tr>
-      <tr><td><b>The line (target)</b></td><td>The price the market sets when the round opens. The question is simply: will the price be above or below this line when the round ends?</td></tr>
-      <tr><td><b>UP / DOWN</b></td><td><span class="up">UP</span> = settles above the line. <span class="down">DOWN</span> = settles below it.</td></tr>
-      <tr><td><b>The market %</b></td><td>The market's own price for a side, read as the crowd's odds. 72% on UP means UP costs about 72&cent; and pays $1 if right.</td></tr>
-      <tr><td><b>Settlement</b></td><td>Rounds settle on an independent index of major exchanges, <b>averaged over the last 60 seconds</b>, so a spike in the final seconds barely moves it.</td></tr>
-      <tr><td><b>Payout</b></td><td>A correct side pays $1 per contract at settlement; a wrong side pays $0. Buying at 72&cent; means 28&cent; profit if right and 72&cent; lost if wrong, before fees.</td></tr>
-      <tr><td><b>Fees</b></td><td>The market charges a trading fee, largest near 50&cent; and smallest near 1&cent; or 99&cent;. Fees mean a side can be right most of the time and still lose money overall.</td></tr>
-      <tr><td><b>Before the end</b></td><td>Prices move all round. A position can be sold before settlement at whatever the market is paying at that moment, which may be more or less than it cost.</td></tr>
-      <tr><td><b>The clock</b></td><td>15 minutes per round. BRAIN reads it at the 4:00 and 8:00 marks and counts down continuously.</td></tr>
-    </table>
+  <div class="sec"><span class="ico i-clock"></span>A 15-minute round in 30 seconds</div>
+  <div class="card glow"><table>
+    <tr><th style="width:24%">Piece</th><th>What it means</th></tr>
+    <tr><td><b>The line</b></td><td>The price set when the round opens. The only question: will price finish <span class="up">above</span> or <span class="down">below</span> it?</td></tr>
+    <tr><td><b>UP / DOWN</b></td><td><span class="up">UP</span> ends above the line. <span class="down">DOWN</span> ends below it.</td></tr>
+    <tr><td><b>Market %</b></td><td>The crowd's odds for a side. 72% on UP means the crowd sees UP as the likelier finish.</td></tr>
+    <tr><td><b>The finish</b></td><td>Rounds settle on an average of the <b>final 60 seconds</b>, so one last-second spike barely moves the result.</td></tr>
+    <tr><td><b>The clock</b></td><td>15 minutes per round. BRAIN makes its readings at the <b>4:00</b> and <b>8:00</b> marks.</td></tr>
+  </table></div>
+  <div class="sec">Inside this Playbook</div>
+  <div class="toc">
+    <div><b>The calls &amp; confidence tiers</b><span>3</span></div>
+    <div><b>Live flip watch &amp; voice</b><span>7</span></div>
+    <div><b>Early vs sealed scorecard</b><span>4</span></div>
+    <div><b>Charts</b><span>8</span></div>
+    <div><b>Buy &amp; sell pressure</b><span>5</span></div>
+    <div><b>The record</b><span>9</span></div>
+    <div><b>Flip radar &amp; line crosses</b><span>6</span></div>
+    <div><b>Memberships, risk &amp; glossary</b><span>10</span></div>
   </div>
-  <div class="disc"><span class="ico i-warn"></span>&nbsp; Prediction markets carry a high risk of loss. Everything in this guide explains what BRAIN's screens show. None of it is a suggestion to trade.</div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>2</span></div>
+  <div class="disc" style="margin-top:14px"><span class="ico i-warn"></span>&nbsp; Prediction markets carry a high risk of loss. This guide explains what BRAIN's screens show. None of it is a suggestion to trade.</div>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">2</span></div>
 </section>
 
 <!-- 3 THE CALLS -->
-<section class="page tight">
-  <div class="kick">The core reading</div>
-  <h2>The calls</h2>
-  <p class="lead">A "call" is BRAIN's model reading of which side the data leans toward at a fixed moment. It's a measurement, not an instruction.</p>
+<section class="page">
+  <div class="ph"><div class="num">02</div><div><div class="kick">The core reading</div><h2>The calls</h2></div></div>
+  <div class="rule"></div>
+  <p class="lead">A <b>call</b> is BRAIN's reading of which side the data leans toward at a set moment in the round. It's a measurement, not an instruction.</p>
   <div class="three">
-    <div class="card"><h3>Early &middot; 4:00</h3><p>The first reading, 4 minutes in. More time left means more can change.</p></div>
-    <div class="card"><h3><span class="ico i-lock"></span>Sealed &middot; 8:00</h3><p>The main reading, locked at 8 minutes. It's the one tracked hardest in the record.</p></div>
-    <div class="card"><h3><span class="ico i-clock"></span>Late call</h3><p>Only when the sealed reading sat out a coin flip and price later clearly decided.</p></div>
+    <div class="card glow"><h3>Early &middot; 4:00</h3><p>The first reading, 4 minutes in. More time left means more can still change.</p></div>
+    <div class="card glow"><h3><span class="ico i-lock"></span>Sealed &middot; 8:00</h3><p>The main reading, locked at 8 minutes. It's the one tracked hardest in the record.</p></div>
+    <div class="card glow"><h3><span class="ico i-clock"></span>Late call</h3><p>Shows up only when the sealed reading sat out a toss-up and price later made a clear move.</p></div>
   </div>
-  <h3 style="margin-top:16px">Two numbers on every call</h3>
-  <div class="glass"><table>
-    <tr><th style="width:30%">Line in the box</th><th>What it tells you</th></tr>
-    <tr><td><b>BRAIN confidence: 84%</b></td><td>How strongly BRAIN's own models lean to that side at the lock.</td></tr>
-    <tr><td><b>Market at lock: 72%</b></td><td>What the market was charging for that side at the exact moment the call locked. Comparing the two shows whether BRAIN and the crowd agreed.</td></tr>
-    <tr><td><b>Market agrees &middot; 70%</b></td><td>The market's price for that side right now. "Agrees" means the market still favors BRAIN's side; "disagrees" means it has swung the other way.</td></tr>
-  </table></div>
-  <h3>Confidence tiers</h3>
-  <div class="glass"><table>
-    <tr><th style="width:20%">Tier</th><th style="width:22%">Confidence</th><th>Notes</th></tr>
-    <tr><td><span class="pill p-super">SUPER</span></td><td>Highest</td><td>The strongest readings, backed by a strong record from similar rounds.</td></tr>
-    <tr><td><span class="pill p-good">GOOD</span></td><td>Clear lean</td><td>A clear lean. A choppy round or mixed signals can lower a reading's tier.</td></tr>
-    <tr><td><span class="pill p-weak">WEAK</span></td><td>Close</td><td>A lean, but close. This is where most misses happen (see the scorecard on page 5).</td></tr>
-  </table></div>
-  <h3><span class="ico i-star"></span>Tags you may see</h3>
-  <p style="font-size:9.6pt;margin:0"><span class="gold">80% SETUP</span>: the round matches a pattern that scored 80%+ on rounds it was never built from. <span class="amber">REVERSAL</span>: the reading sides with the underdog because several signals point to a turn. <span class="pink">Top traders agree</span>: verified high-record traders were on the same side (sealed call only, never changes the direction). <span class="sage">Held the early call</span>: the 8:00 reading kept the 4:00 side because switching at that confidence has lost more often than it won (page 4).</p>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>3</span></div>
-</section>
-
-<!-- 4 HOW BRAIN LEARNS -->
-<section class="page tight">
-  <div class="kick">Under the hood</div>
-  <h2>How BRAIN learns</h2>
-  <p class="lead">BRAIN doesn't just read the round in front of it. It checks how every past round from the same spot actually ended, wins and losses, and keeps updating.</p>
-  <div class="card"><h3><span class="ico i-clock"></span>Price-target history</h3>
-    <p>At 4:00 and 8:00 BRAIN looks at where price sits against the line and what the market is doing, then checks how past rounds in a similar spot actually ended. The reason under the call shows it in plain words, e.g. <i>"38 of 45 rounds from this spot ended UP (84%) with the trend up."</i></p>
-    <p class="note">A few lucky rounds can't swing a reading on their own; it takes a real record.</p></div>
-  <div class="two">
-    <div class="card"><h3><span class="ico i-flame"></span>Trend</h3>
-      <p>BRAIN reads the short-term trend as <span class="up">up</span>, <span class="down">down</span> or flat.</p>
-      <p>If readings that go against a running trend keep losing, BRAIN learns that and leans with the trend instead.</p></div>
-    <div class="card"><h3><span class="ico i-x"></span>Learning from losses</h3>
-      <p>Recent rounds count more than older ones, so this week's misses reshape the next reading quickly.</p>
-      <p>It refreshes several times a day, and changes only go live after they prove themselves on rounds they were never built from.</p></div>
-  </div>
-  <div class="glass"><h3 style="margin-top:0"><span class="ico i-lock"></span>Early vs sealed: the flip check</h3>
-    <p>Sometimes the 8:00 reading disagrees with the 4:00 reading. BRAIN studies every past round where that happened and learns how sure the 8:00 reading has to be before switching sides has actually paid off. Below that level, the sealed reading <b>holds the early side</b> and says so on screen.</p>
-    <p class="note" style="margin:0">This rule is tested the same way and only used when it has produced more correct readings, not fewer.</p></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>4</span></div>
-</section>
-
-<!-- 5 SCORECARD -->
-<section class="page tight">
-  <div class="kick">By the numbers</div>
-  <h2>4:00 vs 8:00: the scorecard</h2>
-  <p class="lead">How each reading has scored in BRAIN's backtest of 1,992 Bitcoin rounds over 21 days (October 2026), graded against how each round settled.</p>
-  <div class="two">
-    <div class="card"><div class="kick">Early &middot; 4:00</div><div class="big">68.7%</div><p class="note" style="margin:0">right overall &middot; side cost about 69&cent; on average</p></div>
-    <div class="card"><div class="kick">Sealed &middot; 8:00</div><div class="big">78.4%</div><p class="note" style="margin:0">right overall &middot; side cost about 78&cent; on average</p></div>
-  </div>
-  <h3>By confidence tier</h3>
-  <div class="glass"><table>
-    <tr><th style="width:22%">Tier</th><th>Early 4:00</th><th>Sealed 8:00</th></tr>
-    <tr><td><span class="pill p-super">SUPER</span></td><td class="sage">86.1% <span class="note">(423 rounds)</span></td><td class="sage">89.4% <span class="note">(603 rounds)</span></td></tr>
-    <tr><td><span class="pill p-good">GOOD</span></td><td>70.2% <span class="note">(734)</span></td><td>78.7% <span class="note">(633)</span></td></tr>
-    <tr><td><span class="pill p-weak">WEAK</span></td><td class="amber">57.1% <span class="note">(718)</span></td><td class="amber">68.2% <span class="note">(670)</span></td></tr>
-  </table></div>
-  <h3>What the record shows</h3>
-  <div class="card">
-    <p><b>Later is more often right, but costs more.</b> By 8:00 price has usually moved, so the 8:00 reading is right more often, but the market already prices that in. The leading side cost about 78&cent; at 8:00 vs 69&cent; at 4:00, so each correct reading is worth less.</p>
-    <p><b>Tier matters more than timing.</b> A 4:00 SUPER reading (86.1%) has scored nearly as well as an 8:00 SUPER (89.4%), and far better than any WEAK reading.</p>
-    <p><b>WEAK is where the misses are.</b> Close rounds stay close; 57&ndash;68% isn't far from a coin flip.</p>
-    <p style="margin:0"><b>Fees change the picture.</b> In the $100 simulation (page 9), after the market's fee and a cent of slippage, most readings came out near break-even. 4:00 SUPER readings were slightly positive (+0.7% per dollar).</p>
-  </div>
-  <p class="note">Past and simulated results don't predict future results. These numbers update as the backtest reruns; the live record is always on the dashboard.</p>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>5</span></div>
-</section>
-
-<!-- 6 READING THE ROUND -->
-<section class="page">
-  <div class="kick">The gauges</div>
-  <h2>Reading the round</h2>
-  <p class="lead">Around the calls, BRAIN shows the measurements that drive them.</p>
-  <h3>Line crosses: how choppy the round is</h3>
-  <div class="glass"><table>
-    <tr><th>Crosses so far</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr>
-    <tr><td><b>Market favorite won at 8:00</b></td><td class="sage">82.6%</td><td>76.9%</td><td>70.9%</td><td>67.5%</td><td class="amber">62.8%</td></tr>
-  </table><p class="note" style="margin:6px 0 0">From BRAIN's 21-day backtest of 1,992 Bitcoin rounds (1-minute candles). Each extra cross has meant a less settled round. Box labels: CLEAN 0&ndash;1 &middot; SOME CHOP 2 &middot; CHOPPY 3+.</p></div>
-  <h3>RSI (14): momentum</h3>
-  <div class="glass"><p>BRAIN shows RSI the way <b>TradingView</b> and <b>Webull</b> compute it, so it matches the charts you already use. The starred one is whichever has read rounds better lately.</p>
-  <table><tr><th>Method</th><th>RSI above/below 50 matched the round at 8:00</th><th>At extremes (70+ / 30&minus;)</th></tr>
-  <tr><td><b>TradingView</b></td><td>73.2%</td><td>91.9% (160 rounds)</td></tr>
-  <tr><td>Webull</td><td>72.3%</td><td>85.0% (453 rounds)</td></tr></table>
-  <p class="note" style="margin:6px 0 0">By 8:00 price has often already moved, so RSI partly confirms the move rather than predicting it.</p></div>
-  <div class="two">
-    <div class="card"><h3>Projected settlement</h3><p>In the final minute BRAIN averages the index second by second, the way the round settles, and shows what the remaining seconds would need to average to flip it.</p></div>
-    <div class="card"><h3>Flip radar</h3><p>A 0&ndash;99% estimate of how likely the round is to cross back to the other side.</p></div>
-  </div>
-  <div class="card"><h3>Price-target history</h3><p>At the bottom of each coin: the last three rounds whose line was this one or closest to it (within 5%), how each ended, and whether BRAIN's sealed reading matched.</p></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>6</span></div>
-</section>
-
-<!-- 7 ALERTS -->
-<section class="page">
-  <div class="kick">Live alerts</div>
-  <h2>Flip watch, sounds and voice</h2>
-  <p class="lead">Alerts describe a change in the data the moment it happens.</p>
-  <h3>Flip watch pills</h3>
-  <div class="glass">
-    <p>After a confirmed flip, a slim pill floats at the top of the page:</p>
-    <table>
-      <tr><th style="width:34%">You see</th><th>It means</th></tr>
-      <tr><td><span class="sage">&#9650; UP with call 74%</span></td><td>Price is moving the same way as the call.</td></tr>
-      <tr><td><span class="amber">&#9660; DOWN against call 53%</span></td><td>Price is moving against the call (amber text).</td></tr>
-      <tr><td><span class="pill p-hold"><span class="ico i-hold" style="color:var(--sage)"></span>HOLDING</span></td><td>The market is back on the call's side.</td></tr>
-      <tr><td><span class="pill p-rev"><span class="ico i-warn" style="color:#f6ece5"></span>TURNED</span></td><td>The market has turned clearly against the call.</td></tr>
-    </table></div>
-  <div class="two">
-    <div class="card"><h3><span class="ico i-cash"></span>Cash-out level note</h3><p>When the called side reaches 90%+ on the market with 2+ minutes left, the voice says <i>"Some traders cash out here."</i> It describes the market; it's not a suggestion.</p></div>
-    <div class="card"><h3><span class="ico i-warn"></span>Late coin flip</h3><p>With 3 minutes or less left and the market at 40&ndash;60%, BRAIN says the round is a real coin flip, and adds "it's flipping" if price just crossed the line.</p></div>
-  </div>
-  <h3><span class="ico i-sound"></span>Sounds and voices</h3>
+  <div class="sec">Two numbers on every call</div>
   <div class="card"><table>
-    <tr><td style="width:34%"><b>Cash-register cha-ching</b></td><td>A whale <span class="up">buy</span> just printed.</td></tr>
-    <tr><td><b>Double beep</b></td><td>A whale <span class="down">sell</span> just printed.</td></tr>
-    <tr><td><b>Chime + spoken call</b></td><td>An early, sealed or late call just locked, with BRAIN's confidence and the market's price.</td></tr>
-    <tr><td><b>Voices</b></td><td>Ava, Jenny, Aria, Emma, Michelle, Tony (New York style) or Sarge (drill sergeant). Pick one in Sound settings; sound needs one tap to switch on in each browser session.</td></tr>
+    <tr><th style="width:32%">You see</th><th>It tells you</th></tr>
+    <tr><td><b>BRAIN confidence &middot; 84%</b></td><td>How strongly BRAIN leans to that side when the call locks.</td></tr>
+    <tr><td><b>Market at lock &middot; 72%</b></td><td>What the crowd had on that side at the same moment. Side by side, they show whether BRAIN and the crowd agreed.</td></tr>
   </table></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>7</span></div>
+  <div class="sec">Confidence tiers</div>
+  <div class="card"><table>
+    <tr><td style="width:22%"><span class="tag t-super">SUPER</span></td><td>BRAIN's strongest readings, with a strong record from similar rounds behind them.</td></tr>
+    <tr><td><span class="tag t-good">GOOD</span></td><td>A clear lean. A choppy round or mixed signals can drop a reading a tier.</td></tr>
+    <tr><td><span class="tag t-weak">WEAK</span></td><td>A lean, but close. Most misses happen here (see the scorecard on page 4).</td></tr>
+  </table></div>
+  <div class="sec"><span class="ico i-star"></span>Tags you may see</div>
+  <div class="two">
+    <div class="card"><p><span class="tag t-gold"><span class="ico i-star"></span>80% SETUP</span></p><p style="margin:0">The round looks like a setup that has been right 80% of the time or more in BRAIN's testing.</p></div>
+    <div class="card"><p><span class="tag t-gold"><span class="ico i-rev" style="color:var(--gold)"></span>REVERSAL</span></p><p style="margin:0">A rare call on the underdog side, made only when the momentum supports a turn. It pays more when right, so it has its own column in the record.</p></div>
+    <div class="card"><p><span class="tag t-pink">Held the early call</span></p><p style="margin:0">The 8:00 reading wasn't sure enough to switch sides, so it kept the 4:00 side.</p></div>
+    <div class="card"><p><span class="tag t-tan">Sealed call switched</span></p><p style="margin:0">The 8:00 reading landed on the other side from the 4:00 one. The voice says it out loud.</p></div>
+  </div>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">3</span></div>
 </section>
 
-<!-- 8 WHALES + RADAR -->
+<!-- 4 SCORECARD -->
 <section class="page">
-  <div class="kick">Big money</div>
-  <h2>Whales, exchanges and Trader Radar</h2>
-  <p class="lead">Not every big trade matters equally. BRAIN scores each one.</p>
-  <h3>Exchange trust tiers</h3>
-  <div class="glass"><table>
-    <tr><th style="width:22%">Tier</th><th style="width:40%">Exchanges</th><th>Why</th></tr>
-    <tr><td><span class="sage">Index</span></td><td>The exchanges the settlement index is built from</td><td>They feed the index the round settles on, so their trades move the settlement price directly.</td></tr>
-    <tr><td><b>Big global</b></td><td>The largest global exchanges and futures markets</td><td>Lead price discovery but don't count toward settlement.</td></tr>
-    <tr><td class="note">Low-trust</td><td class="note">Dropped from BRAIN</td><td class="note">Offshore venues with enforcement history or thin volume aren't read at all.</td></tr>
+  <div class="ph"><div class="num">03</div><div><div class="kick">By the numbers</div><h2>4:00 vs 8:00: the scorecard</h2></div></div>
+  <div class="rule"></div>
+  <p class="lead">How each reading scored in BRAIN's test of <b>1,992 Bitcoin rounds over 21 days</b> (October 2026), graded against how every round ended.</p>
+  <div class="two">
+    <div class="card glow"><div class="kick" style="font-size:8pt;font-weight:800;letter-spacing:2.2px;color:var(--tan);text-transform:uppercase">Early &middot; 4:00</div>
+      <div class="stat">68.7%</div><p class="note" style="margin:4px 0 0">right overall</p></div>
+    <div class="card glow"><div class="kick" style="font-size:8pt;font-weight:800;letter-spacing:2.2px;color:var(--tan);text-transform:uppercase">Sealed &middot; 8:00</div>
+      <div class="stat">78.4%</div><p class="note" style="margin:4px 0 0">right overall</p></div>
+  </div>
+  <div class="sec">By confidence tier</div>
+  <div class="card"><table>
+    <tr><th style="width:24%">Tier</th><th>Early 4:00</th><th>Sealed 8:00</th></tr>
+    <tr><td><span class="tag t-super">SUPER</span></td><td><b>86.1%</b> <span class="note">(423 rounds)</span></td><td><b>89.4%</b> <span class="note">(603 rounds)</span></td></tr>
+    <tr><td><span class="tag t-good">GOOD</span></td><td>70.2% <span class="note">(734)</span></td><td>78.7% <span class="note">(633)</span></td></tr>
+    <tr><td><span class="tag t-weak">WEAK</span></td><td>57.1% <span class="note">(718)</span></td><td>68.2% <span class="note">(670)</span></td></tr>
   </table></div>
-  <h3>Whale impact score (0&ndash;100)</h3>
-  <div class="card"><p>Each big trade is scored on how much it could actually move this round, not just its size. A large buy when the round is a toss-up and price sits right on the line scores high; the same buy when the market is already at 97% scores low.</p>
-  <p class="note">After every alert BRAIN checks whether price really moved the whale's way and keeps a running hit rate, so the score's accuracy is measured, not assumed.</p></div>
-  <h3><span class="ico i-radar"></span>Trader Radar</h3>
-  <div class="card"><p>Tracks positions that well-known prediction-market traders show publicly, only from accounts locked as the real ones. Lookalike names (M0GS, mogs_, letters from other alphabets) are ignored as impostors. Records are kept by round, hour, day and 7 days.</p></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>8</span></div>
+  <div class="sec">What the record shows</div>
+  <div class="two">
+    <div class="card"><h3>Later is right more often</h3><p>By 8:00 price has usually moved, so the sealed reading is right more often. The crowd sees that move too, so its odds are higher by then as well.</p></div>
+    <div class="card"><h3>Tier beats timing</h3><p>A SUPER reading at 4:00 has scored nearly as well as one at 8:00, and far better than any WEAK reading.</p></div>
+    <div class="card"><h3>WEAK means close</h3><p>Close rounds tend to stay close. 57&ndash;68% isn't far from a coin flip.</p></div>
+    <div class="card"><h3>When 4:00 and 8:00 disagree</h3><p>Round history keeps a running count of which reading turned out right when the two landed on different sides.</p></div>
+  </div>
+  <p class="note" style="margin-top:6px">Past and tested results don't predict future results. The live record on the dashboard is always the latest word.</p>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">4</span></div>
+</section>
+
+<!-- 5 PRESSURE -->
+<section class="page">
+  <div class="ph"><div class="num">04</div><div><div class="kick">Who's pushing</div><h2>Buy &amp; sell pressure</h2></div></div>
+  <div class="rule"></div>
+  <p class="lead">Price moves when one side pushes harder. These bars show who is pushing right now: <span class="up">green is buying</span>, <span class="down">red is selling</span>.</p>
+  <div class="two">
+    <div>
+      <div class="sec" style="margin-top:0">Buy pressure bar</div>
+      <div class="mock">
+        <div class="mlabel">Buy pressure</div>
+        <div class="bar"><i class="b" style="width:61%"></i><i class="s" style="width:39%"></i></div>
+        <div class="mnums"><span class="bb">61% buying</span><span class="ss">39% selling</span></div>
+      </div>
+      <p style="margin-top:8px">Sits under the live price. It shows how the overall trading splits between buyers and sellers across trusted live sources. A bar that leans hard one way, and stays there, tells you which side has control.</p>
+    </div>
+    <div>
+      <div class="sec" style="margin-top:0">Short-term pressure meter</div>
+      <div class="mock">
+        <div class="mhead">BUYERS STEPPING IN <span>$1.4M in 2 min</span></div>
+        <div class="bar"><i class="b" style="width:66%"></i><i class="s" style="width:34%"></i></div>
+        <div class="mnums"><span class="bb">$920K bought <em>7 hits</em></span><span class="ss"><em>4 hits</em> $480K sold</span></div>
+      </div>
+      <p style="margin-top:8px">Counts only the <b>big money</b> from the last 2 minutes. It's the fastest read on whether large buyers or sellers just showed up.</p>
+    </div>
+  </div>
+  <div class="sec">What the meter's title tells you</div>
+  <div class="card glow"><div class="state">
+    <b class="up">BUYERS FLOODING IN</b><div class="sw"><i style="width:84%;background:linear-gradient(90deg,var(--up2),var(--up))"></i><i style="width:16%;background:var(--down)"></i></div>
+    <b class="up" style="opacity:.8">BUYERS STEPPING IN</b><div class="sw"><i style="width:65%;background:linear-gradient(90deg,var(--up2),var(--up))"></i><i style="width:35%;background:var(--down)"></i></div>
+    <b class="tn">EVEN</b><div class="sw"><i style="width:52%;background:linear-gradient(90deg,var(--up2),var(--up))"></i><i style="width:48%;background:var(--down)"></i></div>
+    <b class="down" style="opacity:.8">SELLERS STEPPING IN</b><div class="sw"><i style="width:35%;background:var(--up)"></i><i style="width:65%;background:linear-gradient(90deg,var(--down),var(--down2))"></i></div>
+    <b class="down">SELLERS DUMPING</b><div class="sw"><i style="width:16%;background:var(--up)"></i><i style="width:84%;background:linear-gradient(90deg,var(--down),var(--down2))"></i></div>
+    <b style="color:var(--mute)">quiet</b><div class="sw"><i style="width:100%;background:rgba(255,255,255,.12)"></i></div>
+  </div><p class="note" style="margin:8px 0 0">The strongest titles need both a lopsided split <i>and</i> a lot of money. A lopsided split on small money stays calmer.</p></div>
+  <div class="sec">Whale &amp; liquidity alerts</div>
+  <div class="two">
+    <div class="mock">
+      <div class="whale wb wm"><span>&#9650; BUY $1.2M</span><em>just now</em></div>
+      <div class="whale wb"><span>&#9650; BUY $340K</span><em>14s ago</em></div>
+      <div class="whale ws"><span>&#9660; SELL $510K</span><em>38s ago</em></div>
+      <div class="whale wv"><span>&#10005; PULLED $800K</span><em>1m ago</em></div>
+    </div>
+    <div class="card" style="margin:0"><p>A live feed of large trades and large resting orders. <b>Bigger money gets a bigger, brighter row</b>, so a wave of buying or selling jumps out.</p>
+      <p><span class="up">Green</span> = bought. <span class="down">Red</span> = sold. <b>White</b> = an order that was pulled before it filled.</p>
+      <p class="note">Scroll the box to look back through recent alerts.</p></div>
+  </div>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">5</span></div>
+</section>
+
+<!-- 6 FLIP RADAR + LINE CROSSES -->
+<section class="page">
+  <div class="ph"><div class="num">05</div><div><div class="kick">The gauges</div><h2>Flip radar &amp; line crosses</h2></div></div>
+  <div class="rule"></div>
+  <p class="lead">Once a call is in, these two gauges answer the big question: <b>is this round settled, or could it still turn?</b></p>
+  <div class="two">
+    <div>
+      <div class="mock">
+        <div class="mlabel"><span class="ico i-radar"></span> Flip radar</div>
+        <div class="radar-big">32%<span>WATCH</span></div>
+        <div class="track"><i style="width:32%;background:linear-gradient(90deg,#f6d27e,#f2c46b)"></i></div>
+        <div class="note" style="color:#e6d8cf">Why: big selling against the call</div>
+      </div>
+    </div>
+    <div class="card" style="margin:0"><h3>Flip radar</h3>
+      <p>A 0&ndash;99% read on how likely price is to cross back against the call before the round ends.</p>
+      <p>It shows <b>one reason</b> at a time, the thing that matters most right now: big money moving against the call, or momentum turning.</p></div>
+  </div>
+  <div class="scale">
+    <div><b class="up">LOW</b>0&ndash;20%. Holding steady.</div>
+    <div><b class="gd">WATCH</b>21&ndash;45%. Worth keeping an eye on.</div>
+    <div><b style="color:#f2a65a">HIGH</b>46&ndash;70%. Real pressure to turn.</div>
+    <div><b class="down">CRITICAL</b>71%+. A turn looks likely.</div>
+  </div>
+  <div class="card" style="margin-top:10px"><p style="margin:0"><span class="tag t-gold"><span class="ico i-rev" style="color:var(--gold)"></span>REVERSAL mode</span>&nbsp; On a reversal call the radar flips around and shows the chance of the cross the call is waiting for: <b class="up">ON TRACK</b>, <b class="gd">BUILDING</b> or <b class="down">STALLED</b>.</p></div>
+  <div class="sec">Line crosses</div>
+  <div class="two">
+    <div class="mock">
+      <div class="mlabel">Line crosses</div>
+      <div style="display:flex;align-items:baseline;gap:12px;margin-top:4px"><div class="lx-num">2</div><b class="gd" style="letter-spacing:1px">SOME CHOP</b></div>
+      <div class="note" style="color:#e6d8cf"><span class="up">&#9650; 1 up</span> &middot; <span class="down">&#9660; 1 down</span></div>
+      <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line);font-size:8.8pt"><b>STABILIZING UP</b><br><span class="note">Last cross 4:10 ago &middot; volatility <b class="up">LOW</b></span></div>
+    </div>
+    <div class="card" style="margin:0"><p>How many times price has crossed the line this round. Fewer crosses has meant a more settled round:</p>
+      <p><span class="tag t-tan">CLEAN 0&ndash;1</span> <span class="tag t-gold">SOME CHOP 2</span> <span class="tag t-pink">CHOPPY 3+</span></p>
+      <p style="margin:0">As time passes without a cross, the box moves from <b>STILL LIVE</b> to <b>SETTLING</b>, <b>STABILIZING</b> and <b>MARKET DECIDED</b>. Volatility shows how much price has been swinging.</p></div>
+  </div>
+  <div class="card" style="margin-top:10px"><table>
+    <tr><th>Crosses by 8:00</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr>
+    <tr><td><b>Crowd's favorite won</b></td><td class="up">82.6%</td><td>76.9%</td><td>70.9%</td><td>67.5%</td><td class="down">62.8%</td></tr>
+  </table><p class="note" style="margin:5px 0 0">From the same 1,992-round test. Every extra cross has meant a less settled round.</p></div>
+  <div class="card"><h3>Projected finish</h3><p style="margin:0">In the final minute, BRAIN tracks the 60-second average the round settles on and shows how far price would have to move to change the result.</p></div>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">6</span></div>
+</section>
+
+<!-- 7 FLIP WATCH + VOICE -->
+<section class="page">
+  <div class="ph"><div class="num">06</div><div><div class="kick">Live alerts</div><h2>Flip watch &amp; voice</h2></div></div>
+  <div class="rule"></div>
+  <p class="lead">Alerts tell you the moment something changes, so you don't have to stare at every number.</p>
+  <div class="sec">Flip watch pills</div>
+  <div class="two">
+    <div class="mock pillrow" style="padding:14px">
+      <span class="fw fw-with"><b>BTC</b><span class="dot">&#9650; UP</span><span>with call</span><span>74%</span><span class="badge"><span class="ico i-hold"></span>HOLDING</span></span>
+      <span class="fw fw-agdn"><b>BTC</b><span class="dot">&#9660; DOWN</span><span>against call</span><span>63%</span><span class="badge"><span class="ico i-warn" style="color:#fff"></span>TURNED</span></span>
+      <span class="fw fw-agup"><b>XRP</b><span class="dot">&#9650; UP</span><span>against call</span><span>55%</span></span>
+    </div>
+    <div class="card" style="margin:0">
+      <p>Slim pills float at the top of the screen, but only once an early or sealed call is in.</p>
+      <p><b class="pk">Pink</b> = the market is holding with the call. <b style="color:#ec6096">Reddish pink</b> = moving <span class="down">down</span> against it. <b style="color:#8c8fe0">Reddish blue</b> = moving <span class="up">up</span> against it.</p>
+      <p style="margin:0"><b>TURNED</b> appears when the market has swung clearly (60%+) against the call.</p></div>
+  </div>
+  <div class="sec"><span class="ico i-sound"></span>What the voice says</div>
+  <div class="card glow"><table>
+    <tr><th style="width:36%">You hear</th><th>When</th></tr>
+    <tr><td><b>"New round"</b> + the trend</td><td>At the start of a round, with the up / down trend on the timeframes that aren't flat.</td></tr>
+    <tr><td><b>The call</b> + a chime</td><td>When the early, sealed or late call locks. <b>"Sealed call switched"</b> if 8:00 landed on the other side.</td></tr>
+    <tr><td><b>Whale alerts</b></td><td>Big buys or sells that matter to the round. Before a call is in, this is almost all the voice says.</td></tr>
+    <tr><td><b>"Possible flip up / down"</b></td><td>Only when the flip radar is high or climbing fast <i>and</i> price is really moving.</td></tr>
+    <tr><td><b>"Flipping" / "flipped"</b></td><td>Only for a real flip: the crowd has moved to the other side at 60/40 or wider.</td></tr>
+    <tr><td><b>Minutes left</b></td><td>Only in the last 3 minutes.</td></tr>
+    <tr><td><b>"Some traders cash out here"</b></td><td>The call's side is at 90%+ with 2+ minutes left. It describes the market, it's not a suggestion.</td></tr>
+  </table></div>
+  <div class="two">
+    <div class="card"><h3><span class="ico i-sound"></span>Voices</h3><p style="margin:0"><b>Ava</b> (calm and natural) or <b>Sarge</b> (a shouting drill sergeant). Pick one in Sound settings. Each browser needs one tap to turn sound on.</p></div>
+    <div class="card"><h3><span class="ico i-cash"></span>Sounds</h3><p style="margin:0">A <b>cha-ching</b> means a whale <span class="up">buy</span> just hit. A <b>double beep</b> means a whale <span class="down">sell</span>.</p></div>
+  </div>
+  <p class="note">The voice is built to stay calm: no repeated lines, nothing every minute, and it never reads out numbers it isn't sure about.</p>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">7</span></div>
+</section>
+
+<!-- 8 CHARTS -->
+<section class="page">
+  <div class="ph"><div class="num">07</div><div><div class="kick">See it yourself</div><h2>Charts</h2></div></div>
+  <div class="rule"></div>
+  <p class="lead">The <b>Charts</b> tab gives you live candle charts with the most-used indicators drawn right on them, plus a built-in guide to what they mean.</p>
+  <div class="sec">Coins on the Charts tab</div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:6px">
+    <span class="tag t-pink">BTC</span><span class="tag t-tan">ETH</span><span class="tag t-gold">SOL</span><span class="tag t-pink">XRP</span><span class="tag t-tan">DOGE</span><span class="tag t-gold">BNB</span><span class="tag t-pink">HYPE</span><span class="tag t-tan">NEAR</span>
+  </div>
+  <p class="note">On a phone, pick the coin from the dropdown at the top. The Analysis dashboard (calls, pressure, flip radar) covers BTC and XRP.</p>
+  <div class="sec">What's on the chart</div>
+  <div class="two">
+    <div class="card"><h3>EMA lines</h3><p style="margin:0">Smoothed averages of recent price. Price riding above them leans <span class="up">up</span>; below leans <span class="down">down</span>. When two lines cross, the trend may be changing.</p></div>
+    <div class="card"><h3>RSI</h3><p style="margin:0">Momentum from 0 to 100. Above 70 is stretched to the upside, below 30 stretched to the downside. Around 50 is neutral.</p></div>
+    <div class="card"><h3>MACD</h3><p style="margin:0">Shows momentum speeding up or slowing down. A cross of its two lines is an early hint the push is changing direction.</p></div>
+    <div class="card"><h3>Support &amp; resistance</h3><p style="margin:0">Price zones where buyers (support) or sellers (resistance) have stepped in before. Watch whether price <b>holds</b> a zone or gets <b>rejected</b> by it.</p></div>
+  </div>
+  <div class="card glow"><h3><span class="ico i-star"></span>Chart patterns</h3><p style="margin:0">BRAIN marks well-known shapes on the chart as they form and shows how often each has played out in its testing. Tap <b>"What do these mean?"</b> under the chart for a plain-English guide to every line and pattern.</p></div>
+  <div class="sec">Chart Only membership</div>
+  <div class="card"><p style="margin:0">Want just the charts? A <b>Chart Only</b> membership includes everything on this page for all eight coins, without the BRAIN calls, pressure meters, flip radar or alerts. Every full BRAIN membership already includes the Charts tab.</p></div>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">8</span></div>
 </section>
 
 <!-- 9 RECORD -->
 <section class="page">
-  <div class="kick">Accountability</div>
-  <h2>The record</h2>
-  <p class="lead">Every reading is graded against how the round actually settled. Wins and losses both stay on the screen.</p>
-  <div class="two">
-    <div class="card"><h3><span class="ico i-flame"></span>Streaks &amp; scoreboard</h3><p>The current run of right or wrong readings, the best and worst runs, today's record and the latest results as small circles.</p></div>
-    <div class="card"><h3>Round history</h3><p>Tap the badge at the top right for today, this week and all time: win rate per call, by tier, how readings did <b>with vs against the trend</b>, and every graded round.</p></div>
-  </div>
-  <h3>Reading the result circles</h3>
-  <div class="glass"><p>Two things in one circle: the <b>color</b> is how the round ended (<span class="up">green = UP</span>, <span class="down">red = DOWN</span>), and the <b>letter</b> is whether BRAIN's reading was right: a white W when it was, an L in the circle's color when it wasn't.</p>
+  <div class="ph"><div class="num">08</div><div><div class="kick">Accountability</div><h2>The record</h2></div></div>
+  <div class="rule"></div>
+  <p class="lead">Every call is graded against how the round actually ended. Wins and losses both stay on the screen.</p>
+  <div class="sec">Reading the result circles</div>
+  <div class="card glow"><p>Each circle tells you two things. The <b>color</b> is how the round ended (<span class="up">green = UP</span>, <span class="down">red = DOWN</span>). The <b>letter</b> is whether BRAIN was right: a white <b>W</b> when it was, an <b>L</b> in the circle's color when it wasn't.</p>
   <table>
-    <tr><td style="width:12%"><span class="chip c-dn" style="color:#fff">W</span></td><td>Read DOWN, ended DOWN</td><td style="width:12%"><span class="chip c-up" style="color:#fff">W</span></td><td>Read UP, ended UP</td></tr>
-    <tr><td><span class="chip c-up">L</span></td><td>Read DOWN, but ended UP</td><td><span class="chip c-dn">L</span></td><td>Read UP, but ended DOWN</td></tr>
-  </table></div>
-  <h3>The $100-a-trade example</h3>
-  <div class="glass"><p>To show what a reading's record looks like in dollars, BRAIN replays every graded call as if $100 had been placed at the market's price at the moment of the call, held to settlement, with the market's fee and a cent of slippage included.</p>
-  <p class="note" style="margin:0"><b>This is a simulation.</b> It uses past data, assumes fills at the price shown, and doesn't reflect real trading. Past and hypothetical results never predict future results, and nothing here suggests placing $100, or any amount, on anything.</p></div>
-  <h3>The backtest</h3>
-  <div class="card"><p>Several times a day BRAIN replays recent Bitcoin rounds to check which readings held up and where they lost, and refreshes what it has learned (page 4).</p></div>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>9</span></div>
+    <tr><td style="width:10%"><span class="chip c-up" style="color:#fff">W</span></td><td>Called UP, ended UP</td><td style="width:10%"><span class="chip c-dn" style="color:#fff">W</span></td><td>Called DOWN, ended DOWN</td></tr>
+    <tr><td><span class="chip c-dn">L</span></td><td>Called UP, but ended DOWN</td><td><span class="chip c-up">L</span></td><td>Called DOWN, but ended UP</td></tr>
+  </table>
+  <div style="display:flex;gap:6px;margin-top:10px;align-items:center"><span class="note" style="margin-right:6px">Example run:</span>
+    <span class="chip c-up" style="color:#fff">W</span><span class="chip c-up" style="color:#fff">W</span><span class="chip c-dn" style="color:#fff">W</span><span class="chip c-dn">L</span><span class="chip c-up" style="color:#fff">W</span><span class="chip c-dn" style="color:#fff">W</span><span class="chip c-up">L</span><span class="chip c-up" style="color:#fff">W</span></div></div>
+  <div class="two">
+    <div class="card"><h3><span class="ico i-flame"></span>Streaks &amp; scoreboard</h3><p style="margin:0">The current run of right or wrong calls, the best and worst runs, and today's record at a glance. Reversal calls get their own column.</p></div>
+    <div class="card"><h3><span class="ico i-clock"></span>Round history</h3><p style="margin:0">Tap the badge at the top right for today, this week and all time: the win rate for each call and tier, and every graded round.</p></div>
+  </div>
+  <div class="sec">How BRAIN keeps learning</div>
+  <div class="card"><p>After every round, BRAIN checks its calls against the real result. Recent rounds count more than old ones, so it adjusts quickly when conditions change.</p>
+    <p style="margin:0">Any change has to prove itself on rounds it has never seen before it goes live. If it doesn't make the calls better, it isn't used.</p></div>
+  <p class="note">Every result is checked against the market's own final settlement, and any grade that doesn't match is corrected.</p>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">9</span></div>
 </section>
 
-<!-- 10 RESPONSIBLE USE + GLOSSARY -->
+<!-- 10 MEMBERSHIPS, RISK, GLOSSARY -->
 <section class="page">
-  <div class="kick">Before you go</div>
-  <h2>Risk, and a quick glossary</h2>
-  <div class="disc" style="margin:12px 0 14px">
-    <p style="margin:0 0 6px"><b>Read this.</b> BRAIN is an information and data service. Nothing in BRAIN or in this Playbook is financial, investment, trading, legal or tax advice, a recommendation, or an instruction to buy, sell, hold or trade anything, or to do anything with your money.</p>
-    <p style="margin:0 0 6px">Calls, tiers, percentages, badges, alerts, records and backtests describe what the data and models show. They can be wrong, data can be late or missing, and the service can go down without warning.</p>
-    <p style="margin:0">Prediction markets carry a high risk of loss, including everything you put in. Any decision to trade is yours alone. Only use money you can afford to lose, and talk to a licensed professional if you want advice. BRAIN isn't affiliated with any prediction market, index provider or exchange.</p>
+  <div class="ph"><div class="num">09</div><div><div class="kick">Before you go</div><h2>Memberships, risk &amp; glossary</h2></div></div>
+  <div class="rule"></div>
+  <div class="two">
+    <div class="card glow"><h3><span class="ico i-lock"></span>Your membership</h3>
+      <p>Memberships are a <b>one-time payment</b> and <b>never renew</b> on their own. Buying again adds days on top of the time you have left.</p>
+      <p style="margin:0">We email you <b>2 days before</b> it ends. Current options are on brainswatch.com/pricing. All sales are final.</p></div>
+    <div class="disc" style="margin:0"><p style="margin:0 0 6px"><b>Please read.</b> BRAIN is an information and data service. Nothing in BRAIN or this Playbook is financial, investment, trading, legal or tax advice, or an instruction to buy, sell, hold or trade anything.</p>
+      <p style="margin:0">Calls, tiers, percentages, alerts and records can be wrong, and data can be late or missing. Prediction markets carry a high risk of loss. Any decision is yours alone. Talk to a licensed professional if you want advice.</p></div>
   </div>
-  <div class="glass"><table>
-    <tr><th style="width:26%">Term</th><th>Meaning</th></tr>
-    <tr><td><b>Line / target</b></td><td>The price the round is measured against.</td></tr>
-    <tr><td><b>Cushion</b></td><td>How far price is from the line right now.</td></tr>
+  <div class="sec">Quick glossary</div>
+  <div class="card"><table>
+    <tr><th style="width:25%">Term</th><th>Meaning</th></tr>
+    <tr><td><b>Line</b></td><td>The price the round is measured against.</td></tr>
+    <tr><td><b>Call</b></td><td>BRAIN's reading of which side the data leans toward (early 4:00, sealed 8:00, late).</td></tr>
     <tr><td><b>Line cross</b></td><td>Price moving from one side of the line to the other.</td></tr>
-    <tr><td><b>Flow</b></td><td>Whether buyers or sellers are taking more volume across the exchanges.</td></tr>
-    <tr><td><b>Order-book wall</b></td><td>A large resting order that can slow price at a level.</td></tr>
-    <tr><td><b>Settlement average</b></td><td>The 60-second index average the round settles on.</td></tr>
-    <tr><td><b>Trend</b></td><td>The short-term direction: up, down or flat.</td></tr>
-    <tr><td><b>Spot</b></td><td>Where a round stands at a reading, used to compare it with similar past rounds.</td></tr>
-    <tr><td><b>Flip check</b></td><td>The rule for when the 8:00 reading may switch away from the 4:00 side.</td></tr>
-    <tr><td><b>Whale</b></td><td>A trade large enough to show up against normal volume (the size threshold adapts to the market).</td></tr>
-    <tr><td><b>Pass</b></td><td>Your access period to the live dashboard. Passes are one-time and never renew on their own.</td></tr>
+    <tr><td><b>Flip</b></td><td>The crowd moving clearly from one side to the other during a round.</td></tr>
+    <tr><td><b>Buy / sell pressure</b></td><td>Whether buyers or sellers are doing more of the trading right now.</td></tr>
+    <tr><td><b>Whale</b></td><td>A trade or order big enough to stand out from normal trading.</td></tr>
+    <tr><td><b>Pulled order</b></td><td>A large order that was canceled before it filled (shown in white).</td></tr>
+    <tr><td><b>Reversal</b></td><td>A call on the underdog side, made only when momentum supports a turn.</td></tr>
+    <tr><td><b>Volatility</b></td><td>How much price has been swinging lately: low, medium or high.</td></tr>
+    <tr><td><b>Settlement</b></td><td>How a round ends: the average price over the final 60 seconds.</td></tr>
   </table></div>
-  <p class="note" style="margin-top:12px">Questions: support@brainswatch.com &middot; Full terms: brainswatch.com/terms &middot; &copy; 2026 BrainsWatch</p>
-  <div class="foot"><span>BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span>10</span></div>
+  <div style="text-align:center;margin-top:16px">
+    <img src="logo.png" alt="" style="width:54px;height:54px;filter:drop-shadow(0 0 12px rgba(242,165,192,.5))">
+    <p class="note" style="margin-top:6px">Questions: support@brainswatch.com &middot; Full terms: brainswatch.com/terms<br>&copy; 2026 BrainsWatch. BRAIN isn't affiliated with any prediction market, index provider or exchange.</p>
+  </div>
+  <div class="foot"><span><img src="logo.png" alt="">BRAIN Playbook</span><span>Information &amp; education only &middot; not financial advice</span><span class="pn">10</span></div>
 </section>
 </body></html>
