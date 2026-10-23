@@ -9363,6 +9363,207 @@ def _kalshi_round_flow(asset_name, ticker, open_ts):
         _kflow[asset_name] = {"ticker": ticker, "ts": now, "yes": keep["yes"], "no": keep["no"], "n": keep["n"]}
 
 
+# ---- 2026-10-23 (user): TAPE AUDIT - check the market order tape against the market's own official numbers.
+# For each recent finished round: pull EVERY trade (no page cap, de-duplicated by trade id), compare the contract total
+# with the market's official volume (GET /markets/{ticker} volume_fp), and re-run the exact math the live panel uses
+# (10-page cap, newest-first) to show whether the live numbers would have matched. Owner-only page: /tape_audit
+_KAPI = "https://external-api.kalshi.com/trade-api/v2"
+
+
+def _tape_all(ticker, open_ts=None, close_ts=None, max_pages=60):
+    """Every trade for one market, newest first: (list of trades, pages fetched, duplicate ids seen)."""
+    out, seen, dup, cursor, pages = [], set(), 0, None, 0
+    for _ in range(max_pages):
+        params = {"ticker": ticker, "limit": 1000}
+        if open_ts:
+            params["min_ts"] = int(open_ts) - 5
+        if close_ts:
+            params["max_ts"] = int(close_ts) + 5
+        if cursor:
+            params["cursor"] = cursor
+        r = _rq.get(_KAPI + "/markets/trades", params=params, timeout=15).json()
+        pages += 1
+        tr = r.get("trades", [])
+        for t in tr:
+            tid = t.get("trade_id")
+            if tid in seen:
+                dup += 1
+                continue
+            seen.add(tid)
+            out.append(t)
+        cursor = r.get("cursor")
+        if not tr or not cursor:
+            break
+    return out, pages, dup
+
+
+def _tape_sums(trades, open_ts=None, close_ts=None):
+    up = dn = ty = tn = contracts = 0.0
+    n = outside = bad = 0
+    for t in trades:
+        try:
+            ts = dt.datetime.fromisoformat(t["created_time"].replace("Z", "+00:00")).timestamp()
+            cnt = float(t.get("count_fp", 0) or 0)
+            p = float(t["yes_price_dollars"])
+        except Exception:
+            bad += 1
+            continue
+        if (open_ts and ts < open_ts) or (close_ts and ts > close_ts + 5):
+            outside += 1
+            continue
+        n += 1
+        contracts += cnt
+        up += cnt * p
+        dn += cnt * (1 - p)
+        if t.get("taker_side") == "yes":
+            ty += cnt * p
+        elif t.get("taker_side") == "no":
+            tn += cnt * (1 - p)
+    return {"n": n, "contracts": contracts, "up": up, "dn": dn, "ty": ty, "tn": tn, "outside": outside, "bad": bad}
+
+
+def _tape_live_replica(ticker, open_ts):
+    """The live panel's exact method (no min_ts, 10 pages of 1000, stop at the first trade before the open)."""
+    up = dn = ty = tn = contracts = 0.0
+    n, cursor, capped = 0, None, False
+    for i in range(10):
+        params = {"ticker": ticker, "limit": 1000}
+        if cursor:
+            params["cursor"] = cursor
+        r = _rq.get(_KAPI + "/markets/trades", params=params, timeout=15).json()
+        trades = r.get("trades", [])
+        if not trades:
+            break
+        old = False
+        for t in trades:
+            ts = dt.datetime.fromisoformat(t["created_time"].replace("Z", "+00:00")).timestamp()
+            if ts < open_ts:
+                old = True
+                continue
+            cnt = float(t.get("count_fp", 0) or 0)
+            p = float(t["yes_price_dollars"])
+            if t.get("taker_side") == "yes":
+                ty += cnt * p
+            elif t.get("taker_side") == "no":
+                tn += cnt * (1 - p)
+            n += 1
+            up += cnt * p
+            dn += cnt * (1 - p)
+            contracts += cnt
+        cursor = r.get("cursor")
+        if old or not cursor:
+            break
+        if i == 9 and cursor:
+            capped = True
+    return {"n": n, "contracts": contracts, "up": up, "dn": dn, "ty": ty, "tn": tn, "capped": capped}
+
+
+def tape_audit(n_rounds=8):
+    rows, live = [], []
+    for name in LIVE_ASSETS:
+        tickers = [h.get("ticker") for h in _history.get(name, []) if h.get("ticker")][-n_rounds:][::-1]
+        for tk in tickers:
+            close = _window_close_utc(tk)
+            if not close:
+                continue
+            c_ts = close.timestamp()
+            o_ts = c_ts - 900
+            row = {"asset": name, "ticker": tk}
+            try:
+                m = (_rq.get(_KAPI + "/markets/" + tk, timeout=15).json() or {}).get("market") or {}
+                row["official"] = float(m.get("volume_fp") or 0)
+                row["result"] = m.get("result")
+                full, row["pages"], row["dup"] = _tape_all(tk, o_ts, c_ts)
+                row["full"] = _tape_sums(full, o_ts, c_ts)
+                row["rep"] = _tape_live_replica(tk, o_ts)
+            except Exception as e:
+                row["err"] = repr(e)[:200]
+            rows.append(row)
+        # the round in progress: what the panel shows right now vs a fresh full pull
+        c = _kflow.get(name) or {}
+        if c.get("ticker"):
+            close = _window_close_utc(c["ticker"])
+            try:
+                o_ts = close.timestamp() - 900 if close else None
+                full, _p, _d = _tape_all(c["ticker"], o_ts)
+                live.append({"asset": name, "ticker": c["ticker"], "shown": c, "age": time.time() - c.get("ts", 0),
+                             "full": _tape_sums(full, o_ts)})
+            except Exception as e:
+                live.append({"asset": name, "ticker": c["ticker"], "err": repr(e)[:200]})
+    return rows, live
+
+
+def tape_audit_html(n_rounds=8):
+    rows, live = tape_audit(n_rounds)
+    pc = lambda a, b: (abs(a - b) / b * 100) if b else (0.0 if not a else 100.0)
+    ok = lambda v: f'<b style="color:{"#3dd69c" if v < 0.5 else ("#e9b45a" if v < 2 else "#f05454")}">{v:.2f}%</b>'
+    tr = []
+    n_ok = n_all = 0
+    for r in rows:
+        if r.get("err"):
+            tr.append(f'<tr><td>{r["asset"]}</td><td>{r["ticker"]}</td><td colspan=8 style="color:#f05454">{_html_attr(r["err"])}</td></tr>')
+            continue
+        f, rp, off = r["full"], r["rep"], r["official"]
+        d1, d2 = pc(f["contracts"], off), pc(rp["contracts"], off)
+        n_all += 1
+        n_ok += d1 < 0.5 and d2 < 0.5
+        tr.append(f'<tr><td>{r["asset"]}</td><td>{_round_label(r["ticker"])}<br><span class=h>{r["ticker"]}</span></td>'
+                  f'<td>{off:,.0f}</td><td>{f["contracts"]:,.0f} {ok(d1)}</td><td>{rp["contracts"]:,.0f} {ok(d2)}'
+                  + (' <b style="color:#f05454">CAPPED</b>' if rp["capped"] else "") + '</td>'
+                  f'<td>{f["n"]:,}</td><td>{_usd_short(f["up"])} / {_usd_short(f["dn"])}</td>'
+                  f'<td>{_usd_short(f["ty"])} / {_usd_short(f["tn"])}</td>'
+                  f'<td>{r["pages"]}p &middot; {r["dup"]} dup &middot; {f["outside"]} out &middot; {f["bad"]} bad</td>'
+                  f'<td>{r.get("result") or "-"}</td></tr>')
+    lv = []
+    for x in live:
+        if x.get("err"):
+            lv.append(f'<tr><td>{x["asset"]}</td><td colspan=5 style="color:#f05454">{_html_attr(x["err"])}</td></tr>')
+            continue
+        sh, f = x["shown"], x["full"]
+        lv.append(f'<tr><td>{x["asset"]}</td><td>{x["ticker"]}</td><td>{x["age"]:.0f}s old</td>'
+                  f'<td>shown {sh.get("contracts", 0):,.0f} &middot; fresh {f["contracts"]:,.0f}</td>'
+                  f'<td>shown {_usd_short(sh.get("up_all", 0))}/{_usd_short(sh.get("dn_all", 0))} &middot; fresh {_usd_short(f["up"])}/{_usd_short(f["dn"])}</td>'
+                  f'<td>shown {sh.get("n", 0):,} &middot; fresh {f["n"]:,} trades</td></tr>')
+    verdict = (f'<p><b>{n_ok} of {n_all}</b> finished rounds match the market&rsquo;s official volume within 0.5% '
+               f'(both a full pull and the live panel&rsquo;s own method).</p>')
+    st = ("<style>body{background:#1b1719;color:#eee2d7;font:14px system-ui;padding:16px}table{border-collapse:collapse;width:100%;margin:10px 0 24px}"
+          "td,th{border-bottom:1px solid #3a2e3c;padding:6px;text-align:left;vertical-align:top}th{color:#c9a98a;font-size:12px}.h{color:#8e7f78;font-size:11px}</style>")
+    return (f'<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><title>Tape audit</title>{st}'
+            f'<h2>Market order tape audit</h2>{verdict}'
+            '<table><tr><th>Coin</th><th>Round</th><th>Official volume</th><th>Full pull (off by)</th><th>Live method (off by)</th>'
+            '<th>Trades</th><th>$ UP / DOWN</th><th>Takers UP / DOWN</th><th>Checks</th><th>Result</th></tr>' + "".join(tr) + '</table>'
+            '<h3>Round in progress: panel vs fresh pull</h3><table><tr><th>Coin</th><th>Ticker</th><th>Panel age</th><th>Contracts</th><th>$ UP/DOWN</th><th>Trades</th></tr>'
+            + "".join(lv) + '</table><p class=h>Official volume = the market&rsquo;s own contract count. Small live gaps are expected '
+            '(the panel refreshes every 6 seconds). Add ?n=20 for more rounds.</p>')
+
+
+def _tape_audit_log():
+    """Once after start: run the audit and print it, so the result is in the server log too."""
+    time.sleep(240)
+    try:
+        rows, live = tape_audit(12)
+        for r in rows:
+            if r.get("err"):
+                print(f"[tape audit] {r['asset']} {r['ticker']} ERROR {r['err']}")
+                continue
+            f, rp, off = r["full"], r["rep"], r["official"]
+            print(f"[tape audit] {r['asset']} {r['ticker']} official={off:.2f} full={f['contracts']:.2f} live_method={rp['contracts']:.2f}"
+                  f" capped={rp['capped']} trades={f['n']} up=${f['up']:.2f} down=${f['dn']:.2f} takers_up=${f['ty']:.2f} takers_down=${f['tn']:.2f}"
+                  f" pages={r['pages']} dup={r['dup']} outside={f['outside']} bad={f['bad']} result={r.get('result')}")
+        for x in live:
+            if x.get("err"):
+                print(f"[tape audit] LIVE {x['asset']} ERROR {x['err']}")
+                continue
+            sh, f = x["shown"], x["full"]
+            print(f"[tape audit] LIVE {x['asset']} {x['ticker']} age={x['age']:.0f}s shown={sh.get('contracts', 0):.2f}/{sh.get('n', 0)} trades"
+                  f" fresh={f['contracts']:.2f}/{f['n']} trades shown_up=${sh.get('up_all', 0):.2f} fresh_up=${f['up']:.2f}")
+    except Exception as e:
+        print(f"[tape audit] {e!r}")
+
+
+threading.Thread(target=_tape_audit_log, daemon=True, name="tape-audit").start()
+
+
 def build_order_tape(name, d):
     """2026-10-22 (user): at the bottom - how much money the market's traders have actually put on UP vs DOWN this round."""
     c = _kflow.get(name) or {}
@@ -14878,7 +15079,7 @@ PUBLIC_GET = {"/pricing", "/og.png", "/", "/login", "/signup", "/forgot", "/rese
 OWNER_ONLY = {"/admin", "/arm_live", "/set_live_size", "/set_flip_target", "/set_flip_max_price", "/set_main_max_price",
               "/set_buy_delay", "/set_main_sell_price", "/set_flip_sell_mode", "/set_flip_hold_if_certain",
               "/set_protect_threshold", "/backtest_run", "/locked", "/live_status", "/backtest", "/backtest.txt",
-              "/backtest.json", "/debug_poll", "/debug_threads",
+              "/backtest.json", "/debug_poll", "/debug_threads", "/tape_audit",
               # 2026-10-22 viewer mode: everyone sees the same live dashboard; only the owner can change the shared
               # chart timeframe, pull/restore the round-history backup, or switch the candle-chart zoom
               "/set_pattern_tf", "/history_meta", "/history_export", "/chart"}
@@ -15367,6 +15568,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers()
             self.wfile.write(body)
             return
+        if parsed.path == "/tape_audit":
+            try:
+                _n = max(1, min(30, int((urllib.parse.parse_qs(parsed.query).get("n") or ["8"])[0])))
+            except Exception:
+                _n = 8
+            return self._send(200, tape_audit_html(_n))
         if parsed.path == "/debug_threads":
             import sys as _sys, traceback as _tb
             names = {t.ident: t.name for t in threading.enumerate()}
