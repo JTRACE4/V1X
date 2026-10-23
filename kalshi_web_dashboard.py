@@ -7570,9 +7570,11 @@ function updateFlipWatch() {
         // "flipping" while the market is 60-74% on the new side, "flipped" once it is 75%+
         const fw = strength !== null && strength >= 0.75 ? ' flipped ' : ' is flipping ';
         const sure = strength !== null && strength >= 0.60 && left <= 840;
-        if (withCall === false) { if (sure) speakUrgent(coin + fw + how + '.', 0); }
+        // 2026-10-23 (user): no flip talk at all until the early or sealed call is in
+        const made = (callName === 'sealed' || callName === 'early') && withCall !== null;
+        if (!made) {}
+        else if (withCall === false) { if (sure) speakUrgent(coin + fw + how + '.', 0); }
         else if (withCall === true) speak(coin + ' flipped back ' + how + '.', false, 15000);
-        else if (sure) speak(coin + fw + how + '.', false, 15000);
       } else if (w.lastState === null) {
         w.lastState = state;                       // the flip alert itself already said this
       }
@@ -8090,7 +8092,9 @@ function _radarInfo(name) {
   return { pct: isNaN(shown) ? Math.round(parseFloat(el.getAttribute('data-flip-chance-pct'))) : shown,
            tier: (el.getAttribute('data-tier') || '').toLowerCase(), shift: el.getAttribute('data-shift') === '1',
            left: parseInt(el.getAttribute('data-left') || '0', 10), above: el.getAttribute('data-above') === '1',
-           call: real ? call : null, round: (el.getAttribute('data-flip-chance-key') || '').split('::').slice(0, 2).join('::') };
+           call: real ? call : null,
+           // 2026-10-23 (user: "no flip risk before a call is made"): flip talk only once the early or sealed call is in
+           made: (callName === 'sealed' || callName === 'early') && (call === 'YES' || call === 'NO'), round: (el.getAttribute('data-flip-chance-key') || '').split('::').slice(0, 2).join('::') };
 }
 function _coinWord(n) { return n === 'BTC' ? 'Bitcoin' : n; }
 function _minuteLine(name) {
@@ -8101,7 +8105,7 @@ function _minuteLine(name) {
   let line = _coinWord(name) + ', ' + when + '. ';
   line += (r.above ? 'Up.' : 'Down.');          // 2026-10-23 (d, user): just up or down - no "with / against the call"
   // 2026-10-23 (d, user: "14% is not enough to care"): the flip risk is only said when it is serious - 40% or more
-  return line + (r.pct >= 40 ? ' Flip risk ' + r.pct + ' percent.' : '');
+  return line + (r.made && r.pct >= 40 ? ' Flip risk ' + r.pct + ' percent.' : '');
 }
 // 2026-10-23 (c, user): when a round starts say "new round" (not "15 minutes left") plus the market trend read on 1m / 5m / 15m /
 // 1h / 1D - straight from the MARKET TREND buttons on screen. Neutral (50/50) timeframes are left out; all neutral = just "new round".
@@ -8151,7 +8155,7 @@ function flipRiseAlerts() {
   ['BTC', 'XRP'].forEach(name => {
     if (assetSoundEnabled[name] === false) return;
     const r = _radarInfo(name);
-    if (!r || isNaN(r.pct)) return;
+    if (!r || isNaN(r.pct) || !r.made) { delete radarHist[name]; return; }
     const h = radarHist[name] = (radarHist[name] && radarHist[name].round === r.round) ? radarHist[name] : { round: r.round, pts: [] };
     h.pts.push([now, r.pct]);
     while (h.pts.length && now - h.pts[0][0] > 20000) h.pts.shift();
@@ -8159,7 +8163,7 @@ function flipRiseAlerts() {
     const proven = r.shift && (r.pct >= 40 || (r.pct >= 30 && r.pct - low >= 15));
     if (!proven || r.left <= 10 || now - (riseSaid[name] || 0) < RISE_GAP_MS) return;
     riseSaid[name] = now; coinSpoke[name] = now; orderSaid[name] = now;
-    speak(() => { const q = _radarInfo(name); return (q && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip.' : null; },
+    speak(() => { const q = _radarInfo(name); return (q && q.made && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip.' : null; },
           true, 10000);
   });
 }
@@ -8174,7 +8178,7 @@ function _orderVoice(name, side, usd) {
   orderSaid[name] = now; coinSpoke[name] = now;
   speak(() => {
     const q = _radarInfo(name);
-    return _coinWord(name) + ', big ' + (side === 'buy' ? 'buying' : 'selling') + ', ' + spokenUsd(usd) + '.' + (q && !isNaN(q.pct) && q.pct >= 40 ? ' Flip risk ' + q.pct + ' percent.' : '');
+    return _coinWord(name) + ', big ' + (side === 'buy' ? 'buying' : 'selling') + ', ' + spokenUsd(usd) + '.' + (q && q.made && !isNaN(q.pct) && q.pct >= 40 ? ' Flip risk ' + q.pct + ' percent.' : '');
   }, false, 10000);
 }
 setInterval(() => { if (!document.hidden) { try { minuteCheckins(); } catch (e) {} try { flipRiseAlerts(); } catch (e) {} } }, 1000);
