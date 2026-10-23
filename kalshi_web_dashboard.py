@@ -4133,15 +4133,10 @@ def _reconcile_pending_grades():
             if settled.get("status") == "finalized" and real_result in ("YES", "NO"):
                 for h in _history.get(item["asset"], []):
                     if h["ticker"] == item["ticker"]:
-                        if h.get("actual_side") != real_result:
-                            h["actual_side"] = real_result
-                            h["correct"] = (h["call"] == real_result) if h.get("call") else None
-                            for _sk, _m, _lab, _mk in STAGE_CALLS:
-                                if h.get(f"{_sk}_call"):
-                                    h[f"{_sk}_correct"] = h[f"{_sk}_call"] == real_result
-                            if h.get("mini_call"):
-                                h["mini_correct"] = h["mini_call"] == real_result
+                        if _regrade(h, real_result):
                             changed = True
+                        h["verified"] = True
+                        changed = True
                         break
                 # settle a real-money live position that was still open because
                 # Kalshi hadn't finalized at the original rollover moment
@@ -4153,6 +4148,74 @@ def _reconcile_pending_grades():
     _pending_reconcile[:] = still_pending
     if changed:
         _save_history()
+
+
+# ---- 2026-10-23 (user: "make sure the scoreboard is accurate - do a backlog"): every saved round is checked once against the
+# market's OWN finalized result (its 60-second settlement average), and any grade that disagrees is corrected in place. Unlike
+# the old 15-minute in-memory queue this survives redeploys: the check is stored on each round ("verified"), so after a
+# restart it simply carries on. One market lookup every few seconds, newest rounds first, so new rounds are confirmed fast.
+VERIFY_EVERY_S = 3.0
+_verify_last = [0.0]
+_verify_skip = {}             # ticker -> time to look again (not finalized yet / no clean result)
+
+
+def _regrade(h, real):
+    """Re-score one saved round against the real result. Returns True if anything changed."""
+    changed = h.get("actual_side") != real
+    h["actual_side"] = real
+    h["correct"] = (h["call"] == real) if h.get("call") else None
+    for _sk, _m, _lab, _mk in STAGE_CALLS:
+        if h.get(f"{_sk}_call"):
+            if h.get(f"{_sk}_correct") != (h[f"{_sk}_call"] == real):
+                changed = True
+            h[f"{_sk}_correct"] = h[f"{_sk}_call"] == real
+    if h.get("mini_call"):
+        h["mini_correct"] = h["mini_call"] == real
+    if h.get("decided_call"):
+        if h.get("decided_correct") != (h["decided_call"] == real):
+            changed = True
+        h["decided_correct"] = h["decided_call"] == real
+    return changed
+
+
+def _verify_history_step():
+    now = time.time()
+    if now - _verify_last[0] < VERIFY_EVERY_S:
+        return
+    _verify_last[0] = now
+    todo = None
+    for name, hist in _history.items():
+        for h in reversed(hist):
+            t = h.get("ticker")
+            if t and not h.get("verified") and _verify_skip.get(t, 0) <= now:
+                todo = (name, h)
+                break
+        if todo:
+            break
+    if not todo:
+        return
+    name, h = todo
+    try:
+        snap = get_market_snapshot(h["ticker"])
+    except Exception:
+        return                                    # network hiccup - try again next time
+    real = (snap.get("result") or "").upper()
+    if snap.get("status") != "finalized" or real not in ("YES", "NO"):
+        _verify_skip[h["ticker"]] = now + 60          # not final yet - move on to older rounds, look again in a minute
+        return
+    before = {k: h.get(k) for k in ("actual_side", "early_correct", "sealed_correct", "decided_correct")}
+    if _regrade(h, real):
+        print(f"[VERIFY] FIXED {name} {h['ticker']}: market settled {'UP' if real == 'YES' else 'DOWN'} "
+              f"(was {before}) -> early {h.get('early_correct')} sealed {h.get('sealed_correct')} late {h.get('decided_correct')}")
+        for r in _rounds.get(name, []):
+            if r.get("ticker") == h["ticker"]:
+                r["actual"] = real
+        try:
+            _save_rounds()
+        except Exception:
+            pass
+    h["verified"] = True
+    _save_history()
 
 
 def _push_dashboard_alerts(asset, v):
@@ -4219,6 +4282,10 @@ def poll_loop():
     while True:
         _t_loop = time.time()
         _reconcile_pending_grades()
+        try:
+            _verify_history_step()
+        except Exception as _ve:
+            print(f"[VERIFY] {_ve!r}")
         try:
             _refresh_bt100()
         except Exception as _be:
@@ -4499,6 +4566,8 @@ def poll_loop():
                         if _lt.get("call"):
                             hist[-1]["decided_call"] = _lt["call"]
                             hist[-1]["decided_correct"] = _lt["call"] == actual_side
+                        if used_real_result:
+                            hist[-1]["verified"] = True
                         del hist[:-HISTORY_CAP]
                         _save_history()
                         try:     # 2026-10-22 (user: "make sure it's tracking the wins and losses"): one line per graded round
