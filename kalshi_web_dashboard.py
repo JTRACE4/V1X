@@ -6720,6 +6720,9 @@ body[data-matf="h21"] .ma-pane[data-tf="h21"] { display:block; }
 body[data-matf="h22"] .ma-pane[data-tf="h22"] { display:block; }
 body[data-matf="h23"] .ma-pane[data-tf="h23"] { display:block; }
 body[data-matf="h0"] .ma-tab-hr, body[data-matf="h1"] .ma-tab-hr, body[data-matf="h2"] .ma-tab-hr, body[data-matf="h3"] .ma-tab-hr, body[data-matf="h4"] .ma-tab-hr, body[data-matf="h5"] .ma-tab-hr, body[data-matf="h6"] .ma-tab-hr, body[data-matf="h7"] .ma-tab-hr, body[data-matf="h8"] .ma-tab-hr, body[data-matf="h9"] .ma-tab-hr, body[data-matf="h10"] .ma-tab-hr, body[data-matf="h11"] .ma-tab-hr, body[data-matf="h12"] .ma-tab-hr, body[data-matf="h13"] .ma-tab-hr, body[data-matf="h14"] .ma-tab-hr, body[data-matf="h15"] .ma-tab-hr, body[data-matf="h16"] .ma-tab-hr, body[data-matf="h17"] .ma-tab-hr, body[data-matf="h18"] .ma-tab-hr, body[data-matf="h19"] .ma-tab-hr, body[data-matf="h20"] .ma-tab-hr, body[data-matf="h21"] .ma-tab-hr, body[data-matf="h22"] .ma-tab-hr, body[data-matf="h23"] .ma-tab-hr { background:linear-gradient(90deg, #e9a5bb, #dcbb91); color:#2a1b21; border-color:transparent; }
+/* 2026-10-23 (user): band labels - thin sans, softer, plain words, on the left so they never cover the round-line tag */
+.lw-band span { left:8px !important; right:auto !important; background:none !important; padding:0 !important;
+  font-family:var(--br-sans) !important; font-weight:400 !important; font-size:12px !important; letter-spacing:0.2px !important; opacity:0.78; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -9016,7 +9019,7 @@ function lwBands(o) {
     if (bot <= 0 || top >= H) return '';
     const h = Math.max(4, bot - top);
     return '<div class="lw-band ' + (z.r ? 'res' : 'sup') + '" style="top:' + top.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px">' + (z.n >= 2 ? '<span>' : '<span hidden>')
-      + (z.n >= 2 ? (z.r ? 'Rejected ' : 'Held ') + z.n + 'x' : '') + '</span></div>';
+      + (z.n >= 2 ? (z.r ? 'Rejected ' : 'Held ') + z.n + ' times' : '') + '</span></div>';
   }).join('');
   if (lay._h !== html) { lay.innerHTML = html; lay._h = html; }
 }
@@ -9057,7 +9060,7 @@ function lwCreate(a) {
     + '<p class="hint">Information only &ndash; not financial advice.</p></div></details>'
     + '<div class="lw-pats"></div>';
   const el = box.querySelector('.lw-chart');
-  const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: 'Montserrat'},
+  const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: "Carlito, Calibri, 'Segoe UI', sans-serif", fontSize: 12},
     grid: {vertLines: {color: 'rgba(242,196,107,.05)'}, horzLines: {color: 'rgba(242,196,107,.05)'}},
     rightPriceScale: {borderColor: 'rgba(242,196,107,.18)'},
     timeScale: {borderColor: 'rgba(242,196,107,.18)', timeVisible: true, secondsVisible: false,
@@ -9110,6 +9113,14 @@ async function lwTick(o) {
     }
   } catch (e) {} finally { o.busy = false; }
 }
+// 2026-10-23 (user): plain-English, sentence-case chart labels - "up-channel - BROKE DOWN" -> "Up-channel broke down"
+function lwPlainName(n) {
+  let t = String(n || '').split(' (')[0].replace(/\s+/g, ' ').trim().toLowerCase();
+  const m = t.match(/^(.*?) - broke (up|down)/);
+  if (m) t = 'Broke ' + (m[2] === 'up' ? 'above' : 'below') + ' the ' + m[1];
+  else t = t.replace(/\s+-\s+/g, ' ');
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
+}
 async function lwPatterns(o) {
   let j;
   try { j = await (await fetch('/chart_patterns?asset=' + o.a + '&tf=' + o.tf, {cache: 'no-store'})).json(); } catch (e) { return; }
@@ -9117,12 +9128,12 @@ async function lwPatterns(o) {
   const row = (x, worked) => {
     const up = x.bias === 'bullish';
     const st = worked ? '<span class="up">worked</span>' : (x.status === 'formed' ? 'formed' : 'forming ' + Math.round(x.pct * 100) + '%');
-    return '<details class="lw-pat"><summary><span class="' + (up ? 'up' : 'down') + '">' + (up ? '<i class=va-u></i>' : '<i class=va-d></i>') + '</span> <b>' + esc(x.name) + '</b> &middot; '
+    return '<details class="lw-pat"><summary><span class="' + (up ? 'up' : 'down') + '">' + (up ? '<i class=va-u></i>' : '<i class=va-d></i>') + '</span> <b>' + esc(lwPlainName(x.name)) + '</b> &middot; '
       + st + ' <span class="hint">&middot; right ' + Math.round(x.rate * 100) + '% of ' + x.n + '</span></summary>'
       + (x.means ? '<div class="hint">' + esc(x.means) + (x.watch ? ' ' + esc(x.watch) : '') + '</div>' : '') + '</details>';
   };
   (j.items || []).forEach(x => marks.push({time: Math.floor(x.ts / g) * g, position: x.bias === 'bullish' ? 'belowBar' : 'aboveBar',
-    color: x.bias === 'bullish' ? '#3dd69c' : '#f05454', shape: x.bias === 'bullish' ? 'arrowUp' : 'arrowDown', text: x.name.split(' (')[0].slice(0, 22)}));
+    color: x.bias === 'bullish' ? 'rgba(61,214,156,0.72)' : 'rgba(240,84,84,0.72)', shape: x.bias === 'bullish' ? 'arrowUp' : 'arrowDown', text: lwPlainName(x.name)}));
   try { o.candle.setMarkers(marks.filter(m => o.bars.length && m.time >= o.bars[0].time).sort((p, q) => p.time - q.time)); } catch (e) {}
   const items = (j.items || []).map(x => row(x, false)).join(''), worked = (j.worked || []).map(x => row(x, true)).join('');
   // formed in the last hour, grouped 5 / 10 / 15 / 30 / 60 minutes, every short timeframe
