@@ -6432,6 +6432,43 @@ body .top-alerts > .top-w-title, body[data-view] .top-alerts > .top-w-title, bod
 .press-top { padding-top:40px !important; padding-bottom:8px !important; }
 .top-alerts { padding-top:40px !important; }
 .top-alerts .fa-list { max-height:min(300px, 34vh) !important; overflow-y:auto !important; scrollbar-width:thin; scrollbar-color:rgba(220,187,145,0.5) transparent; }
+/* 2026-10-23 (user: "whale alerts are boring"): neon money tide + louder rows */
+.tide { margin:0 0 10px; padding:10px 12px; border-radius:14px; background:rgba(20,15,18,0.55); border:1px solid rgba(255,255,255,0.12); }
+.tide-head { font:900 15px var(--br-sans); letter-spacing:1.2px; color:#efe6df; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.tide-head span { font-size:12px; font-weight:700; letter-spacing:.3px; color:#cdb6ad; }
+.tide-bar { display:flex; height:14px; border-radius:999px; overflow:hidden; margin:8px 0 6px; background:#2a2226; }
+.tide-bar i { display:block; height:100%; transition:width .6s ease; }
+.tide-bar .tb-b { background:linear-gradient(90deg, #12d67a, #39ff8c); box-shadow:0 0 12px rgba(57,255,140,0.6); }
+.tide-bar .tb-s { background:linear-gradient(90deg, #ff3155, #ff6b81); box-shadow:0 0 12px rgba(255,49,85,0.6); }
+.tide-nums { display:flex; justify-content:space-between; gap:8px; font:800 13px var(--br-sans); }
+.tide-nums em { font-style:normal; font-weight:700; font-size:11px; opacity:.75; }
+.tn-b { color:#5bff9f; } .tn-s { color:#ff6b81; }
+.tide-quiet .tide-bar i { background:#4a3c43; box-shadow:none; } .tide-quiet .tide-head { color:#a8968e; }
+.tide-lean-buy .tide-head { color:#8affbd; } .tide-lean-sell .tide-head { color:#ff8fa0; }
+.tide-buy { background:linear-gradient(90deg, rgba(18,214,122,0.38), rgba(57,255,140,0.12)); border-color:rgba(57,255,140,0.75);
+  animation:tidePulseG 1.6s ease-in-out infinite; }
+.tide-sell { background:linear-gradient(90deg, rgba(255,49,85,0.40), rgba(255,49,85,0.12)); border-color:rgba(255,90,118,0.8);
+  animation:tidePulseR 1.6s ease-in-out infinite; }
+.tide-buy .tide-head { color:#d9ffe9; text-shadow:0 0 10px rgba(57,255,140,0.9); }
+.tide-sell .tide-head { color:#ffe3e8; text-shadow:0 0 10px rgba(255,49,85,0.9); }
+.tide-buy .tide-head, .tide-sell .tide-head { font-size:17px; }
+@keyframes tidePulseG { 0%,100% { box-shadow:0 0 10px rgba(57,255,140,0.35); } 50% { box-shadow:0 0 26px rgba(57,255,140,0.85), inset 0 0 14px rgba(57,255,140,0.25); } }
+@keyframes tidePulseR { 0%,100% { box-shadow:0 0 10px rgba(255,49,85,0.35); } 50% { box-shadow:0 0 26px rgba(255,49,85,0.85), inset 0 0 14px rgba(255,49,85,0.25); } }
+.top-alerts.box-tide-buy { border-color:rgba(57,255,140,0.7) !important; box-shadow:0 0 28px rgba(57,255,140,0.35) !important; }
+.top-alerts.box-tide-sell { border-color:rgba(255,90,118,0.75) !important; box-shadow:0 0 28px rgba(255,49,85,0.38) !important; }
+.fa-item.fa-up { border-left:4px solid #39ff8c !important; } .fa-item.fa-down { border-left:4px solid #ff3155 !important; }
+.fa-item.fa-large .fa-usd { font-size:22px !important; }
+.fa-item.fa-mega { padding:9px 11px !important; }
+.fa-item.fa-mega .fa-usd { font-size:26px !important; }
+.fa-item.fa-mega .fa-head { font-size:14.5px; letter-spacing:.6px; }
+.fa-item.fa-up.fa-mega { background:linear-gradient(90deg, rgba(57,255,140,0.62), rgba(57,255,140,0.22) 55%, rgba(57,255,140,0.08)) !important;
+  box-shadow:0 0 16px rgba(57,255,140,0.45); }
+.fa-item.fa-down.fa-mega { background:linear-gradient(90deg, rgba(255,49,85,0.64), rgba(255,49,85,0.24) 55%, rgba(255,49,85,0.08)) !important;
+  box-shadow:0 0 16px rgba(255,49,85,0.45); }
+.fa-item.fa-fresh.fa-up { animation:faNewG 1s ease-out 3 !important; } .fa-item.fa-fresh.fa-down { animation:faNewR 1s ease-out 3 !important; }
+@keyframes faNewG { 0% { box-shadow:0 0 0 2px #39ff8c, 0 0 24px rgba(57,255,140,0.9); } 100% { box-shadow:0 0 0 0 transparent; } }
+@keyframes faNewR { 0% { box-shadow:0 0 0 2px #ff3155, 0 0 24px rgba(255,49,85,0.9); } 100% { box-shadow:0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .tide-buy, .tide-sell, .fa-item.fa-fresh { animation:none !important; } }
 .top-alerts .fa-item { margin-bottom:0 !important; padding:5px 9px !important; }
 .top-alerts .fa-usd { font-size:19px; }
 /* 2026-10-22 (user): serif ONLY on the scoreboard's big win % and the chart's speed-sign numbers - everything else sans */
@@ -7340,10 +7377,28 @@ function _voiceBudgetOk(item) {
 }
 // 2026-10-23 (b, user: "make sure the flip radar matches the percent actually being said"): a line can be a function, built at
 // the moment it is spoken from what the radar shows right then (not from a reading that is several seconds old).
+const _saidText = {}, _lastMinSaid = {};
 function _voicePush(text, urgent, ttlMs, mustSay) {
   const fn = typeof text === 'function' ? text : null;
   const t = fn ? (fn() || '') : _marketWords(text);
   if (!t) return;
+  // 2026-10-23 (user: "don't repeat itself ... stop all the repetitive talking in the last minute"):
+  //  - the exact same line is never said twice within 2 minutes
+  //  - in a round's last 60 seconds each coin gets ONE line (a real flip can still break through)
+  try {
+    const _n = Date.now();
+    if (_saidText[t] && _n - _saidText[t] < 120000) return;
+    const coin = /\bBitcoin\b|\bBTC\b/.test(t) ? 'BTC' : (/\bXRP\b/.test(t) ? 'XRP' : null);
+    if (coin) {
+      const q = _radarInfo(coin);
+      if (q && q.left > 0 && q.left <= 60) {
+        const k = coin + '|' + q.round, flip = /flipping|flipped/.test(t);
+        if (_lastMinSaid[k] && !flip) return;
+        _lastMinSaid[k] = 1;
+      }
+    }
+    _saidText[t] = _n;
+  } catch (e) {}
   const item = { text: t, fn: fn, until: Date.now() + (ttlMs || 20000), prio: !!(urgent || mustSay), words: t.split(/\s+/).filter(Boolean).length };
   if (urgent) voiceQ.unshift(item); else voiceQ.push(item);
   // 2026-10-23 (user: "don't keep annoying the listener"): remember when each coin was last talked about, by any line
@@ -7640,8 +7695,7 @@ function updateFlipWatch() {
       const how = goingUp ? 'up' : 'down';
       if (w.lastCall === undefined) w.lastCall = callName + call;
       if (!w.said10 && left <= 10) {
-        w.said10 = true; w.lastSpoke = now; w.lastState = state;
-        speak(coin + ', ten seconds, ' + how + '.', true, 8000);
+        w.said10 = true; w.lastState = state;           // 2026-10-23 (user): no "ten seconds" line - it only repeated the read
       } else if (!w.said90 && left <= 90 && left > 15) {
         w.said90 = true; w.lastSpoke = now; w.lastState = state;
         speak(coin + ', ninety seconds, ' + how + '.', false, 15000);
@@ -11184,6 +11238,48 @@ def _alert_status_line(name, h):
     return f'<div class="fa-status hint">{" &middot; ".join(bits)}</div>' if bits else ""
 
 
+_TIDE_KINDS = ("whale", "sweep", "liq", "absorbed")      # real executed money - not bursts / walls (those would double count)
+_TIDE_BIG = {"BTC": 1_000_000, "XRP": 150_000}
+
+
+def _tide_html(name, rows):
+    """2026-10-23 (user: "whale alerts are boring, make it noticeable when red sells or green buys are coming a lot"): a bold
+    money tide across the top of the box - the last 2 minutes of whale / big-order dollars, buys vs sells. When one side is 70%+
+    of a big total it lights up: BUYERS FLOODING IN (neon green) or SELLERS DUMPING (neon red), and the whole box glows."""
+    now = time.time()
+    b = s_ = 0.0
+    nb = ns = 0
+    for a in rows:
+        if a.get("kind") not in _TIDE_KINDS or now - a["ts"] > 120 or not a.get("usd"):
+            continue
+        if a["side"] == "buy":
+            b += a["usd"]; nb += 1
+        elif a["side"] == "sell":
+            s_ += a["usd"]; ns += 1
+    tot = b + s_
+    big = _TIDE_BIG.get(name, 1_000_000)
+    if not tot:
+        return "", "tide-quiet", ('<div class="tide tide-quiet"><div class="tide-head">QUIET <span>no whale money in the last 2 min</span></div>'
+                                  '<div class="tide-bar"><i class="tb-b" style="width:50%"></i><i class="tb-s" style="width:50%"></i></div></div>')
+    bp = b / tot
+    if tot >= big and bp >= 0.7:
+        cls, head = "tide-buy", "BUYERS FLOODING IN"
+    elif tot >= big and bp <= 0.3:
+        cls, head = "tide-sell", "SELLERS DUMPING"
+    elif tot >= big * 0.4 and bp >= 0.62:
+        cls, head = "tide-lean-buy", "BUYERS STEPPING IN"
+    elif tot >= big * 0.4 and bp <= 0.38:
+        cls, head = "tide-lean-sell", "SELLERS STEPPING IN"
+    else:
+        cls, head = "tide-even", "TUG OF WAR"
+    hot = cls in ("tide-buy", "tide-sell")
+    return (cls if hot else ""), cls, (
+        f'<div class="tide {cls}"><div class="tide-head">{head} <span>{_usd_short(tot)} in 2 min</span></div>'
+        f'<div class="tide-bar"><i class="tb-b" style="width:{bp * 100:.1f}%"></i><i class="tb-s" style="width:{(1 - bp) * 100:.1f}%"></i></div>'
+        f'<div class="tide-nums"><span class="tn-b"><i class=va-u></i> {_usd_short(b)} bought <em>{nb} hit{"s" if nb != 1 else ""}</em></span>'
+        f'<span class="tn-s"><em>{ns} hit{"s" if ns != 1 else ""}</em> {_usd_short(s_)} sold <i class=va-d></i></span></div></div>')
+
+
 def build_alert_box(name):
     rows = _ENG.alerts_for(name, max_age=3600, limit=40)   # 2026-10-22 (user): scroll back through at least 30 buys / sells
     dec = 4 if name == "XRP" else 2
@@ -11193,12 +11289,15 @@ def build_alert_box(name):
         side_cls = "void" if void else ("up" if a["side"] == "buy" else ("down" if a["side"] == "sell" else "flat"))
         arrow = "&#10005;" if void else "&#10227;" if a["kind"] == "moved" else ("<i class=va-u></i>" if a["side"] == "buy" else ("<i class=va-d></i>" if a["side"] == "sell" else "&#9679;"))
         fresh = " fa-fresh" if time.time() - a["ts"] < 20 else ""
+        # 2026-10-23 (user): bigger money = bigger, brighter row
+        _big = _TIDE_BIG.get(name, 1_000_000)
+        size = " fa-mega" if (a.get("usd") or 0) >= _big else (" fa-large" if (a.get("usd") or 0) >= _big * 0.4 else "")
         head, where = _alert_line(a, dec)
         usd_big = _usd_short(a["usd"]) if a.get("usd") else ""
         if usd_big and usd_big in head:
             head = head.replace(" " + usd_big, "").replace(usd_big, "").rstrip(" :")
         items.append(
-            f'<div class="fa-item fa-sev{a["sev"]} fa-{side_cls}{fresh}" title="{_html_attr(a["detail"])}" data-alert-id="{name}::{a["id"]}" data-kind="{a["kind"]}" '
+            f'<div class="fa-item fa-sev{a["sev"]} fa-{side_cls}{fresh}{size}" title="{_html_attr(a["detail"])}" data-alert-id="{name}::{a["id"]}" data-kind="{a["kind"]}" '
             f'data-side="{a["side"] or ""}" data-sev="{a["sev"]}" data-sound="{1 if a.get("sound") else 0}" data-ts="{a["ts"]:.0f}" '
             f'data-name="{name}" data-title="{_html_attr(a["title"])}" data-usd="{a.get("usd") or 0:.0f}">'
             f'<span class="fa-arrow {side_cls}">{arrow}</span> <b class="fa-head {side_cls}">{head}</b>'
@@ -11213,9 +11312,10 @@ def build_alert_box(name):
     if lt["n"]:
         liq_txt = (f' &middot; forced sales, last 5 min: <span class="down">longs {_usd_short(lt["long"])}</span> / '
                    f'<span class="up">shorts {_usd_short(lt["short"])}</span>')
-    return (f'<div class="top-w top-alerts"><div class="top-w-title">WHALE &amp; LIQUIDITY ALERTS <span class="hint">whales &middot; big orders &middot; '
+    hot, _tc, tide = _tide_html(name, rows)
+    return (f'<div class="top-w top-alerts {("box-" + hot) if hot else ""}"><div class="top-w-title">WHALE &amp; LIQUIDITY ALERTS <span class="hint">whales &middot; big orders &middot; '
             f'fake breakouts &middot; forced sales</span></div>'
-            + _alert_status_line(name, h) +
+            + tide + _alert_status_line(name, h) +
             f'<div class="fa-list">{"".join(items)}</div>'
             f'<!--OWNER--><div class="hint fa-foot">{h["n_live"]} feed{"s" if h["n_live"] != 1 else ""} live{liq_txt}</div><!--/OWNER--></div>')
 
