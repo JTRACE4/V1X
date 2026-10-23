@@ -6723,6 +6723,13 @@ body[data-matf="h0"] .ma-tab-hr, body[data-matf="h1"] .ma-tab-hr, body[data-matf
 /* 2026-10-23 (user): band labels - thin sans, softer, plain words, on the left so they never cover the round-line tag */
 .lw-band span { left:8px !important; right:auto !important; background:none !important; padding:0 !important;
   font-family:var(--br-sans) !important; font-weight:400 !important; font-size:12px !important; letter-spacing:0.2px !important; opacity:0.78; }
+/* 2026-10-23 (user): BRAIN's favorite tabs by day; All time is the default */
+body:not([data-matf]) .ma-pane[data-tf="all"], body[data-matf="all"] .ma-pane[data-tf="all"], body[data-matf="today"] .ma-pane[data-tf="today"],
+body[data-matf="yday"] .ma-pane[data-tf="yday"], body[data-matf="7d"] .ma-pane[data-tf="7d"] { display:block; }
+body:not([data-matf]) .ma-tab[data-tf="all"], body[data-matf="all"] .ma-tab[data-tf="all"], body[data-matf="today"] .ma-tab[data-tf="today"],
+body[data-matf="yday"] .ma-tab[data-tf="yday"], body[data-matf="7d"] .ma-tab[data-tf="7d"] {
+  background:linear-gradient(90deg, #e9a5bb, #dcbb91); color:#2a1b21; border-color:transparent; }
+body:not([data-matf]) .ma-tab[data-tf="6"] { background:transparent; color:#dcbb91; border-color:rgba(220,187,145,0.35); }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -11925,9 +11932,18 @@ def _build_brain_favorite(name):
         bc["v"] = {k: _best_cashout(hist, k)[0] for k in ("mini", "early", "sealed")}
     at_by = bc["v"]
     panes = []
-    for tf, hrs in (("6", 6), ("12", 12), ("24", 24)):
-        rows = _fav_rows(hist, lambda t, hrs=hrs: now - t.timestamp() <= hrs * 3600, at_by)
+    # 2026-10-23 (user): by calendar day (ET), not rolling hours; "All time" = exactly the scoreboard's numbers
+    d_today = now_et.date()
+    d_yday = d_today - dt.timedelta(days=1)
+    day_of = lambda t: (t - dt.timedelta(minutes=15)).astimezone(et).date()
+    wins = (("today", lambda t: day_of(t) == d_today), ("yday", lambda t: day_of(t) == d_yday),
+            ("7d", lambda t: now - t.timestamp() <= 7 * 86400), ("all", lambda t: True))
+    all_best = None
+    for tf, keep in wins:
+        rows = _fav_rows(hist, keep, at_by)
         best = _fav_best(rows)
+        if tf == "all":
+            all_best = best
         panes.append(f'<div class="ma-pane" data-tf="{tf}">{_fav_cells(rows, best)}'
                      + ('' if best else '<div class="hint" style="margin-top:4px;">No call has made a profit over at least 5 rounds in this window.</div>') + '</div>')
     # by hour (start of the round, ET), last 30 days
@@ -11946,6 +11962,15 @@ def _build_brain_favorite(name):
     short = {"mini": "Mini", "early": "Early", "sealed": "Sealed"}
     best_txt = (" &middot; ".join(f'<b>{lab12(H)}</b> {short[b]} <span class="up">+${v:,.0f}</span>' for H, b, v in ranked)
                 if ranked else "not enough rounds yet")
+    fav_line = ""
+    if all_best:
+        ph = sorted(((H, next(r["hold"] for r in hour_rows[H] if r["key"] == all_best)) for H in range(24)
+                     if any(r["key"] == all_best and r["nm"] for r in hour_rows[H])), key=lambda x: -x[1])
+        if ph:
+            good = " &middot; ".join(f'<b>{lab12(H)}</b> <span class="{"up" if v >= 0 else "down"}">{"+" if v >= 0 else "-"}${abs(v):,.0f}</span>' for H, v in ph[:3])
+            bad = " &middot; ".join(f'<b>{lab12(H)}</b> <span class="down">-${abs(v):,.0f}</span>' for H, v in ph[::-1][:2] if v < 0)
+            fav_line = (f'<div class="ma-sub">All-time favorite, <b>{short[all_best]} call</b>: best hours {good}'
+                        + (f' &middot; worst {bad}' if bad else "") + '</div>')
     for H in range(24):
         strip = "".join(
             f'<button type="button" class="hr-cell{" on" if h2 == H else ""}{" pos" if v > 0 else ""}" '
@@ -11956,11 +11981,11 @@ def _build_brain_favorite(name):
         best = _fav_best(hour_rows[H], 3)
         nr = max((r["n"] for r in hour_rows[H]), default=0)
         panes.append(f'<div class="ma-pane" data-tf="h{H}"><div class="hr-strip">{strip}</div>'
-                     f'<div class="hint ma-sub">Most profitable hours (last 30 days): {best_txt}</div>'
+                     f'{fav_line}<div class="hint ma-sub">Most profitable call in each hour (last 30 days): {best_txt}</div>'
                      f'<div class="ma-sub"><b>{lab12(H).replace("a", " AM").replace("p", " PM")} ET</b> <span class="hint">&middot; {nr} {name} rounds that started in this hour, last 30 days</span></div>'
                      f'{_fav_cells(hour_rows[H], best)}</div>')
     tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{tf}" onclick="document.body.dataset.matf=\'{tf}\'">{lab}</button>'
-                   for tf, lab in (("6", "6 hrs"), ("12", "12 hrs"), ("24", "24 hrs")))
+                   for tf, lab in (("today", "Today"), ("yday", "Yesterday"), ("7d", "7 days"), ("all", "All time")))
     tabs += (f'<button type="button" class="ma-tab ma-tab-hr" data-tf="hr" '
              f'onclick="document.body.dataset.matf=\'h{now_et.hour}\'">By hour</button>')
     return (f'<div class="most-acc"><div class="ma-head"><span class="ma-title">BRAIN&rsquo;S FAVORITE</span><span class="ma-tabs">{tabs}</span></div>'
@@ -11989,8 +12014,10 @@ def build_scoreboard(name, d):
             rows = [h for h in rows if h.get("mini_v") == 2]          # 2026-10-22: fresh start for the reworked mini call
         res = [bool(h[field]) for h in rows]
         n, w = len(res), sum(res)
-        _now24 = time.time()   # 2026-10-23 (user): "last 24 hrs" - same window + rules as BRAIN's favorite 24 hrs tab
-        today = [bool(h[field]) for h in rows if _window_close_utc(h.get("ticker")) and _now24 - _window_close_utc(h.get("ticker")).timestamp() <= 86400]
+        # 2026-10-23 (user): by calendar day (ET) - same rounds as BRAIN's favorite "Today" tab
+        _d0 = dt.datetime.now(et).date()
+        today = [bool(h[field]) for h in rows if _window_close_utc(h.get("ticker"))
+                 and (_window_close_utc(h.get("ticker")) - dt.timedelta(minutes=15)).astimezone(et).date() == _d0]
         if key == "bot":
             first_k = since
         else:
@@ -12022,7 +12049,7 @@ def build_scoreboard(name, d):
             f'<div class="sc-main"><span class="sc-pct">{w / n:.0%}</span><span class="sc-wl"><b class="skw">{w}W</b> &middot; <b class="skl">{n - w}L</b>'
             f'<br><span class="hint">{n:,} round{"s" if n != 1 else ""}</span></span></div>'
             f'<div class="sc-cur">{streak}</div>'
-            f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; last 24 hrs: <b>{td}</b>'
+            f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; today: <b>{td}</b>'
             + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div>{_mbt}</div>')
     # 2026-10-22 (user): reversals in their own column so the main win rate stays clean
     # 2026-10-22 (d, user: "reset the win to lose rate"): the reversal record restarts with the flip-history system
