@@ -3,6 +3,11 @@ Plain HTML/CSS/JS strings - no build step. The island-town art is an original in
 sunset 'vice city' palette) drawn for this page."""
 import html as _html
 import time
+try:
+    from zoneinfo import ZoneInfo as _ZI
+    _ET_TZ = _ZI("America/New_York")
+except Exception:
+    _ET_TZ = None
 
 E = _html.escape
 
@@ -368,7 +373,7 @@ ADMIN_CSS = r"""
 .adm table{width:100%;border-collapse:collapse;font-size:14px}.adm td,.adm th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .adm form{display:inline}.adm .b{padding:6px 12px;border-radius:999px;border:0;font-weight:800;cursor:pointer}
 .b.ok{background:var(--up);color:var(--ink)}.b.no{background:var(--down);color:#fff}.b.n{background:#3a2e3c;color:var(--text)}
-.adm .card{margin-top:14px}.tag{font-size:11px;font-weight:900;padding:2px 7px;border-radius:999px;background:#3a2e3c}
+.adm .card{margin-top:14px}.tag{font-size:11px;font-weight:900;padding:2px 7px;border-radius:999px;background:#3a2e3c}.st{display:inline-block;font-size:11px;font-weight:900;letter-spacing:1px;padding:3px 8px;border-radius:999px;margin-bottom:4px}.st-on{background:rgba(61,214,156,.18);color:#3dd69c}.st-pend{background:rgba(233,180,90,.18);color:#e9b45a}.st-off{background:rgba(240,84,84,.18);color:#f05454}
 """
 
 
@@ -391,13 +396,23 @@ def admin_page(user, db, email_on, flash="", reset_links=None, kalshi=None):
                  f'<form method="post" action="/admin"><input type="hidden" name="u" value="{uname}"><button class="b ok" name="a" value="approve">Allow</button></form> ')
                 + f'<form method="post" action="/admin" onsubmit="return confirm(\'Remove {uname}?\')"><input type="hidden" name="u" value="{uname}"><button class="b no" name="a" value="remove">Remove</button></form>')
             au = float(u.get("access_until") or 0)
-            pas = ("owner - always" if u.get("role") == "owner" else
-                   (f'pass until {time.strftime("%b %d %H:%M", time.localtime(au))}' if au > time.time() else "no pass"))
+            # 2026-10-23 (user): BRAIN ACTIVE = paid / has the bot tabs; PENDING BRAIN = no access yet (hasn't paid)
+            if u.get("role") == "owner":
+                st, pas = '<span class="st st-on">OWNER</span>', "always"
+            elif u["status"] != "approved":
+                st, pas = '<span class="st st-off">BLOCKED</span>', "no access"
+            elif au > time.time():
+                _et = _ET_TZ
+                _w = (__import__("datetime").datetime.fromtimestamp(au, _et).strftime("%b %d %-I:%M %p ET") if _et else
+                      time.strftime("%b %d %H:%M", time.localtime(au)))
+                st, pas = '<span class="st st-on">BRAIN ACTIVE</span>', f"until {_w}"
+            else:
+                st, pas = '<span class="st st-pend">PENDING BRAIN</span>', "hasn&rsquo;t paid &middot; no access"
             give = "" if u.get("role") == "owner" else (
                 f'<form method="post" action="/admin"><input type="hidden" name="u" value="{uname}"><input type="hidden" name="a" value="grant">'
                 f'<input name="days" type="number" min="1" max="400" value="7" style="width:64px"> <button class="b ok">Give days</button></form> ')
             rows_a.append(f'<tr><td><b>{uname}</b> <span class="tag">{E(u.get("role", ""))}</span><br><span class="mute">{E(u["email"])}</span></td>'
-                          f'<td>{E(u["status"])} &middot; <b>{pas}</b><br><span class="mute">{nd} device{"s" if nd != 1 else ""}</span></td><td>{give}{act}</td></tr>')
+                          f'<td>{st}<br><b>{pas}</b><br><span class="mute">{nd} device{"s" if nd != 1 else ""}</span></td><td>{give}{act}</td></tr>')
     resets = ""
     for r in db.get("reset_requests", []):
         link = (reset_links or {}).get(r["u"])
