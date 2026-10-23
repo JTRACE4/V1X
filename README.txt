@@ -97,3 +97,15 @@ UPDATE 7 (same day)
   is still running (the previous version) BEFORE it starts listening. Railway's /health check keeps the old one live until
   the copy is done. Additive by ticker - nothing is ever overwritten or removed. Rounds then live on the /data volume, so
   later updates keep them automatically.
+
+UPDATE 2026-10-23 - voice + flip radar
+- Switching voices just says hello in the new voice (no more fake "84 percent" call).
+- Voices: Ava + "Sarge" (a real shouting drill sergeant). Snoop and Caller removed. Sarge only appears in the voice menu once
+  ELEVENLABS_API_KEY and ELEVENLABS_SARGE_VOICE_ID are set in Railway (he's read with Eleven v3 and a [shouts] tag;
+  ELEVENLABS_SARGE_MODEL can override the model).
+- Voice talks more: a check-in every minute per coin (time left, up/down with or against the call, flip risk + top reason),
+  a spoken alert on big aggressive buy/sell bursts, and when the flip radar jumps 15+ points in 20 seconds. Budget 70 words/min.
+- Wording: "up, with the call" / "down, against the call" instead of "back on our side".
+- Flip radar part 4 "chart" (-15..+25): the chart's support/resistance zones (holds between price and the line defend the call;
+  a fresh rejection at the opposing zone or a broken defending zone adds risk), 1-minute RSI (stretched or turning against the
+  call) and MACD histogram against the call. Line crosses still count in part 2.

@@ -7091,17 +7091,27 @@ function updateVoiceToggleButton() {
 // no longer cut each other off.
 // Only these alerts make sound now: flip warnings, the early + sealed calls, whale trades (cha-ching / denied).
 const LEGACY_SOUNDS = false;
-const NEURAL_VOICES = { ava: 'Ava', snoop: 'Snoop', sarge: 'Sarge', caller: 'Caller' };
+// 2026-10-23 (user): "all the other voices are bad except Ava" - Snoop + Caller are gone. Sarge is a REAL shouting drill
+// sergeant (an ElevenLabs voice) and only shows up once his voice key is set on the server (window.SARGE_REAL).
+// Switching voices no longer reads a fake "84 percent" call - just a short hello in the new voice.
+const NEURAL_VOICES = { ava: 'Ava', sarge: 'Sarge' };
 let neuralVoice = 'ava';
 try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VOICES || nv === 'device')) neuralVoice = nv; } catch (e) {}
+if (neuralVoice === 'sarge' && !window.SARGE_REAL) neuralVoice = 'ava';
 function setNeuralVoice(v) {
+  if (v === 'sarge' && !window.SARGE_REAL) v = 'ava';
   neuralVoice = v; neuralBroken = false;
   try { localStorage.setItem('neuralVoice', v); } catch (e) {}
-  if (v === 'snoop') { speakRaw('Snoop on the market. Bitcoin sealed call: up, 84 percent.'); return; }
-  if (v === 'caller') { speakRaw('Caller here. Bitcoin sealed call: up, 84 percent.'); return; }
-  if (v === 'sarge') { speakRaw('Sarge here. Eyes on the market.'); speakRaw('Bitcoin sealed call: up, 84 percent.'); return; }
-  speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is ' + NEURAL_VOICES[v] + '. Bitcoin sealed call: up, 84 percent.');
+  if (v === 'sarge') { speakRaw('Sarge here. Eyes on the market.'); return; }
+  speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is Ava. I am watching the market for you.');
 }
+function syncVoicePick() {
+  const sel = document.getElementById('voice-pick');
+  if (!sel) return;
+  if (!window.SARGE_REAL) { const o = sel.querySelector('option[value="sarge"]'); if (o) o.remove(); }
+  sel.value = neuralVoice;
+}
+document.addEventListener('DOMContentLoaded', syncVoicePick);
 // browser fallback: the most natural-sounding female voices first (premium / enhanced / natural before the old robotic ones)
 const VOICE_PREFS = ['Ava (Premium)', 'Zoe (Premium)', 'Ava (Enhanced)', 'Zoe (Enhanced)', 'Allison (Enhanced)', 'Samantha (Enhanced)',
   'Microsoft Ava Online', 'Microsoft Aria Online', 'Microsoft Jenny Online', 'Microsoft Emma Online', 'Google US English',
@@ -7145,7 +7155,7 @@ function _voicePunch(a) {
       src.connect(lo); lo.connect(eq); eq.connect(comp); comp.connect(g); g.connect(ctx.destination);
       _vChain = { eq: eq, lo: lo, g: g };
     }
-    const hard = neuralVoice === 'sarge' || neuralVoice === 'caller';
+    const hard = neuralVoice === 'sarge';
     _vChain.eq.gain.value = hard ? 5 : 0;          // presence: crisp consonants
     _vChain.lo.gain.value = hard ? 3 : 0;          // chest: a bigger, manlier voice
     _vChain.g.gain.value = hard ? 1.9 : 1.0;       // loud
@@ -7180,7 +7190,7 @@ function _voiceNext() {
   const fallback = () => { if (finished) return; try { a.onended = null; a.onerror = null; a.pause(); } catch (e) {} neuralBroken = true; _deviceSay(item.text, done); setTimeout(() => { neuralBroken = false; }, 120000); };
   a.onended = done; a.onerror = fallback;
   a.src = '/tts?v=' + neuralVoice + '&t=' + encodeURIComponent(item.text);
-  if (neuralVoice === 'sarge' || neuralVoice === 'caller' || _vChain) _voicePunch(a);
+  if (neuralVoice === 'sarge' || _vChain) _voicePunch(a);
   a.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
   const pr = a.play();
   if (pr && pr.catch) pr.catch(fallback);
@@ -7193,7 +7203,7 @@ function _marketWords(t) {
 }
 // 2026-10-22 (user): keep it to about 30 spoken words a minute. Routine lines that would go over are dropped; urgent
 // ones (calls locking, flip alerts, the 10-second check-in, test buttons) always play.
-const VOICE_WORDS_PER_MIN = 30;
+const VOICE_WORDS_PER_MIN = 70;      // 2026-10-23 (user): talk more - minute check-ins + big order alerts
 const voiceSaid = [];          // [time, words]
 function _voiceBudgetOk(item) {
   const now = Date.now();
@@ -7492,8 +7502,8 @@ function updateFlipWatch() {
       const coin = name === 'BTC' ? 'Bitcoin' : name;
       const callWord = callName === 'sealed' ? 'the sealed call' : (callName === 'early' ? 'the early call' : 'the call');
       const state = (goingUp ? 'U' : 'D') + (withCall === null ? '' : (withCall ? 'w' : 'a'));
-      // plain English (user, 2026-10-22): "looking good" / "going the other way", never "against the call"
-      const how = withCall === null ? 'heading ' + (goingUp ? 'up' : 'down') : (withCall ? 'looking good' : 'going the other way');
+      // 2026-10-23 (user): "when it says our side just say if it's up or down with the call or against"
+      const how = (goingUp ? 'up' : 'down') + (withCall === null ? '' : (withCall ? ', with the call' : ', against the call'));
       if (!w.said10 && left <= 10) {
         w.said10 = true; w.lastSpoke = now; w.lastState = state;
         speak(coin + ', ten seconds, ' + how + '.', true, 8000);
@@ -7503,8 +7513,8 @@ function updateFlipWatch() {
       } else if (state !== w.lastState && w.lastState !== null && now - w.lastSpoke >= WATCH_EVERY_MS) {
         w.lastSpoke = now; w.lastState = state;
         // the market really switched sides -> THIS is the only spoken "flip"
-        if (withCall === false) speakUrgent(coin + ' is flipping ' + (goingUp ? 'up' : 'down') + '.', 0);
-        else speak(coin + (withCall === null ? ' now ' + how : ' is back on our side') + '.', false, 15000);
+        if (withCall === false) speakUrgent(coin + ' is flipping ' + how + '.', 0);
+        else speak(coin + ' going ' + how + '.', false, 15000);
       } else if (w.lastState === null) {
         w.lastState = state;                       // the flip alert itself already said this
       }
@@ -8004,6 +8014,84 @@ function showIncomingBanner(name, side, usd, head, detail) {
   el._t = setTimeout(() => el.remove(), 10000);
 }
 const alertedIncoming = new Set();
+// ---- 2026-10-23 (user): "the voice should talk more - every minute is good, or an alert for high buy / sell orders that
+// affect the flip radar". (1) a check-in every minute per coin (coins staggered 30s apart), (2) a spoken alert when a big
+// aggressive buy / sell burst lands or the flip radar jumps 15+ points in 20 seconds - saying which way and whether it is
+// with or against the call.
+const MINUTE_MS = 60000, RADAR_JUMP = 15, ORDER_GAP_MS = 25000;
+const minuteSaid = {}, radarHist = {}, orderSaid = {}, coinSpoke = {};
+function _radarInfo(name) {
+  let el = null;
+  document.querySelectorAll('.flip-chance-value[data-flip-src="radar"]').forEach(e => { if ((e.getAttribute('data-flip-chance-key') || '').split('::')[0] === name) el = e; });
+  if (!el) return null;
+  const callName = el.getAttribute('data-call-name') || 'none', call = el.getAttribute('data-call');
+  const real = (callName === 'sealed' || callName === 'early' || callName === 'bot') && (call === 'YES' || call === 'NO');
+  return { pct: parseFloat(el.getAttribute('data-flip-chance-pct')), left: parseInt(el.getAttribute('data-left') || '0', 10),
+           above: el.getAttribute('data-above') === '1', call: real ? call : null, callName,
+           say: el.getAttribute('data-say') || '', crosses: parseInt(el.getAttribute('data-crosses') || '0', 10),
+           round: (el.getAttribute('data-flip-chance-key') || '').split('::').slice(0, 2).join('::') };
+}
+function _coinWord(n) { return n === 'BTC' ? 'Bitcoin' : n; }
+function _riskWord(p) { return p >= 70 ? 'critical' : (p >= 45 ? 'high' : (p >= 20 ? 'watch' : 'low')); }
+function minuteCheckins() {
+  if (!soundEnabled || !voiceAlertsEnabled) return;
+  const now = Date.now();
+  ['BTC', 'XRP'].forEach((name, i) => {
+    if (assetSoundEnabled[name] === false) return;
+    const r = _radarInfo(name);
+    if (!r || isNaN(r.pct) || r.left <= 20) return;
+    if (minuteSaid[name] === undefined) { minuteSaid[name] = now - MINUTE_MS + 15000 + i * 30000; return; }   // first one ~15s / 45s in
+    if (now - minuteSaid[name] < MINUTE_MS) return;
+    if (now - (coinSpoke[name] || 0) < 20000) { minuteSaid[name] = now - MINUTE_MS + 20000; return; }      // just talked about it
+    minuteSaid[name] = now;
+    const mins = Math.round(r.left / 60), when = mins >= 1 ? mins + (mins === 1 ? ' minute' : ' minutes') + ' left' : r.left + ' seconds left';
+    const goingUp = r.above;
+    let line = _coinWord(name) + ', ' + when + '. ';
+    if (r.call) {
+      const withCall = (r.call === 'YES') === goingUp;
+      line += (goingUp ? 'Up' : 'Down') + (withCall ? ', with the call.' : ', against the call.');
+    } else {
+      line += 'Price ' + (goingUp ? 'above' : 'below') + ' the line, no call yet.';
+    }
+    line += ' Flip risk ' + Math.round(r.pct) + ' percent, ' + _riskWord(r.pct) + '.';
+    if (r.pct >= 30 && r.say) line += ' ' + r.say.charAt(0).toUpperCase() + r.say.slice(1) + '.';
+    else if (r.crosses >= 2) line += ' ' + r.crosses + ' line crosses.';
+    coinSpoke[name] = now;
+    speak(line, false, 20000);
+  });
+}
+function radarJumpAlerts() {
+  if (!soundEnabled || !voiceAlertsEnabled) return;
+  const now = Date.now();
+  ['BTC', 'XRP'].forEach(name => {
+    if (assetSoundEnabled[name] === false) return;
+    const r = _radarInfo(name);
+    if (!r || isNaN(r.pct)) return;
+    const h = radarHist[name] = (radarHist[name] && radarHist[name].round === r.round) ? radarHist[name] : { round: r.round, pts: [] };
+    h.pts.push([now, r.pct]);
+    while (h.pts.length && now - h.pts[0][0] > 20000) h.pts.shift();
+    const low = Math.min(...h.pts.map(x => x[1]));
+    if (r.left <= 10 || r.pct - low < RADAR_JUMP || r.pct < 30 || now - (orderSaid[name] || 0) < ORDER_GAP_MS) return;
+    orderSaid[name] = now; coinSpoke[name] = now; h.pts = [[now, r.pct]];
+    const dir = r.call ? (r.call === 'YES' ? 'the up call' : 'the down call') : 'price';
+    speak(_coinWord(name) + ' flip risk jumped to ' + Math.round(r.pct) + ' percent against ' + dir + (r.say ? ': ' + r.say : '') + '.', r.pct >= 45, 12000);
+  });
+}
+function _orderVoice(name, side, usd) {
+  if (!soundEnabled || !voiceAlertsEnabled || assetSoundEnabled[name] === false) return;
+  const now = Date.now();
+  if (now - (orderSaid[name] || 0) < ORDER_GAP_MS) return;
+  const r = _radarInfo(name);
+  const up = side === 'buy';
+  let tail = '';
+  if (r && r.call) tail = ((r.call === 'YES') === up ? ', with the call' : ', against the call');
+  if (r && !isNaN(r.pct)) tail += '. Flip risk ' + Math.round(r.pct) + ' percent';
+  orderSaid[name] = now; coinSpoke[name] = now;
+  const against = r && r.call && ((r.call === 'YES') !== up);
+  speak(_coinWord(name) + ', big ' + (up ? 'buy' : 'sell') + ' orders, ' + spokenUsd(usd) + ', pushing ' + (up ? 'up' : 'down') + tail + '.', !!against, 12000);
+}
+setInterval(() => { if (!document.hidden) { try { minuteCheckins(); } catch (e) {} try { radarJumpAlerts(); } catch (e) {} } }, 1000);
+
 function checkIncomingAlerts() {
   document.querySelectorAll('.incoming-alert').forEach(el => {
     const name = el.getAttribute('data-name'), side = el.getAttribute('data-side'), key = el.getAttribute('data-key');
@@ -8013,6 +8101,7 @@ function checkIncomingAlerts() {
     showIncomingBanner(name, side, usd, 'INCOMING ' + side.toUpperCase(),
       fmtUsdShort(usd) + ' of aggressive ' + (side === 'buy' ? 'BUYING' : 'SELLING') + ' in the last 10 seconds across ' +
       el.getAttribute('data-venues') + ' exchanges (biggest: ' + el.getAttribute('data-top') + ') - ahead of the chart');
+    try { _orderVoice(name, side, usd); } catch (e) {}
     if (LEGACY_SOUNDS && soundEnabled && assetSoundEnabled[name] !== false) {
       playWhaleSound(side); playWallAlert(side);
       speak(name + '. Incoming ' + side + '. ' + spokenUsd(usd) + '.', false, 12000);      // budgeted (2026-10-22)
@@ -8879,7 +8968,7 @@ function tickClocks() {
 setInterval(tickClocks, 250);
 setTimeout(refreshLoop, 1000);
 window.onload = function() {
-  updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); updateSoundButtons(); try { const vp = document.getElementById('voice-pick'); if (vp) vp.value = neuralVoice; } catch (e) {}
+  updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); updateSoundButtons(); try { syncVoicePick(); } catch (e) {}
   let wantedSound = false;
   try { wantedSound = localStorage.getItem('soundWanted') === '1'; } catch (e) {}
   if (wantedSound && !soundEnabled) {
@@ -9263,15 +9352,17 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button id="toggle-voice" onclick="toggleVoiceAlerts()">Voice alerts: ON</button>
       <label style="color:#bcaaa1; font-size:13px; margin:0 6px 0 4px;">Voice
         <select id="voice-pick" onchange="setNeuralVoice(this.value)" style="background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit;">
-          <option value="ava">Ava (natural)</option><option value="snoop">Snoop (laid-back)</option>
-          <option value="sarge">Sarge (drill sergeant)</option><option value="caller">Caller (clear + fast, for calls)</option><option value="device">This device's voice</option>
+          <option value="ava">Ava (natural)</option><option value="sarge">Sarge (shouting drill sergeant)</option>
+          <option value="device">This device's voice</option>
         </select></label>
       <br>
       <button onclick="speakRaw('Bitcoin call update: under pressure.')">Test call update</button>
       <button onclick="speakRaw('XRP is flipping down.')">Test flip alert</button>
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent.'),650)">Test sealed call</button>
-      <button onclick="speakRaw('Bitcoin, ninety seconds, looking good.')">Test 90-second check-in</button>
+      <button onclick="speakRaw('Bitcoin, ninety seconds, up, with the call.')">Test 90-second check-in</button>
+      <button onclick="speakRaw('Bitcoin, 6 minutes left. Up, with the call. Flip risk 34 percent, watch. Rejected at resistance, MACD bearish.')">Test minute check-in</button>
+      <button onclick="speakRaw('XRP, big sell orders, 1.2 million dollars, pushing down, against the call. Flip risk 52 percent.')">Test big order alert</button>
       <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
       <button onclick="speakRaw('XRP is a toss-up, 2 minutes left. It just crossed the line.')">Test late toss-up</button>
       <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Bitcoin whales: 2.4 million bought, 600 thousand sold, mostly buying, with the call.'),1300)">Test whale BUY (cha-ching)</button>
@@ -11318,6 +11409,172 @@ def _lerp(x, x0, x1, y0, y1):
     return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
 
 
+# ---- 2026-10-23 (user): "factor in the rejections and holds on the support channels from the chart, the line crosses, MACD
+# and RSI". The same support / resistance zones the live chart shades (lwLevels in the page: swing highs / lows clustered into
+# tight $ bands, "Rejected N times" / "Held N times"), plus RSI(14) and MACD(12,26,9) on the same 1-minute candles. Re-read at
+# most every 5 seconds per coin, so the radar costs nothing extra on the 1-second refresh.
+_chart_cache = {}
+
+
+def _wilder_rsi(cl, n=14):
+    if len(cl) < n + 2:
+        return None, None
+    g = l = 0.0
+    for i in range(1, n + 1):
+        d_ = cl[i] - cl[i - 1]
+        g += max(d_, 0); l += max(-d_, 0)
+    g /= n; l /= n
+    out = []
+    for i in range(n + 1, len(cl)):
+        d_ = cl[i] - cl[i - 1]
+        g = (g * (n - 1) + max(d_, 0)) / n
+        l = (l * (n - 1) + max(-d_, 0)) / n
+        out.append(100.0 if l == 0 else 100 - 100 / (1 + g / l))
+    if len(out) < 4:
+        return None, None
+    return out[-1], out[-4]
+
+
+def _ema_series(vals, n):
+    k = 2 / (n + 1)
+    e, out = vals[0], []
+    for v in vals:
+        e = v * k + e * (1 - k)
+        out.append(e)
+    return out
+
+
+def _sr_zones(B):
+    """Python twin of the chart's lwLevels: nearest resistance + support bands with their touch counts."""
+    n = len(B)
+    if n < 30:
+        return [], 0.0
+    px = B[-1][4]
+    atr = sum(b[2] - b[3] for b in B[-20:]) / 20
+    piv = []
+    for i in range(2, n - 2):
+        hi = all(B[j][2] < B[i][2] for j in range(i - 2, i + 3) if j != i)
+        lo = all(B[j][3] > B[i][3] for j in range(i - 2, i + 3) if j != i)
+        if hi:
+            piv.append(B[i][2])
+        if lo:
+            piv.append(B[i][3])
+    tol, minw = max(atr * 0.5, px * 0.00025), max(atr * 0.35, px * 0.0001)
+    maxw = max(atr * 1.1, minw * 2)
+    zones = []
+    for p_ in sorted(piv):
+        z = next((z for z in zones if p_ - z["hi"] <= tol and p_ - z["lo"] <= maxw), None)
+        if z:
+            z["hi"] = max(z["hi"], p_); z["n"] += 1
+        else:
+            zones.append({"lo": p_, "hi": p_, "n": 1})
+    for z in zones:
+        if z["hi"] - z["lo"] < minw:
+            m = (z["hi"] + z["lo"]) / 2
+            z["lo"], z["hi"] = m - minw / 2, m + minw / 2
+        z["mid"] = (z["lo"] + z["hi"]) / 2
+    res = sorted([z for z in zones if z["mid"] > px], key=lambda z: z["mid"])
+    sup = sorted([z for z in zones if z["mid"] <= px], key=lambda z: -z["mid"])
+    pick = lambda L: ([z for z in L if z["n"] >= 2] or L)[:2]
+    out = [dict(z, r=True) for z in pick(res)] + [dict(z, r=False) for z in pick(sup)]
+    return out, atr
+
+
+def chart_read(name):
+    """{"rsi", "rsi_prev", "hist", "hist_prev", "macd", "zones", "atr", "last"} from 1-minute candles, or None."""
+    now = time.time()
+    c = _chart_cache.get(name)
+    if c and now - c[0] < 5:
+        return c[1]
+    out = None
+    try:
+        sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
+        cs = _mtf.books[sym].series(60, 180) if (_mtf is not None and sym in _mtf.books) else None
+        if cs and len(cs) >= 40:
+            cl = [x[4] for x in cs]
+            r, rp = _wilder_rsi(cl)
+            m = [a - b for a, b in zip(_ema_series(cl, 12), _ema_series(cl, 26))]
+            sg = _ema_series(m, 9)
+            h = [a - b for a, b in zip(m, sg)]
+            zones, atr = _sr_zones(cs)
+            out = {"rsi": r, "rsi_prev": rp, "hist": h[-1], "hist_prev": h[-3], "macd": m[-1], "zones": zones,
+                   "atr": atr, "last": cs[-4:]}
+    except Exception as e:
+        print(f"[chart_read] {name}: {e!r}")
+    _chart_cache[name] = (now, out)
+    return out
+
+
+def flip_chart_part(name, call_sign, spot, line):
+    """Points (-15..+25) the chart adds to the flip score, plus (weight, driver text, spoken words) tuples."""
+    cr = chart_read(name)
+    if not cr or not spot or not line:
+        return 0.0, [], {}
+    pts, why = 0.0, []
+    dec = 4 if name == "XRP" else 2
+    atr = cr["atr"] or spot * 0.0005
+    last = cr["last"]
+    # --- support / resistance: the zone that defends the call (between price and the line) and the ceiling / floor in its way
+    for z in cr["zones"]:
+        defends = (not z["r"]) if call_sign > 0 else z["r"]       # support under an UP call, resistance over a DOWN call
+        z_txt = f'{fmt_price(z["lo"], dec)}-{fmt_price(z["hi"], dec)}'
+        between = (line < z["mid"] < spot) if call_sign > 0 else (spot < z["mid"] < line)
+        if defends and between and z["n"] >= 2:
+            held_now = any((b[3] <= z["hi"] and b[4] > z["hi"]) if call_sign > 0 else (b[2] >= z["lo"] and b[4] < z["lo"]) for b in last)
+            v = -min(12.0, 4 + 2 * z["n"] + (4 if held_now else 0))
+            pts += v
+            why.append((v, f'{"support" if call_sign > 0 else "resistance"} {z_txt} {"held" if call_sign > 0 else "rejected"} {z["n"]}x between price and the line'
+                           + ((" (just held again)" if call_sign > 0 else " (just rejected again)") if held_now else ""),
+                        f'{"support" if call_sign > 0 else "resistance"} holding above the line' if call_sign > 0 else "resistance holding below the line"))
+        elif defends and not between:
+            # the defending zone was just broken toward the line
+            broke = any((b[4] < z["lo"]) if call_sign > 0 else (b[4] > z["hi"]) for b in last[-2:]) and z["n"] >= 2 \
+                and abs(spot - z["mid"]) <= 1.5 * atr
+            if broke:
+                v = min(12.0, 5 + 1.5 * z["n"])
+                pts += v
+                why.append((v, f'{"support" if call_sign > 0 else "resistance"} {z_txt} just broke ({z["n"]}x level)',
+                            f'{"support" if call_sign > 0 else "resistance"} just broke'))
+        elif not defends and abs(spot - z["mid"]) <= 2.5 * atr:
+            # the opposing zone near price: a fresh rejection there (wick in, close back out) turns price back toward the line
+            rej = any((b[2] >= z["lo"] and b[4] < z["lo"]) if call_sign > 0 else (b[3] <= z["hi"] and b[4] > z["hi"]) for b in last)
+            if rej:
+                v = min(14.0, 6 + 2 * z["n"])
+                pts += v
+                why.append((v, f'{"rejected at resistance" if call_sign > 0 else "bounced off support"} {z_txt} ({z["n"]}x level)',
+                            "rejected at resistance" if call_sign > 0 else "bounced off support"))
+            elif z["n"] >= 2 and abs(spot - z["mid"]) <= 1.2 * atr:
+                pts += 3
+                why.append((3, f'{"ceiling" if call_sign > 0 else "floor"} right {"above" if call_sign > 0 else "below"} at {z_txt} ({z["n"]}x)', ""))
+    # --- RSI (1-minute, Wilder 14)
+    r, rp = cr["rsi"], cr["rsi_prev"]
+    if r is not None:
+        stretched = r >= 70 if call_sign > 0 else r <= 30
+        if stretched:
+            v = _lerp(abs(r - 50), 20, 35, 4, 10)
+            pts += v
+            why.append((v, f'RSI {r:.0f} {"overbought" if call_sign > 0 else "oversold"}', f'R S I {"overbought" if call_sign > 0 else "oversold"}'))
+        if rp is not None and (rp - r) * call_sign >= 6:
+            pts += 4
+            why.append((4, f'RSI turning {"down" if call_sign > 0 else "up"} ({rp:.0f} -> {r:.0f})', f'R S I turning {"down" if call_sign > 0 else "up"}'))
+    # --- MACD (12,26,9) histogram
+    h, hp = cr["hist"], cr["hist_prev"]
+    rel = abs(h) / spot
+    if rel >= 0.000005:
+        against = (h * call_sign) < 0
+        growing = abs(h) > abs(hp) and (h * hp) > 0
+        if against:
+            v = _lerp(rel, 0.000005, 0.00008, 2, 8) + (2 if growing else 0)
+            pts += v
+            why.append((v, f'MACD {"bearish" if call_sign > 0 else "bullish"}{" and widening" if growing else ""}',
+                        f'MACD {"bearish" if call_sign > 0 else "bullish"}'))
+        elif growing:
+            pts -= 3
+            why.append((-3, f'MACD backing the call', ""))
+    pts = max(-15.0, min(25.0, pts))
+    return pts, why, {"rsi": r, "hist": h}
+
+
 def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, crosses=0, events=None, ticker=None):
     """call_sign: +1 the call is UP, -1 DOWN. Returns {"score", "tier", "cls", "parts", "drivers", "opp_share", "toward"}."""
     if not spot or not line or call_sign not in (1, -1):
@@ -11412,6 +11669,16 @@ def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, cros
             book = -_lerp(sup, 0.52, 0.65, 2, 15)
             drivers.append((book, f'{sup:.0%} {"bid" if call_sign > 0 else "ask"} walls defending ({bn} books)'))
     parts["book"] = round(book, 1)
+    # ---- 4. chart: support / resistance holds + rejections, RSI, MACD (2026-10-23)
+    chart, cwhy, _cread = flip_chart_part(name, call_sign, spot, line)
+    parts["chart"] = round(chart, 1)
+    say = []
+    for w_, txt_, sp_ in cwhy:
+        drivers.append((w_, txt_))
+        if sp_ and w_ > 0:
+            say.append((w_, sp_))
+    if opp_share is not None and opp_share >= 0.6 and mom >= 12:
+        say.append((mom, f'{"sellers" if call_sign > 0 else "buyers"} in control'))
     # ---- pace + time
     pace = None
     try:
@@ -11420,7 +11687,7 @@ def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, cros
             pace = vg["total"] / vg["median"]
     except Exception:
         pass
-    raw = mom + cush + cx + book
+    raw = mom + cush + cx + book + chart
     pf = min(1.35, max(0.75, pace)) if pace else 1.0
     score = max(0.0, raw) * pf
     tf = 1.0
@@ -11448,6 +11715,7 @@ def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, cros
         drivers.append((0, f'market pace {pace:.1f}x normal'))
     return {"score": score, "tier": tier, "cls": cls, "parts": parts, "pace": pace, "opp_share": opp_share,
             "toward": toward, "wrong_side": wrong_side, "dist_pct": dist,
+            "say": [t for _w, t in sorted(say, key=lambda z: -z[0])][:2],
             "drivers": [t for _w, t in sorted(drivers, key=lambda z: -abs(z[0]))]}
 
 
@@ -11602,10 +11870,6 @@ def build_flip_radar(name, d):
     rm = d.get("rsi_multi") or {}
     r1 = rm.get("rsi1")
     extra = []
-    if r1 is not None and call == "YES" and r1 >= 70:
-        extra.append(f"RSI {r1:.0f} overbought")
-    if r1 is not None and call == "NO" and r1 <= 30:
-        extra.append(f"RSI {r1:.0f} oversold")
     if _ENG.recent_kind(name, ("stoprun",), side=("sell" if call == "YES" else "buy"), within=240):
         extra.append("fake breakout against it")
     drv = extra + fr["drivers"][:4]
@@ -11619,13 +11883,14 @@ def build_flip_radar(name, d):
         spike = f'<div class="fr-txt hint">spiking to {fr["raw"]:.0f}%</div>'
     p = fr["parts"]
     tip = (f'momentum {p["momentum"]:+.0f} &middot; cushion {p["cushion"]:+.0f} &middot; crosses {p["crosses"]:+.0f} &middot; '
-           f'book walls {p["book"]:+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
+           f'book walls {p["book"]:+.0f} &middot; chart {p.get("chart", 0):+.0f}' + (f' &middot; pace {fr["pace"]:.2f}x' if fr.get("pace") else ""))
     _cname = key or ("bot" if which == "the bot's call" else "none")
     marker = (f'<span class="flip-chance-value" data-flip-src="radar" data-flip-chance-key="{name}::{d.get("ticker", "")}{("::" + key) if key else ""}" '
               f'data-flip-chance-pct="{pct:.2f}" data-k-opp="{(((1 - kp) if call == "YES" else kp) if kp is not None else -1):.3f}" '
               f'data-call="{call}" data-call-name="{_cname}" '
               f'data-kup="{kp if kp is not None else -1:.3f}" data-left="{int(d.get("seconds_left") or 0)}" '
-              f'data-above="{1 if spot >= line else 0}" style="display:none;"></span>')
+              f'data-above="{1 if spot >= line else 0}" data-say="{_html_attr(", ".join(fr.get("say") or []))}" '
+              f'data-crosses="{int(ls.get("crosses") or 0)}" style="display:none;"></span>')
     _early_in = bool(((d.get("stage_calls") or {}).get("early") or {}).get("call"))     # 2026-10-22 (user)
     return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
             f'<div class="fr-big {cls}">{pct:.0f}% <span>{level}</span></div>'
@@ -13877,16 +14142,8 @@ def render_html():
 # 2026-10-22 (user): only Ava + Snoop + Sarge (drill sergeant) + Caller (clear, proper, fast, demanding - for the calls).
 # Real human voices come from Speechify (or ElevenLabs) when their key + voice ID are set in Railway - see _speechify_voice.
 _TTS_VOICES = {"ava": "en-US-AvaNeural",
-               "snoop": "en-US-GuyNeural",          # free fallback: deep, laid-back - the real one needs a Speechify voice ID
-               "caller": "en-US-AndrewNeural",      # crisp, proper, fast
-               # 2026-10-22 (b, user: "didn't sound like a drill sergeant or a Bronx New York accent ... aggressive, loud,
-               # clear, quicker, manly, sometimes sounds angry but really kind"). Microsoft's free neural voices have no real
-               # NYC accent and no shouting style, so the character comes from: a gruffer voice, faster + deeper + louder
-               # delivery, every line rewritten in the persona's words (_persona below), and a compressor + boost in the page.
-               "sarge": "en-US-ChristopherNeural"}
-_TTS_STYLE = {"snoop": {"rate": "-8%", "pitch": "-14Hz", "volume": "+20%"},     # slow, low, laid-back
-              "sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"},
-              "caller": {"rate": "+18%", "pitch": "-3Hz", "volume": "+35%"}}     # fast, clear, firm
+               "sarge": "en-US-ChristopherNeural"}   # only used if the real Sarge voice errors out mid-round
+_TTS_STYLE = {"sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"}}
 _NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b", "'bout"), (r"\bAlright\b", "Awright"),
              (r"\b(go|head|mov|flipp|hold|look|build|com|tell|buy|sell|runn|push|turn|hang|watch|bring|happen|mak|stay|get|tak|break)ing\b", r"\1in'"),
              (r"\byour\b", "ya"), (r"\byou\b", "ya"), (r"\bsure\b", "shuah"), (r"\bhere\b", "heah"), (r"\bover\b", "ovah"),
@@ -13939,17 +14196,26 @@ def _speechify_mp3(text, voice_id):
 
 def _eleven_mp3(text, voice_id, key):
     import requests as _rq
-    st = {"snoop": {"stability": 0.45, "similarity_boost": 0.85, "style": 0.45, "use_speaker_boost": True},
-          "sarge": {"stability": 0.30, "similarity_boost": 0.80, "style": 0.75, "use_speaker_boost": True},
-          "caller": {"stability": 0.55, "similarity_boost": 0.80, "style": 0.35, "use_speaker_boost": True}}.get(key, {})
+    if key == "sarge":
+        # 2026-10-23 (user: "a real military drill sergeant who's shouting"): Eleven v3 reads audio tags, so every line is
+        # delivered as a bark. Stability 0.0 = "creative", the most expressive / loudest delivery v3 allows.
+        model = os.environ.get("ELEVENLABS_SARGE_MODEL", "eleven_v3")
+        body = {"text": "[shouts] " + text, "model_id": model, "voice_settings": {"stability": 0.0}}
+    else:
+        st = {"ava": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.2, "use_speaker_boost": True}}.get(key, {})
+        body = {"text": text, "model_id": os.environ.get("ELEVENLABS_MODEL", "eleven_turbo_v2_5"), "voice_settings": st}
     r = _rq.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128",
                  headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json"},
-                 json={"text": text, "model_id": os.environ.get("ELEVENLABS_MODEL", "eleven_turbo_v2_5"), "voice_settings": st},
-                 timeout=12)
+                 json=body, timeout=20)
     r.raise_for_status()
     if len(r.content) < 500:
         raise RuntimeError("empty audio")
     return r.content
+
+
+def _sarge_real():
+    """True when Sarge has a real (ElevenLabs or Speechify) voice set in Railway - only then is he offered on the page."""
+    return bool(_eleven_voice("sarge") or _speechify_voice("sarge"))
 
 
 def _persona(text, key, respell=True):
@@ -13993,7 +14259,9 @@ def _tts_mp3(text, voice_key):
     text = " ".join((text or "").split())
     if not _TTS_OK.match(text):
         return None
-    voice = _TTS_VOICES.get(voice_key, _TTS_VOICES["ava"])
+    if voice_key not in _TTS_VOICES or (voice_key == "sarge" and not _sarge_real()):
+        voice_key = "ava"
+    voice = _TTS_VOICES[voice_key]
     style = _TTS_STYLE.get(voice_key, {})
     _sv = _speechify_voice(voice_key)
     if _sv:
@@ -16223,7 +16491,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _pend = sum(1 for u_ in _auth.DB["users"].values() if u_.get("status") == "pending") if user.get("role") == "owner" else 0
             _own = "true" if user.get("role") == "owner" else "false"
             body = (PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json())
-                    .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';', 1)
+                    .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';window.SARGE_REAL = ' + ('true' if _sarge_real() else 'false') + ';', 1)
                     .replace('</header>', '</header>' + _site.app_tabs(user, "live", _pend), 1)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
