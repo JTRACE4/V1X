@@ -117,3 +117,9 @@ UPDATE 2026-10-23 (b) - voice clarity pass
   0.03%+ toward the line in 30s with 55%+ of the tape behind it. A "Why:" line shows on the radar in that case.
 - Big buying/selling bursts are spoken only when live price is moving the same way; whale totals no longer add verdicts.
 - "Under pressure" line removed; side switch said as "now down, against the call"; calls say "84 percent sure".
+
+UPDATE 2026-10-23 (c) - CHART ONLY pass
+- New pass: Chart Only, 3.5 months (105 days), $35, one-time. Opens /app with just the live BTC + XRP charts (indicators,
+  "What do these mean?", chart patterns). No calls, flip radar, scoreboard, alerts, voice or Playbook.
+- Time is kept in user["chart_until"] (separate from the full pass). Admin shows CHART ONLY, and "Give days" has a BRAIN / Chart Only pick.
+- Stripe: created automatically with the other passes when STRIPE_SECRET_KEY is set (or set STRIPE_LINK_CHART).

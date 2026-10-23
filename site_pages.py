@@ -373,7 +373,7 @@ ADMIN_CSS = r"""
 .adm table{width:100%;border-collapse:collapse;font-size:14px}.adm td,.adm th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .adm form{display:inline}.adm .b{padding:6px 12px;border-radius:999px;border:0;font-weight:800;cursor:pointer}
 .b.ok{background:var(--up);color:var(--ink)}.b.no{background:var(--down);color:#fff}.b.n{background:#3a2e3c;color:var(--text)}
-.adm .card{margin-top:14px}.tag{font-size:11px;font-weight:900;padding:2px 7px;border-radius:999px;background:#3a2e3c}.st{display:inline-block;font-size:11px;font-weight:900;letter-spacing:1px;padding:3px 8px;border-radius:999px;margin-bottom:4px}.st-on{background:rgba(61,214,156,.18);color:#3dd69c}.st-pend{background:rgba(233,180,90,.18);color:#e9b45a}.st-off{background:rgba(240,84,84,.18);color:#f05454}
+.adm .card{margin-top:14px}.tag{font-size:11px;font-weight:900;padding:2px 7px;border-radius:999px;background:#3a2e3c}.st{display:inline-block;font-size:11px;font-weight:900;letter-spacing:1px;padding:3px 8px;border-radius:999px;margin-bottom:4px}.st-on{background:rgba(61,214,156,.18);color:#3dd69c}.st-pend{background:rgba(233,180,90,.18);color:#e9b45a}.st-off{background:rgba(240,84,84,.18);color:#f05454}.st-chart{background:rgba(110,170,230,.18);color:#8fc4f0}
 """
 
 
@@ -406,11 +406,18 @@ def admin_page(user, db, email_on, flash="", reset_links=None, kalshi=None):
                 _w = (__import__("datetime").datetime.fromtimestamp(au, _et).strftime("%b %d %-I:%M %p ET") if _et else
                       time.strftime("%b %d %H:%M", time.localtime(au)))
                 st, pas = '<span class="st st-on">BRAIN ACTIVE</span>', f"until {_w}"
+            elif float(u.get("chart_until") or 0) > time.time():
+                _cu = float(u["chart_until"])
+                _w = (__import__("datetime").datetime.fromtimestamp(_cu, _ET_TZ).strftime("%b %d %-I:%M %p ET") if _ET_TZ else
+                      time.strftime("%b %d %H:%M", time.localtime(_cu)))
+                st, pas = '<span class="st st-chart">CHART ONLY</span>', f"until {_w}"
             else:
                 st, pas = '<span class="st st-pend">PENDING BRAIN</span>', "hasn&rsquo;t paid &middot; no access"
             give = "" if u.get("role") == "owner" else (
                 f'<form method="post" action="/admin"><input type="hidden" name="u" value="{uname}"><input type="hidden" name="a" value="grant">'
-                f'<input name="days" type="number" min="1" max="400" value="7" style="width:64px"> <button class="b ok">Give days</button></form> ')
+                f'<input name="days" type="number" min="1" max="400" value="7" style="width:64px"> '
+                f'<select name="kind" style="padding:5px;border-radius:8px"><option value="full">BRAIN</option><option value="chart">Chart Only</option></select> '
+                f'<button class="b ok">Give days</button></form> ')
             rows_a.append(f'<tr><td><b>{uname}</b> <span class="tag">{E(u.get("role", ""))}</span><br><span class="mute">{E(u["email"])}</span></td>'
                           f'<td>{st}<br><b>{pas}</b><br><span class="mute">{nd} device{"s" if nd != 1 else ""}</span></td><td>{give}{act}</td></tr>')
     resets = ""
@@ -455,6 +462,8 @@ PRICING_CSS = r"""
 .pr .status{margin:0 0 16px;padding:12px 14px;border-radius:14px;background:rgba(61,214,156,.10);border:1px solid rgba(61,214,156,.35);color:#c9f7e6}
 .pr .status.none{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.15);color:#e9ded8}
 .pr .fine{color:#bcaaa1;font-size:12.5px;margin-top:18px;line-height:1.6}
+.pr .co-h{font-family:Fraunces,Georgia,serif;font-weight:700;color:#fbf4ec;margin:26px 0 10px;font-size:22px}
+.pr .plan.co{max-width:420px}
 """
 
 PLAN_FEATURES = ["Live dashboard: early + sealed calls with BRAIN confidence", "Spoken alerts, flip watch, cash-out + coin-flip notes",
@@ -462,17 +471,37 @@ PLAN_FEATURES = ["Live dashboard: early + sealed calls with BRAIN confidence", "
                  "The BRAIN Playbook (PDF guide to every screen)"]
 
 
-def pricing_page(user, plans, until_text=None, active=False):
-    """plans: [(key, label, price, per_day_text, checkout_url_or_'')]"""
+CHART_FEATURES = ["Live BTC + XRP charts (1m to 1D)", "EMA 12 / 25 / 50, RSI and MACD read in plain words",
+                  "Support + resistance zones (held / rejected counts)", "\"What do these mean?\" indicator guide",
+                  "Chart patterns with their track record", "No BRAIN bot features (calls, flip radar, alerts, voice)"]
+
+
+def pricing_page(user, plans, until_text=None, active=False, chart_until_text=None):
+    """plans: [(key, label, price, per_day_text, checkout_url_or_'')]. Keys starting with "chart" are the Chart Only pass."""
     if user and active:
         status = (f'<div class="status">Your pass is active until <b>{E(until_text or "")}</b>. Buying another adds its days on top. '
                   f'&middot; <a href="/playbook.pdf" style="color:#c9f7e6;font-weight:800">Download your BRAIN Playbook</a></div>')
+    elif user and chart_until_text:
+        status = (f'<div class="status">Your Chart Only pass is active until <b>{E(chart_until_text)}</b>. '
+                  f'&middot; <a href="/app" style="color:#c9f7e6;font-weight:800">Open your charts</a> &middot; upgrade below for the full BRAIN bot.</div>')
     elif user:
         status = '<div class="status none">No active pass yet - pick one below to unlock the live dashboard.</div>'
     else:
         status = '<div class="status none">Create a free account first, then pick a pass.</div>'
-    cards = ""
+    cards = chart_card = ""
     for key, label, price, per, url in plans:
+        if key.startswith("chart"):
+            if not user:
+                cbtn = '<a class="go" href="/signup">Create account</a>'
+            elif url:
+                cbtn = f'<a class="go" href="{E(url)}">Buy Chart Only</a>'
+            else:
+                cbtn = '<span class="go off">Checkout opening soon</span>'
+            chart_card = (f'<h2 class="co-h">Just the charts</h2><div class="grid"><div class="plan co">'
+                          f'<div class="nm">CHART ONLY &middot; 3.5 MONTHS</div><div class="px">{E(price)}</div>'
+                          f'<div class="per">{E(per)} &middot; one-time, never renews</div>'
+                          + "<ul>" + "".join(f"<li>{E(x)}</li>" for x in CHART_FEATURES) + "</ul>" + cbtn + "</div></div>")
+            continue
         best = key == "105d"
         if not user:
             btn = '<a class="go" href="/signup">Create account</a>'
@@ -486,7 +515,7 @@ def pricing_page(user, plans, until_text=None, active=False):
     body = ((app_tabs(user, "pricing") if user else
              '<div class="top" style="padding:10px 16px"><a class="brand" href="/">' + brain_logo(34, "p") + '<b>BRAIN</b></a></div>')
             + '<div class="pr"><h1>Get BRAIN</h1><p class="lead">Live market intelligence for 15-minute BTC and XRP rounds.</p>'
-            + status + f'<div class="grid">{cards}</div>'
+            + status + f'<div class="grid">{cards}</div>{chart_card}'
             + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Passes are one-time payments and never '
               'renew on their own - we email you 2 days before yours ends. <b>All sales are final, no refunds.</b> Accounts that misuse '
               'the service or put it at risk can be suspended or ended without a refund (see Terms). BRAIN is an information and '

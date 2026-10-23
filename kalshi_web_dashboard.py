@@ -10022,6 +10022,25 @@ _VOL_HELP = ('<details class="vol-help" data-pat="VOLHELP|{a}"><summary>? what i
              'Information only - never used for buying.</span></div></details>')
 
 
+# ---- 2026-10-23 (user): CHART ONLY pass ($35, 3.5 months) - the live BTC / XRP charts with the indicators, the "What do these
+# mean?" guide and the chart patterns. No BRAIN bot features (no calls, flip radar, scoreboard, alerts or voice).
+CHART_ONLY_GET = {"/app", "/data", "/chart_patterns"}
+CHART_ONLY_CSS = """
+body.chart-only .view-bar, body.chart-only .sound-bar, body.chart-only #snd-toggle, body.chart-only #wr-badge,
+body.chart-only #wr-panel, body.chart-only #vol-warn { display:none !important; }
+.co-wrap { max-width:1100px; margin:0 auto; padding:8px 12px 40px; display:grid; gap:18px; }
+.co-note { color:#d6cac4; font-size:13.5px; padding:10px 14px; border-radius:14px; background:rgba(30,46,50,.42);
+  border:1px solid rgba(255,255,255,.14); }
+.co-note a { color:#e9a5bb; font-weight:800; }
+"""
+
+
+def chart_only_html():
+    return ('<div class="co-wrap"><div class="co-note">Chart Only pass &middot; live charts, indicators and chart patterns. '
+            'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN passes</a></div>'
+            + "".join(build_pattern_window(a["name"]) for a in DASHBOARD_ASSETS if a["name"] in LIVE_ASSETS) + '</div>')
+
+
 def build_pattern_window(asset_name):
     """2026-10-22 (user): the same zoomable live chart as the free page, with RSI + MACD read in its corner and, under it,
     only the patterns that are 80%+ formed or finished AND have a proven track record. The chart is drawn in the browser
@@ -15722,7 +15741,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             plans = [(k, lab, (f"${c // 100:,}" if c % 100 == 0 else f"${c / 100:,.2f}"), f"${c / 100 / d:,.2f}/day", _bill.checkout_url(k, user))
                      for k, (d, c, lab) in _bill.PASSES.items()]
             act = _bill.has_access(user) and user.get("role") != "owner"
-            return self._send(200, _site.pricing_page(user, plans, _bill.fmt_until(_bill.access_until(user)) if act else None, act))
+            _co = _bill.chart_only(user) and user.get("role") != "owner"
+            return self._send(200, _site.pricing_page(user, plans, _bill.fmt_until(_bill.access_until(user)) if act else None, act,
+                                                      chart_until_text=_bill.fmt_until(_bill.chart_until(user)) if _co else None))
         if path == "/login":
             if user:
                 return self._redirect(_safe_next(q("next")))
@@ -15898,8 +15919,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     _days = max(1, min(400, int(f.get("days") or 0)))
                 except ValueError:
                     _days = 0
-                _gu = _bill.grant_days(un, _days, why="admin gift") if _days else None
-                flash = f"Gave {un} {_days} days - access until {_bill.fmt_until(_gu['access_until'])}." if _gu else "Couldn't give days."
+                _fld = "chart_until" if f.get("kind") == "chart" else "access_until"
+                _gu = _bill.grant_days(un, _days, why="admin gift", field=_fld) if _days else None
+                flash = (f"Gave {un} {_days} {'Chart Only ' if _fld == 'chart_until' else ''}days - until {_bill.fmt_until(_gu[_fld])}."
+                         if _gu else "Couldn't give days.")
             elif a == "kalshi_save":
                 _ok, flash = _kalshi_key_save(f.get("key_id"), f.get("pem"))
             elif a == "kalshi_remove":
@@ -15964,7 +15987,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if parsed.path in OWNER_ONLY and user.get("role") != "owner":
             return self._send(403, "Owner only.", "text/plain")
         # 2026-10-22: the live dashboard needs an active pass (the owner always has access)
-        if not _bill.has_access(user) and parsed.path not in ("/guide",):
+        # 2026-10-23: a Chart Only pass opens just the live charts (the page shell, its data and the chart patterns)
+        _chart_only = _bill.chart_only(user) and user.get("role") != "owner"
+        if not _bill.has_access(user) and parsed.path not in ("/guide",) and not (_chart_only and parsed.path in CHART_ONLY_GET):
             if "text/html" in (self.headers.get("Accept") or ""):
                 return self._redirect("/pricing")
             return self._json({"error": "pass required", "pricing": "/pricing"}, 402)
@@ -16110,8 +16135,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif parsed.path == "/data":
-            _pg_full, _pg_public, _wr = _cached_page()
-            _html = _pg_full if (user and user.get("role") == "owner") else _pg_public
+            if _chart_only:
+                _html, _wr = chart_only_html(), {}
+            else:
+                _pg_full, _pg_public, _wr = _cached_page()
+                _html = _pg_full if (user and user.get("role") == "owner") else _pg_public
             body = json.dumps({"html": _html, "build": BUILD_ID, "wr": _wr, "now": time.time(),
                                "vol_warn": bool(ON_RAILWAY and not HISTORY_ON_VOLUME)}).encode()
             _send_body(self, body, "application/json")
@@ -16533,8 +16561,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             _pend = sum(1 for u_ in _auth.DB["users"].values() if u_.get("status") == "pending") if user.get("role") == "owner" else 0
             _own = "true" if user.get("role") == "owner" else "false"
+            _co = _bill.chart_only(user) and user.get("role") != "owner"
             body = (PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json())
-                    .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';window.SARGE_REAL = ' + ('true' if _sarge_real() else 'false') + ';', 1)
+                    .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';window.SARGE_REAL = ' + ('true' if _sarge_real() else 'false')
+                             + ';window.CHART_ONLY = ' + ('true' if _co else 'false') + ';', 1)
+                    .replace('<body>', '<body class="chart-only">' if _co else '<body>', 1)
+                    .replace('</head>', ('<style>' + CHART_ONLY_CSS + '</style></head>') if _co else '</head>', 1)
                     .replace('</header>', '</header>' + _site.app_tabs(user, "live", _pend), 1)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")

@@ -1,6 +1,9 @@
 """BRAIN passes - one-time Stripe payments that unlock the live dashboard for a set number of days (added 2026-10-22).
 
   * passes: 10 days $65, 30 days $160, 3.5 months (105 days) $379 (changed 2026-10-23 from 7 days $64.99 / 30 days $165) - one-time, never auto-renew
+  * CHART ONLY (2026-10-23): 3.5 months (105 days) $35 - just the live BTC / XRP charts with the indicators, the "What do these
+    mean?" guide and the chart patterns. No BRAIN bot features. Its time is kept separately in user["chart_until"]; a full pass
+    also includes the chart.
   * a member's access is a single date: user["access_until"] (epoch seconds). Buying adds the pass's days on top of
     whatever time is left. The owner always has access and can give anyone free days from /admin.
   * checkout = Stripe Payment Links (env STRIPE_LINK_10D / STRIPE_LINK_30D / STRIPE_LINK_105D). The site adds
@@ -24,7 +27,11 @@ PASSES = {                      # key -> (days, price in cents, label)
     "10d": (10, 6500, "10 days"),
     "30d": (30, 16000, "30 days"),
     "105d": (105, 37900, "3.5 months"),
+    "chart105": (105, 3500, "Chart Only - 3.5 months"),
 }
+CHART_PASSES = {"chart105"}      # these add to user["chart_until"], not the full BRAIN access
+BOT_PASSES = [k for k in PASSES if k not in CHART_PASSES]
+_LINK_ENV = {"10d": "STRIPE_LINK_10D", "30d": "STRIPE_LINK_30D", "105d": "STRIPE_LINK_105D", "chart105": "STRIPE_LINK_CHART"}
 _BY_AMOUNT = {cents: k for k, (_d, cents, _l) in PASSES.items()}
 REMIND_BEFORE_S = 2 * 86400
 SIG_TOLERANCE_S = 300
@@ -41,7 +48,7 @@ def _auto():
 
 
 def link_for(key):
-    env = os.environ.get({"10d": "STRIPE_LINK_10D", "30d": "STRIPE_LINK_30D", "105d": "STRIPE_LINK_105D"}[key], "")
+    env = os.environ.get(_LINK_ENV[key], "")
     return env or (_auto().get("links") or {}).get(_link_key(key), "")
 
 
@@ -61,6 +68,10 @@ def webhook_secret():
 PRODUCT_DESC = ("Access to the BRAIN live market-data dashboard for {label}, plus the BRAIN Playbook (PDF guide). "
                 "Educational market analysis and information service - not financial advice. One-time payment, "
                 "does not renew. All sales final.")
+CHART_DESC = ("BRAIN Chart Only: the live BTC and XRP charts with indicators (EMA, RSI, MACD, support / resistance zones), the "
+              "plain-English indicator guide and chart patterns with their track record, for 3.5 months (105 days). Does not "
+              "include the BRAIN bot features. Educational market information - not financial advice. One-time payment, does not "
+              "renew. All sales final.")
 
 
 def _stripe(method, path, data=None):
@@ -86,7 +97,8 @@ def ensure_stripe():
     for key, (days, cents, label) in PASSES.items():
         if links.get(_link_key(key)):
             continue
-        prod = _stripe("POST", "products", {"name": f"BRAIN {label} pass", "description": PRODUCT_DESC.format(label=label),
+        desc = CHART_DESC if key in CHART_PASSES else PRODUCT_DESC.format(label=label)
+        prod = _stripe("POST", "products", {"name": f"BRAIN {label} pass", "description": desc,
                                             "metadata[pass]": key, "tax_code": "txcd_10701401"})
         price = _stripe("POST", "prices", {"product": prod["id"], "unit_amount": cents, "currency": "usd",
                                            "metadata[pass]": key})
@@ -128,6 +140,20 @@ def access_until(user):
     return float((user or {}).get("access_until") or 0)
 
 
+def chart_until(user):
+    return float((user or {}).get("chart_until") or 0)
+
+
+def has_chart(user):
+    """The live charts: any full pass, or a Chart Only pass."""
+    return has_access(user) or bool(user and chart_until(user) > time.time())
+
+
+def chart_only(user):
+    """True for a member whose ONLY access is a Chart Only pass."""
+    return bool(user) and not has_access(user) and chart_until(user) > time.time()
+
+
 def has_access(user):
     if not user:
         return False
@@ -140,18 +166,19 @@ def fmt_until(ts):
     return dt.datetime.fromtimestamp(ts, ET).strftime("%b %d, %Y %-I:%M %p ET")
 
 
-def grant_days(username, days, why="admin"):
-    """Add days on top of any time left (or start from now). Returns the user, or None."""
+def grant_days(username, days, why="admin", field="access_until"):
+    """Add days on top of any time left (or start from now). field: "access_until" (full BRAIN) or "chart_until" (Chart Only).
+    Returns the user, or None."""
     with _auth._lock:
         u = _auth.DB["users"].get((username or "").lower())
         if not u:
             return None
-        start = max(time.time(), access_until(u))
-        u["access_until"] = int(start + days * 86400)
-        u.pop("reminded_for", None)
+        start = max(time.time(), float(u.get(field) or 0))
+        u[field] = int(start + days * 86400)
+        u.pop("reminded_for" if field == "access_until" else "chart_reminded_for", None)
         if u.get("status") == "pending":
             u["status"] = "approved"
-        _auth._log(f"access +{days}d for {u['username']} ({why}) -> {fmt_until(u['access_until'])}")
+        _auth._log(f"{'chart' if field == 'chart_until' else 'access'} +{days}d for {u['username']} ({why}) -> {fmt_until(u[field])}")
         _auth.save()
         return u
 
@@ -206,7 +233,9 @@ def handle_event(event):
                      f"Amount: ${(s.get('amount_total') or 0) / 100:.2f}\n\nGive them the days from {_auth.public_url()}/admin.")
         return "unmatched"
     days, _cents, label = PASSES[key]
-    u = grant_days(username, days, why=f"stripe {key}")
+    is_chart = key in CHART_PASSES
+    field = "chart_until" if is_chart else "access_until"
+    u = grant_days(username, days, why=f"stripe {key}", field=field)
     if not u:
         return "user missing"
     with _auth._lock:
@@ -214,6 +243,17 @@ def handle_event(event):
                                                    "amount": s.get("amount_total"), "ts": int(time.time())})
         del _auth.DB["payments"][:-2000]
         _auth.save()
+    if is_chart:
+        _auth.send_email(u["email"], "Your BRAIN Chart Only pass is active",
+                         f"Hi {u['username']},\n\nThanks for joining BRAIN. Your Chart Only pass is active until "
+                         f"{fmt_until(u['chart_until'])}.\n\nOpen your live charts: {_auth.public_url()}/app\n\n"
+                         "It includes the live BTC and XRP charts with the indicators, the 'What do these mean?' guide and the "
+                         "chart patterns. Passes don't renew on their own - we'll email you 2 days before it ends.\n\n"
+                         "BRAIN is educational market information, not financial advice. All sales are final.\n\n- BRAIN")
+        notify_owner(f"BRAIN: {u['username']} bought Chart Only",
+                     f"{u['username']} ({u['email']}) bought the {label} pass (${PASSES[key][1] / 100:.2f}).\n"
+                     f"Charts until {fmt_until(u['chart_until'])}.")
+        return f"granted {label} to {u['username']}"
     _auth.send_email(u["email"], "Your BRAIN pass is active",
                      f"Hi {u['username']},\n\nThanks for joining BRAIN. Your {label} pass is active until "
                      f"{fmt_until(u['access_until'])}.\n\nOpen the live dashboard: {_auth.public_url()}/app\n"
@@ -247,8 +287,24 @@ def send_reminders():
             due.append(dict(u))
         if due:
             _auth.save()
+    chart_due = []
+    with _auth._lock:
+        for u in _auth.DB["users"].values():
+            cu = chart_until(u)
+            if u.get("role") == "owner" or not cu or cu <= now or cu - now > REMIND_BEFORE_S or access_until(u) > cu:
+                continue
+            if u.get("chart_reminded_for") == int(cu):
+                continue
+            u["chart_reminded_for"] = int(cu)
+            chart_due.append(dict(u))
+        if chart_due:
+            _auth.save()
+    for u in chart_due:
+        _auth.send_email(u["email"], "Your BRAIN Chart Only pass ends soon",
+                         f"Hi {u['username']},\n\nYour Chart Only pass ends {fmt_until(chart_until(u))}.\n\n"
+                         f"Keep your charts: {_auth.public_url()}/pricing\n\n- BRAIN")
     for u in due:
         _auth.send_email(u["email"], "Your BRAIN pass ends soon",
                          f"Hi {u['username']},\n\nYour BRAIN pass ends {fmt_until(access_until(u))}.\n\n"
                          f"Keep your access: {_auth.public_url()}/pricing\n\n- BRAIN")
-    return len(due)
+    return len(due) + len(chart_due)
