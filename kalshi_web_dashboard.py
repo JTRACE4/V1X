@@ -7628,12 +7628,16 @@ function updateFlipWatch() {
       // 2026-10-23 (user): "when it says our side just say if it's up or down with the call or against"
       // 2026-10-23 (d, user): short - just up or down, never "with / against the call" (too many words, confusing)
       const how = goingUp ? 'up' : 'down';
+      if (w.lastCall === undefined) w.lastCall = callName + call;
       if (!w.said10 && left <= 10) {
         w.said10 = true; w.lastSpoke = now; w.lastState = state;
         speak(coin + ', ten seconds, ' + how + '.', true, 8000);
       } else if (!w.said90 && left <= 90 && left > 15) {
         w.said90 = true; w.lastSpoke = now; w.lastState = state;
         speak(coin + ', ninety seconds, ' + how + '.', false, 15000);
+      } else if (w.lastCall !== undefined && w.lastCall !== callName + call) {
+        w.lastCall = callName + call; w.lastState = state;      // 2026-10-23 (user): the CALL changed, price didn't flip - the call
+                                                                 // announcement says "sealed call switched", nothing here
       } else if (state !== w.lastState && w.lastState !== null && now - w.lastSpoke >= WATCH_EVERY_MS) {
         w.lastSpoke = now; w.lastState = state;
         // the market really switched sides -> THIS is the only spoken "flip"
@@ -8147,6 +8151,7 @@ function showIncomingBanner(name, side, usd, head, detail) {
   el._t = setTimeout(() => el.remove(), 10000);
 }
 const alertedIncoming = new Set();
+const _earlyDir = {};      // coin -> {d: 'up'|'down', t} of this round's early call (for "sealed call switched")
 // ---- 2026-10-23 (b) voice rules (user: "unclear ... don't over talk, don't give misleading info, especially against the call"):
 //  - every minute per coin: time left, up / down with or against the call, and the flip risk EXACTLY as the radar shows it
 //    (read at the moment it is spoken). No reasons, no MACD, no "sellers in control" - the reasons stay on screen.
@@ -8390,6 +8395,7 @@ function checkStageAlerts() {
     const what = stage === 'sealed' ? 'SEALED 8-min' : 'EARLY 4-min';
     const coinName = name === 'BTC' ? 'Bitcoin' : name;
     const callName = stage === 'sealed' ? 'sealed call' : 'early call';
+    if (!call && stage === 'early') delete _earlyDir[name];
     if (!call) {
       const lean = el.getAttribute('data-lean');
       const sit = el.getAttribute('data-sitout') === '1';
@@ -8421,7 +8427,11 @@ function checkStageAlerts() {
       const d2 = dir === 'UP' ? 'up' : 'down';
       // plain + short (2026-10-22): "Bitcoin sealed call: up, 84 percent. Strong one." / "... Underdog pick."
       const conf = '';
-      const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent sure.' : '.') + conf      // "sure" so it is never mistaken for the flip risk
+      // 2026-10-23 (user): when the sealed call goes the other way from the early call, say it switched
+      const ec = _earlyDir[name], switched = stage === 'sealed' && ec && Date.now() - ec.t < 900000 && ec.d !== d2;
+      if (stage === 'early') _earlyDir[name] = { d: d2, t: Date.now() };
+      const line = (switched ? coinName + ' sealed call switched ' + d2 : coinName + ' ' + callName + ': ' + d2)
+        + (sure ? ', ' + sure + ' percent sure.' : '.') + conf      // "sure" so it is never mistaken for the flip risk
         + (rev ? ' Underdog pick.' : '');
       speakUrgent(line, 650);
     }
