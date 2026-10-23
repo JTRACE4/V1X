@@ -6522,6 +6522,34 @@ body .card .scoreboard > .rs-title b, body[data-view] .card .scoreboard > .rs-ti
 .rp-line { font-size:13px; line-height:1.5; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
 .rp-line .rp-time { display:inline-block; min-width:118px; color:#fbf4ec; font-weight:700; }
 .rp-line .call-tag { margin-left:4px; }
+.fa-status { display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; margin:-4px 0 8px; font-size:12px; }
+.fa-status b.warn { color:#e5b85c; } .fa-status b.down { color:#f05454; } .fa-status b.flat { color:#3dd69c; }
+.fa-gauge { display:inline-block; width:54px; height:6px; margin-left:6px; border-radius:999px; background:rgba(255,255,255,0.10); overflow:hidden; vertical-align:1px; }
+.fa-gauge > i { display:block; height:100%; border-radius:999px; background:#3dd69c; } .fa-gauge > i.warn { background:#e5b85c; } .fa-gauge > i.down { background:#f05454; }
+.card .fa-item.fa-flat .fa-arrow { background:rgba(229,184,92,0.20) !important; color:#e5b85c !important; box-shadow:inset 0 0 0 1px rgba(229,184,92,0.55) !important; }
+/* 2026-10-22 (user): market order tape totals - money on UP vs DOWN this round */
+.card .otape { margin:0 0 20px; }
+.card .otape > .top-w-title { display:inline-block; padding:0 0 10px !important; background:linear-gradient(90deg, #e9a5bb 0%, #f3c6b4 50%, #dcbb91 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent !important; font-family:var(--br-label) !important; font-weight:900 !important;
+  font-size:15px !important; letter-spacing:2px !important; }
+.ot-nums { display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; font-size:13px; }
+.ot-nums b { font-family:var(--br-bold); font-weight:800; font-size:18px; } .ot-nums .ot-tot { color:var(--br-mute); font-size:12px; }
+.ot-bar { position:relative; height:22px; border-radius:7px; overflow:hidden; background:linear-gradient(90deg, #f05454, #cf3b3b); margin:6px 0; }
+.ot-bar > i { position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg, #15a57d, #3dd69c); }
+.ot-bar > b { position:absolute; left:8px; top:2px; font-size:12px; color:#fff; font-family:var(--br-bold); }
+.ot-bar > b.r { left:auto; right:8px; }
+.ot-sub { font-size:12px; }
+/* 2026-10-22 (user): single-coin view = two columns (bot info | chart reader), swappable; Both view stays one column */
+.cols { display:block; }
+.chart-side-btn { display:none; }
+body[data-view="BTC"] .chart-side-btn, body[data-view="XRP"] .chart-side-btn { display:inline-block; }
+@media (min-width:1100px) {
+  body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1760px !important; }
+  body[data-view="BTC"] .cols, body[data-view="XRP"] .cols { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.12fr); gap:28px; align-items:start; }
+  body.chart-left[data-view="BTC"] .col-chart, body.chart-left[data-view="XRP"] .col-chart { order:-1; }
+  body[data-view="BTC"] .col-chart, body[data-view="XRP"] .col-chart { position:sticky; top:12px; }
+}
+@media (max-width:1099px) { .chart-side-btn { display:none !important; } }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -6843,13 +6871,14 @@ function updateVoiceToggleButton() {
 // no longer cut each other off.
 // Only these alerts make sound now: flip warnings, the early + sealed calls, whale trades (cha-ching / denied).
 const LEGACY_SOUNDS = false;
-const NEURAL_VOICES = { ava: 'Ava', jenny: 'Jenny', aria: 'Aria', emma: 'Emma', michelle: 'Michelle', tony: 'Tony', sarge: 'Sarge' };
+const NEURAL_VOICES = { ava: 'Ava', snoop: 'Snoop', sarge: 'Sarge', caller: 'Caller' };
 let neuralVoice = 'ava';
 try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VOICES || nv === 'device')) neuralVoice = nv; } catch (e) {}
 function setNeuralVoice(v) {
   neuralVoice = v; neuralBroken = false;
   try { localStorage.setItem('neuralVoice', v); } catch (e) {}
-  if (v === 'tony') { speakRaw("It's Tony. I got the market."); speakRaw('Bitcoin sealed call: up, 84 percent.'); return; }
+  if (v === 'snoop') { speakRaw('Snoop on the market. Bitcoin sealed call: up, 84 percent.'); return; }
+  if (v === 'caller') { speakRaw('Caller here. Bitcoin sealed call: up, 84 percent.'); return; }
   if (v === 'sarge') { speakRaw('Sarge here. Eyes on the market.'); speakRaw('Bitcoin sealed call: up, 84 percent.'); return; }
   speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is ' + NEURAL_VOICES[v] + '. Bitcoin sealed call: up, 84 percent.');
 }
@@ -6896,7 +6925,7 @@ function _voicePunch(a) {
       src.connect(lo); lo.connect(eq); eq.connect(comp); comp.connect(g); g.connect(ctx.destination);
       _vChain = { eq: eq, lo: lo, g: g };
     }
-    const hard = neuralVoice === 'tony' || neuralVoice === 'sarge';
+    const hard = neuralVoice === 'sarge' || neuralVoice === 'caller';
     _vChain.eq.gain.value = hard ? 5 : 0;          // presence: crisp consonants
     _vChain.lo.gain.value = hard ? 3 : 0;          // chest: a bigger, manlier voice
     _vChain.g.gain.value = hard ? 1.9 : 1.0;       // loud
@@ -6931,7 +6960,7 @@ function _voiceNext() {
   const fallback = () => { if (finished) return; try { a.onended = null; a.onerror = null; a.pause(); } catch (e) {} neuralBroken = true; _deviceSay(item.text, done); setTimeout(() => { neuralBroken = false; }, 120000); };
   a.onended = done; a.onerror = fallback;
   a.src = '/tts?v=' + neuralVoice + '&t=' + encodeURIComponent(item.text);
-  if (neuralVoice === 'tony' || neuralVoice === 'sarge' || _vChain) _voicePunch(a);
+  if (neuralVoice === 'sarge' || neuralVoice === 'caller' || _vChain) _voicePunch(a);
   a.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
   const pr = a.play();
   if (pr && pr.catch) pr.catch(fallback);
@@ -8294,9 +8323,16 @@ function setAssetView(v) {
   if (v !== 'BTC' && v !== 'XRP') v = 'both';
   document.body.setAttribute('data-view', v);
   try { localStorage.setItem('assetView', v); } catch (e) {}
-  document.querySelectorAll('.view-bar button').forEach(b =>
+  document.querySelectorAll('.view-bar button[data-view]').forEach(b =>
     b.className = (b.getAttribute('data-view') === v) ? 'size-mode-btn size-mode-active' : 'size-mode-btn');
 }
+// 2026-10-22 (user): BTC-only / XRP-only view - bot info on one side, the chart reader on the other; this swaps the sides
+function swapChartSide() {
+  const left = !document.body.classList.contains('chart-left');
+  document.body.classList.toggle('chart-left', left);
+  try { localStorage.setItem('chartLeft', left ? '1' : '0'); } catch (e) {}
+}
+try { if (localStorage.getItem('chartLeft') === '1') document.addEventListener('DOMContentLoaded', () => document.body.classList.add('chart-left')); } catch (e) {}
 // fast chart channel: the 1-second page refresh is too slow for a live candle, so the chart + volume bar are re-drawn ~3x a second on their own
 const fastBusy = {};
 async function fastChartTick() {
@@ -8865,7 +8901,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
 <div class="view-bar"><span class="hint">Show:</span>
   <button class="size-mode-btn" data-view="BTC" onclick="setAssetView('BTC')">BTC only</button>
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
-  <button class="size-mode-btn" data-view="both" onclick="setAssetView('both')">Both</button></div>
+  <button class="size-mode-btn" data-view="both" onclick="setAssetView('both')">Both</button>
+  <button id="chart-side" class="size-mode-btn chart-side-btn" type="button" onclick="swapChartSide()" title="Move the chart to the other side">&#8644; Chart side</button></div>
 <div id="content">Loading...</div>
 <div class="sound-bar">
   <button id="sound-enable-btn" onclick="toggleSound()">Sound OFF - tap to turn on</button>
@@ -8883,9 +8920,8 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button id="toggle-voice" onclick="toggleVoiceAlerts()">Voice alerts: ON</button>
       <label style="color:#bcaaa1; font-size:13px; margin:0 6px 0 4px;">Voice
         <select id="voice-pick" onchange="setNeuralVoice(this.value)" style="background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit;">
-          <option value="ava">Ava (natural)</option><option value="jenny">Jenny (natural)</option><option value="aria">Aria (natural)</option>
-          <option value="emma">Emma (natural)</option><option value="michelle">Michelle (natural)</option>
-          <option value="tony">Tony (tough New York guy)</option><option value="sarge">Sarge (drill sergeant)</option><option value="device">This device's voice</option>
+          <option value="ava">Ava (natural)</option><option value="snoop">Snoop (laid-back)</option>
+          <option value="sarge">Sarge (drill sergeant)</option><option value="caller">Caller (clear + fast, for calls)</option><option value="device">This device's voice</option>
         </select></label>
       <br>
       <button onclick="speakRaw('Bitcoin call update: under pressure.')">Test call update</button>
@@ -8988,9 +9024,10 @@ def _kalshi_round_flow(asset_name, ticker, open_ts):
     keep = c if (c and c["ticker"] == ticker) else {"yes": 0.0, "no": 0.0, "n": 0}
     try:
         yes = no = 0.0
+        up_all = dn_all = contracts = 0.0          # 2026-10-22 (user): full money on each side (both sides of every trade)
         n = 0
         cursor = None
-        for _ in range(3):
+        for _ in range(10):
             params = {"ticker": ticker, "limit": 1000}
             if cursor:
                 params["cursor"] = cursor
@@ -9011,12 +9048,36 @@ def _kalshi_round_flow(asset_name, ticker, open_ts):
                 elif t.get("taker_side") == "no":
                     no += cnt * (1 - p)
                 n += 1
+                up_all += cnt * p
+                dn_all += cnt * (1 - p)
+                contracts += cnt
             cursor = r.get("cursor")
             if old or not cursor:
                 break
-        _kflow[asset_name] = {"ticker": ticker, "ts": now, "yes": yes, "no": no, "n": n}
+        _kflow[asset_name] = {"ticker": ticker, "ts": now, "yes": yes, "no": no, "n": n,
+                              "up_all": up_all, "dn_all": dn_all, "contracts": contracts}
     except Exception:
         _kflow[asset_name] = {"ticker": ticker, "ts": now, "yes": keep["yes"], "no": keep["no"], "n": keep["n"]}
+
+
+def build_order_tape(name, d):
+    """2026-10-22 (user): at the bottom - how much money the market's traders have actually put on UP vs DOWN this round."""
+    c = _kflow.get(name) or {}
+    if not c or c.get("ticker") != d.get("ticker") or not (c.get("up_all") or c.get("dn_all")):
+        return ('<div class="otape"><div class="top-w-title">MARKET ORDER TAPE &middot; THIS ROUND</div>'
+                '<div class="hint">Waiting for the first trades of this round&hellip;</div></div>')
+    up, dn = c["up_all"], c["dn_all"]
+    tot = up + dn
+    upct = up / tot * 100 if tot else 50
+    ty, tn = c.get("yes", 0.0), c.get("no", 0.0)
+    tt = ty + tn
+    return (f'<div class="otape"><div class="top-w-title">MARKET ORDER TAPE &middot; THIS ROUND</div>'
+            f'<div class="ot-nums"><span class="up"><i class=va-u></i> <b>{_usd_short(up)}</b> on UP</span>'
+            f'<span class="ot-tot">{_usd_short(tot)} total &middot; {int(c.get("contracts", 0)):,} contracts &middot; {c.get("n", 0):,} trades</span>'
+            f'<span class="down"><b>{_usd_short(dn)}</b> on DOWN <i class=va-d></i></span></div>'
+            f'<div class="ot-bar"><i style="width:{upct:.1f}%"></i><b>{upct:.0f}%</b><b class="r">{100 - upct:.0f}%</b></div>'
+            f'<div class="ot-sub hint">Every trade puts money on both sides; this is all of it since the round opened. '
+            f'Who started the trades: buyers of UP {_usd_short(ty)} ({(ty / tt * 100 if tt else 0):.0f}%) vs buyers of DOWN {_usd_short(tn)}.</div></div>')
 
 
 def tug_numbers(name, d):
@@ -9987,6 +10048,13 @@ def _alert_line(a, dec):
     where = " &middot; ".join(x for x in (ven, ("@ " + px) if px else "") if x)
     if k == "whale":
         return f"WHALE {bs} {usd}", where
+    if k == "amass":
+        return (a["title"].split(":")[0], f'{a.get("n_orders", "?")} big orders &middot; {a.get("n_venues", "?")} exchanges &middot; last 30 sec &middot; still counting')
+    if k == "choke":
+        return ("ORDER FLOOD &ndash; BLOW-OFF", a["title"].split("BLOW-OFF ")[-1].lower() + " &middot; " + ("mostly buyers" if sd == "buy" else "mostly sellers")
+                + " &middot; rushes this crowded often exhaust and snap back")
+    if k == "mempool":
+        return (a["title"].split(":")[0], a["title"].split(": ", 1)[-1].lower() + " &middot; " + (a.get("detail") or "").split(";")[-1].split(".")[0].strip())
     if k == "burst":
         b_, s_ = a.get("buy_usd"), a.get("sell_usd")
         net_side = "BUYERS" if sd == "buy" else "SELLERS"
@@ -10017,6 +10085,31 @@ def _alert_line(a, dec):
     if k == "wall":
         return f"BIG {'SELL' if sd == 'sell' else 'BUY'} ORDER WAITING {usd}", ("Index venue 1 @ " + px) if px else "Index venue 1"
     return a["title"], ""
+
+
+def _alert_status_line(name, h):
+    """Live strip under the title: exchanges feeding the alerts, the order-pace (blow-off) gauge, and the network jam."""
+    bits = []
+    try:
+        bits.append(f'<span><b>{h["n_live"]}</b> exchanges live</span>')
+    except Exception:
+        pass
+    try:
+        cs = (_ENG.choke_state or {}).get(name) or {}
+        x = cs.get("x")
+        if x is not None and time.time() - cs.get("ts", 0) < 30:
+            cls = "down" if x >= 3 else ("warn" if x >= 2 else "flat")
+            bits.append(f'<span>order pace <b class="{cls}">{x:.1f}x</b> normal'
+                        f'<i class="fa-gauge"><i class="{cls}" style="width:{min(100, x / 4 * 100):.0f}%"></i></i></span>')
+    except Exception:
+        pass
+    ns = _NET_STATE.get(name) or {}
+    if name == "BTC" and ns.get("count") is not None:
+        bits.append(f'<span>network: <b>{ns["count"] // 1000:,}K</b> waiting &middot; {ns["fee"]} sat/vB'
+                    + (f' ({ns["mult"]:.1f}x)' if ns.get("mult") else "") + '</span>')
+    if name == "XRP" and ns.get("queue") is not None:
+        bits.append(f'<span>ledger queue <b>{ns["queue"]}</b> / {ns["expected"]} &middot; fee {ns["fee_x"]:.0f}x</span>')
+    return f'<div class="fa-status hint">{" &middot; ".join(bits)}</div>' if bits else ""
 
 
 def build_alert_box(name):
@@ -10050,6 +10143,7 @@ def build_alert_box(name):
                    f'<span class="up">shorts {_usd_short(lt["short"])}</span>')
     return (f'<div class="top-w top-alerts"><div class="top-w-title">WHALE &amp; LIQUIDITY ALERTS <span class="hint">whales &middot; big orders &middot; '
             f'fake breakouts &middot; forced sales</span></div>'
+            + _alert_status_line(name, h) +
             f'<div class="fa-list">{"".join(items)}</div>'
             f'<!--OWNER--><div class="hint fa-foot">{h["n_live"]} feed{"s" if h["n_live"] != 1 else ""} live{liq_txt}</div><!--/OWNER--></div>')
 
@@ -10336,6 +10430,48 @@ def _kalshi_spark(pts, w=300, h=54):
 # XRP comes from the ~30s-cached list endpoint (on purpose, for its CALLS), and both coins only refresh as fast as
 # the loop runs. This poller reads the live order book for every active round every ~1.5s - display only.
 _LIVE_ODDS = {}            # ticker -> (mid yes price, epoch seconds)
+
+
+# 2026-10-22 (user): "the blockchain getting clogged with pending - a break-through gauge, maybe just an alert that pops up with
+# the whale & liquidity alerts". Bitcoin: mempool.space (unconfirmed transactions + fees). XRP: the XRPL fee queue.
+_NET_STATE = {"BTC": {}, "XRP": {}}
+
+
+def _network_loop():
+    import requests as _rq
+    fee_hist = collections.deque(maxlen=60)
+    while True:
+        try:
+            m = _rq.get("https://mempool.space/api/mempool", timeout=8).json()
+            f = _rq.get("https://mempool.space/api/v1/fees/recommended", timeout=8).json()
+            cnt, vmb, fast = m.get("count") or 0, (m.get("vsize") or 0) / 1e6, f.get("fastestFee") or 0
+            fee_hist.append(fast)
+            base = sorted(fee_hist)[len(fee_hist) // 2] if len(fee_hist) >= 5 else None
+            mult = (fast / base) if base else None
+            _NET_STATE["BTC"] = {"count": cnt, "vmb": round(vmb, 1), "fee": fast, "mult": round(mult, 2) if mult else None, "ts": time.time()}
+            clogged = vmb >= 100 or (mult is not None and mult >= 2.5 and fast >= 10)
+            if clogged:
+                _ENG.add_alert("BTC", "mempool", "flat", f"BITCOIN NETWORK CLOGGED: {cnt:,} TRANSACTIONS WAITING",
+                               f"{vmb:.0f} MB of unconfirmed transactions; the fast fee is {fast} sat/vB"
+                               + (f" ({mult:.1f}x the last hour's normal)" if mult else "")
+                               + ". A jam like this often means coins are being rushed onto exchanges - big moves can follow.",
+                               sev=2, sound=False, cooldown_key=("mempool", "BTC"), cooldown=1200)
+        except Exception as _e:
+            _NET_STATE["BTC"] = {"error": repr(_e)[:80], "ts": time.time()}
+        try:
+            r = _rq.post("https://xrplcluster.com/", json={"method": "fee", "params": [{}]}, timeout=8).json().get("result") or {}
+            q, exp = int(r.get("current_queue_size") or 0), int(r.get("expected_ledger_size") or 0)
+            of_ = int((r.get("drops") or {}).get("open_ledger_fee") or 0)
+            bf = int((r.get("drops") or {}).get("base_fee") or 10) or 10
+            _NET_STATE["XRP"] = {"queue": q, "expected": exp, "fee_x": round(of_ / bf, 1), "ts": time.time()}
+            if (exp and q >= exp) or of_ >= 20 * bf:
+                _ENG.add_alert("XRP", "mempool", "flat", f"XRP LEDGER CLOGGED: {q:,} TRANSACTIONS QUEUED",
+                               f"{q:,} transactions are waiting for the next ledger (it holds about {exp:,}); the open-ledger fee is "
+                               f"{of_ / bf:.0f}x normal. Heavy on-chain traffic like this often comes with big moves.",
+                               sev=2, sound=False, cooldown_key=("mempool", "XRP"), cooldown=1200)
+        except Exception as _e:
+            _NET_STATE["XRP"] = {"error": repr(_e)[:80], "ts": time.time()}
+        time.sleep(60)
 
 
 def _live_odds_loop():
@@ -11251,7 +11387,7 @@ def build_scoreboard(name, d):
                          f'{_cfg2["line_only"]["hold"]:.0%}</div>')
         if not n:
             cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">'
-                        + ("Fresh start Oct 22, 8:15 PM &ndash; called at 1:00 from the last 2 minutes of the previous round + the first minute, read through RSI, MACD, EMA trend, price vs the line and BRAIN's proven chart patterns." if key == "mini" else "No results yet.")
+                        + ("Fresh start Oct 22, 8:15 PM &ndash; called at 1:00 from the last 2 minutes of the previous round + the first minute, read through RSI, MACD, EMA trend and price vs the line." if key == "mini" else "No results yet.")
                         + f'</div>{_mbt}</div>')
             continue
         ct, cn, bw, bl = _streak_stats(res)
@@ -12602,13 +12738,17 @@ def render_html():
             </div>
             <div class="head-right"></div>
           </div>
+          <div class="cols"><div class="col-info">
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}
           {build_top_strip(name, d)}
           {stage_summary_row(name, d)}
+          </div><div class="col-chart">
           {pattern_window_html}
           {build_rounds_panel(name, d)}
+          </div></div>
           {build_scoreboard(name, d)}
+          {build_order_tape(name, d)}
           <!--OWNER--><details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
           {tug_html}
           {pressure_html}
@@ -12649,16 +12789,19 @@ def render_html():
 # The dashboard's spoken alerts are turned into speech here with a neural female voice (Microsoft's Edge read-aloud voices via
 # the edge-tts package - no key needed) and cached on the data volume, so a line like "Bitcoin sealed call: up, 84 percent
 # sure." is generated once and then served instantly. If anything fails the page falls back to the browser's own voice.
-_TTS_VOICES = {"ava": "en-US-AvaNeural", "jenny": "en-US-JennyNeural", "aria": "en-US-AriaNeural",
-               "emma": "en-US-EmmaNeural", "michelle": "en-US-MichelleNeural",
+# 2026-10-22 (user): only Ava + Snoop + Sarge (drill sergeant) + Caller (clear, proper, fast, demanding - for the calls).
+# Real human voices come from Speechify (or ElevenLabs) when their key + voice ID are set in Railway - see _speechify_voice.
+_TTS_VOICES = {"ava": "en-US-AvaNeural",
+               "snoop": "en-US-GuyNeural",          # free fallback: deep, laid-back - the real one needs a Speechify voice ID
+               "caller": "en-US-AndrewNeural",      # crisp, proper, fast
                # 2026-10-22 (b, user: "didn't sound like a drill sergeant or a Bronx New York accent ... aggressive, loud,
                # clear, quicker, manly, sometimes sounds angry but really kind"). Microsoft's free neural voices have no real
                # NYC accent and no shouting style, so the character comes from: a gruffer voice, faster + deeper + louder
                # delivery, every line rewritten in the persona's words (_persona below), and a compressor + boost in the page.
-               "tony": "en-US-RogerNeural",
                "sarge": "en-US-ChristopherNeural"}
-_TTS_STYLE = {"tony": {"rate": "+12%", "pitch": "-11Hz", "volume": "+40%"},      # older, heavier, more serious (2026-10-22)
-              "sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"}}
+_TTS_STYLE = {"snoop": {"rate": "-8%", "pitch": "-14Hz", "volume": "+20%"},     # slow, low, laid-back
+              "sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"},
+              "caller": {"rate": "+18%", "pitch": "-3Hz", "volume": "+35%"}}     # fast, clear, firm
 _NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b", "'bout"), (r"\bAlright\b", "Awright"),
              (r"\b(go|head|mov|flipp|hold|look|build|com|tell|buy|sell|runn|push|turn|hang|watch|bring|happen|mak|stay|get|tak|break)ing\b", r"\1in'"),
              (r"\byour\b", "ya"), (r"\byou\b", "ya"), (r"\bsure\b", "shuah"), (r"\bhere\b", "heah"), (r"\bover\b", "ovah"),
@@ -12683,13 +12826,37 @@ _CAUTION = re.compile(r"(?i)flip|other way|overbought|oversold|warning|lost|coin
 def _eleven_voice(key):
     if not os.environ.get("ELEVENLABS_API_KEY"):
         return None
-    return {"tony": os.environ.get("ELEVENLABS_TONY_VOICE_ID"), "sarge": os.environ.get("ELEVENLABS_SARGE_VOICE_ID")}.get(key) or None
+    return os.environ.get(f"ELEVENLABS_{key.upper()}_VOICE_ID") or None
+
+
+# 2026-10-22 (user: "real human voices like Speechify - Snoop, an American drill sergeant, a clear call guy"):
+# set SPEECHIFY_API_KEY plus SPEECHIFY_SNOOP_VOICE_ID / SPEECHIFY_SARGE_VOICE_ID / SPEECHIFY_CALLER_VOICE_ID / (opt.)
+# SPEECHIFY_AVA_VOICE_ID in Railway (voice IDs come from your Speechify account's voice list). Speechify wins, then ElevenLabs,
+# then the free voice. Licensed voices only - BRAIN never clones a voice.
+def _speechify_voice(key):
+    if not os.environ.get("SPEECHIFY_API_KEY"):
+        return None
+    return os.environ.get(f"SPEECHIFY_{key.upper()}_VOICE_ID") or None
+
+
+def _speechify_mp3(text, voice_id):
+    import requests as _rq, base64 as _b64
+    r = _rq.post("https://api.speechify.ai/v1/audio/speech",
+                 headers={"Authorization": f"Bearer {os.environ['SPEECHIFY_API_KEY']}", "Content-Type": "application/json"},
+                 json={"input": text, "voice_id": voice_id, "audio_format": "mp3",
+                       "model": os.environ.get("SPEECHIFY_MODEL", "simba-3.5")}, timeout=15)
+    r.raise_for_status()
+    audio = _b64.b64decode((r.json() or {}).get("audio_data") or "")
+    if len(audio) < 500:
+        raise RuntimeError("empty audio")
+    return audio
 
 
 def _eleven_mp3(text, voice_id, key):
     import requests as _rq
-    st = {"tony": {"stability": 0.38, "similarity_boost": 0.85, "style": 0.55, "use_speaker_boost": True},
-          "sarge": {"stability": 0.30, "similarity_boost": 0.80, "style": 0.75, "use_speaker_boost": True}}.get(key, {})
+    st = {"snoop": {"stability": 0.45, "similarity_boost": 0.85, "style": 0.45, "use_speaker_boost": True},
+          "sarge": {"stability": 0.30, "similarity_boost": 0.80, "style": 0.75, "use_speaker_boost": True},
+          "caller": {"stability": 0.55, "similarity_boost": 0.80, "style": 0.35, "use_speaker_boost": True}}.get(key, {})
     r = _rq.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128",
                  headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json"},
                  json={"text": text, "model_id": os.environ.get("ELEVENLABS_MODEL", "eleven_turbo_v2_5"), "voice_settings": st},
@@ -12702,7 +12869,7 @@ def _eleven_mp3(text, voice_id, key):
 
 def _persona(text, key, respell=True):
     """Rewrite a plain alert line in Tony's or Sarge's words. Same line always gets the same sign-off (so it caches)."""
-    if key not in ("tony", "sarge"):
+    if key != "sarge":
         return text
     pick = int(hashlib.md5(text.encode()).hexdigest(), 16)
     t = text
@@ -12743,6 +12910,22 @@ def _tts_mp3(text, voice_key):
         return None
     voice = _TTS_VOICES.get(voice_key, _TTS_VOICES["ava"])
     style = _TTS_STYLE.get(voice_key, {})
+    _sv = _speechify_voice(voice_key)
+    if _sv:
+        _ts = _persona(text, voice_key, respell=False).replace("XRP", "X R P")
+        fps = os.path.join(_TTS_DIR, "sp-" + hashlib.sha1(f"{_sv}|{_ts}".encode()).hexdigest() + ".mp3")
+        if os.path.isfile(fps):
+            with open(fps, "rb") as f_:
+                return f_.read()
+        try:
+            audio = _speechify_mp3(_ts, _sv)
+            os.makedirs(_TTS_DIR, exist_ok=True)
+            with open(fps + ".part", "wb") as f_:
+                f_.write(audio)
+            os.replace(fps + ".part", fps)
+            return audio
+        except Exception as e:
+            print(f"[tts] Speechify {voice_key} failed, trying the next voice source: {e!r}")
     _ev = _eleven_voice(voice_key)
     if _ev:
         _t11 = _persona(text, voice_key, respell=False).replace("XRP", "X R P")
@@ -13557,14 +13740,15 @@ def mini2_live(sym, live_price, line):
                 ps += w if it["bias"] == "bullish" else -w
                 pn.append(f'{it["name"]} {tf}')
         v["patterns"] = 1 if ps > 0.02 else (-1 if ps < -0.02 else 0)
-        if v["patterns"]:
-            keys = keys + ["patterns"]
-            v["_pat"] = pn[:3]
+        # 2026-10-22: tested on every round since BRAIN started logging patterns - adding them DROPPED the hit rate
+        # (59% -> 55%, patterns alone 51%), so they are shown for reference but do NOT vote
+        v["_pat"] = pn[:3]
     except Exception as _pe:
         print(f"[mini2] patterns: {_pe!r}")
     call, agree, of = mini2_combine(v, keys)
-    reasons = [f'{MINI2_LABEL[k]} {"up" if v[k] > 0 else ("down" if v[k] < 0 else "flat")}'
-               + (f' ({", ".join(v.get("_pat") or [])})' if k == "patterns" else "") for k in keys]
+    reasons = [f'{MINI2_LABEL[k]} {"up" if v[k] > 0 else ("down" if v[k] < 0 else "flat")}' for k in keys]
+    if v.get("patterns"):
+        reasons.append(f'chart patterns lean {"up" if v["patterns"] > 0 else "down"} ({", ".join(v.get("_pat") or [])}) &ndash; info only')
     return {"call": call, "agree": agree, "of": of, "keys": keys, "reasons": reasons,
             "rsi": round(v["_rsi"], 1) if v["_rsi"] is not None else None}
 
@@ -15042,6 +15226,7 @@ def main():
     threading.Thread(target=_stripe_setup, daemon=True).start()
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=_live_odds_loop, daemon=True, name="live-odds").start()
+    threading.Thread(target=_network_loop, daemon=True, name="network-clog").start()
     threading.Thread(target=_mini_backfill_loop, daemon=True, name="mini-backfill").start()
     try:
         _rsi_check.start()

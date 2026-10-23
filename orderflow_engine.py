@@ -61,7 +61,15 @@ WALL_REQUOTE_S = 2.0                   # a wall that vanishes and re-appears (sa
 WALL_REQUOTE_TOL = 0.15                # ... at a size within +/-15% is the SAME wall MOVED, not a cancel
 WALL_PULL_NEAR_PCT = 0.0015            # PULLED / SPOOF only if the wall was within 0.15% of price when it vanished
 WALL_MOVE_CHAIN_S = 90                 # repeat moves of one wall inside 90s update ONE alert instead of adding new ones
-WHALE_FALLBACK = {"BTC": (50_000, 250_000), "XRP": (10_000, 50_000)}   # (show, alert) until there is history
+WHALE_FALLBACK = {"BTC": (50_000, 250_000), "XRP": (10_000, 50_000)}
+# 2026-10-22 (user): "anything that amasses to $250K or more should be tracked, and keep updating as the buys come in" -
+# big taker orders on ONE side, across every exchange, adding up inside a rolling window; one live row per side that grows.
+AMASS_USD = 250_000
+AMASS_WINDOW_S = 30
+AMASS_PRINT_MIN = {"BTC": 25_000, "XRP": 5_000}      # only real-size orders count toward the pile, not dust
+# 2026-10-22 (user): "a blow-off value for too many orders coming in that choke it" - prints per 5 s vs this market's normal
+CHOKE_MULT = 3.0
+CHOKE_MIN_5S = {"BTC": 120, "XRP": 60}   # (show, alert) until there is history
 
 REF_VENUES = ("coinbase", "kraken", "bitstamp", "gemini")   # real-dollar venues used for the price path (no USDT basis)
 
@@ -70,6 +78,7 @@ KIND_LABEL = {
     "breakout": "BREAKOUT", "liq": "FORCED SALE", "liqcascade": "FORCED-SALE WAVE", "absorbed": "BIG ORDER FILLED",
     "pulled": "PULLED / SPOOF", "moved": "WALL MOVED", "wall": "BIG ORDER WAITING", "burst": "SURGE", "boom": "FAST MOVE",
     "sweep1m": "NEW HIGH/LOW", "rapid": "CRYPTOMETER", "flip": "FLIP WARNING",
+    "amass": "PILING IN", "choke": "ORDER FLOOD", "mempool": "NETWORK CLOGGED",
 }
 
 
@@ -110,6 +119,8 @@ class Engine:
         self.kinds = {}                                     # venue -> "spot" / "perp"
         self.cmeter = {"enabled": False, "trend": None, "ts": None, "error": None}
         self.stats = {"prints": 0, "fills": 0}
+        self._amass_live = {}                               # (asset, side) -> alert id of the growing pile
+        self.choke_state = {a: {"x": None, "ts": 0} for a in ASSETS}   # latest blow-off multiple (for the gauge)
         self._started = False
 
     # ================================================================== input (called from feed threads - must be cheap)
@@ -409,6 +420,61 @@ class Engine:
                            usd=p["usd"], price=p["last"], venue=vname, sev=3 if p["usd"] >= 3 * SWEEP_MIN_USD.get(a, 1e12) else 2,
                            cooldown_key=("sweep", a, p["side"], p["venue"]), cooldown=15)
 
+    def _amass(self, a, now):
+        with self.lock:
+            rows = [p for p in self.prints[a] if now - p["ts"] <= AMASS_WINDOW_S and p["usd"] >= AMASS_PRINT_MIN.get(a, 1e12)]
+        for side in ("buy", "sell"):
+            r = [p for p in rows if p["side"] == side]
+            tot = sum(p["usd"] for p in r)
+            key = (a, side)
+            if tot < AMASS_USD:
+                if key in self._amass_live and not r:
+                    self._amass_live.pop(key, None)            # pile finished; the row stays in the feed as it ended
+                continue
+            venues = sorted({_venue_label(p["venue"]) for p in r})
+            who = "BUYERS" if side == "buy" else "SELLERS"
+            title = f"{who} PILING IN: {_usd(tot)} in {AMASS_WINDOW_S}s"
+            detail = (f"{len(r)} big {'buy' if side == 'buy' else 'sell'} orders ({_usd(AMASS_PRINT_MIN.get(a, 0))}+ each) across "
+                      f"{len(venues)} exchange{'s' if len(venues) != 1 else ''} in the last {AMASS_WINDOW_S} seconds - still adding up live.")
+            aid = self._amass_live.get(key)
+            cur = next((x for x in self.alerts if x["id"] == aid), None) if aid else None
+            if cur is not None and now - cur["ts"] < 60:
+                with self.lock:
+                    cur.update({"ts": now, "usd": tot, "title": title, "detail": detail, "n_orders": len(r), "n_venues": len(venues),
+                                "price": r[-1].get("vwap")})
+                continue
+            al = self.add_alert(a, "amass", side, title, detail, usd=tot, price=r[-1].get("vwap"), sev=2, sound=False)
+            if al is not None:
+                with self.lock:
+                    al.update({"n_orders": len(r), "n_venues": len(venues)})
+                self._amass_live[key] = al["id"]
+
+    def _choke(self, a, now):
+        """Blow-off gauge: prints in the last 5 s vs this market's normal (95th percentile of 5-s counts, last 15 min)."""
+        with self.lock:
+            ts = [p["ts"] for p in self.prints[a]]
+            last = [p for p in self.prints[a] if now - p["ts"] <= 5]
+        if len(ts) < 200:
+            return
+        bins = {}
+        for t in ts:
+            if now - t > 5:
+                b = int((now - t) // 5)
+                bins[b] = bins.get(b, 0) + 1
+        hist = sorted(bins.get(i, 0) for i in range(1, 180))
+        p95 = max(1, hist[int(len(hist) * 0.95)])
+        x = len(last) / p95
+        self.choke_state[a] = {"x": round(x, 2), "ts": now, "n5": len(last), "p95": p95}
+        if x >= CHOKE_MULT and len(last) >= CHOKE_MIN_5S.get(a, 1e9):
+            bu = sum(p["usd"] for p in last if p["side"] == "buy")
+            se = sum(p["usd"] for p in last if p["side"] == "sell")
+            side = "buy" if bu >= se else "sell"
+            self.add_alert(a, "choke", side, f"ORDER FLOOD - BLOW-OFF {x:.1f}x NORMAL",
+                           f"{len(last)} orders hit the exchanges in 5 seconds ({x:.1f}x this market's normal busy pace). "
+                           f"{'Buyers' if side == 'buy' else 'Sellers'} are most of it ({_usd(max(bu, se))} of {_usd(bu + se)}). "
+                           f"A rush this crowded often marks a blow-off - the move can exhaust and snap back.",
+                           usd=bu + se, sev=2, sound=False, cooldown_key=("choke", a), cooldown=90)
+
     def _xsweep(self, a, now):
         with self.lock:
             rows = [p for p in self.prints[a] if now - p["ts"] <= XSWEEP_WINDOW_S]
@@ -502,6 +568,11 @@ class Engine:
                 for a in ASSETS:
                     try:
                         self._xsweep(a, now)
+                    except Exception:
+                        pass
+                    try:
+                        self._amass(a, now)
+                        self._choke(a, now)
                     except Exception:
                         pass
             if now - last_slow >= 1.0:
