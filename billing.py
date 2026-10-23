@@ -1,7 +1,7 @@
 """BRAIN passes - one-time Stripe payments that unlock the live dashboard for a set number of days (added 2026-10-22).
 
   * passes: 10 days $65, 30 days $160, 3.5 months (105 days) $379 (changed 2026-10-23 from 7 days $64.99 / 30 days $165) - one-time, never auto-renew
-  * CHART ONLY (2026-10-23): 3.5 months (105 days) $35 - just the live BTC / XRP charts with the indicators, the "What do these
+  * CHART ONLY (2026-10-23): 3.5 months (105 days) $35 - just the live charts for every coin (BTC, ETH, SOL, XRP, DOGE, BNB, HYPE, NEAR) with the indicators, the "What do these
     mean?" guide and the chart patterns. No BRAIN bot features. Its time is kept separately in user["chart_until"]; a full pass
     also includes the chart.
   * a member's access is a single date: user["access_until"] (epoch seconds). Buying adds the pass's days on top of
@@ -68,7 +68,7 @@ def webhook_secret():
 PRODUCT_DESC = ("Access to the BRAIN live market-data dashboard for {label}, plus the BRAIN Playbook (PDF guide). "
                 "Educational market analysis and information service - not financial advice. One-time payment, "
                 "does not renew. All sales final.")
-CHART_DESC = ("BRAIN Chart Only: the live BTC and XRP charts with indicators (EMA, RSI, MACD, support / resistance zones), the "
+CHART_DESC = ("BRAIN Chart Only: live charts for BTC, ETH, SOL, XRP, DOGE, BNB, HYPE and NEAR with indicators (EMA, RSI, MACD, support / resistance zones), the "
               "plain-English indicator guide and chart patterns with their track record, for 3.5 months (105 days). Does not "
               "include the BRAIN bot features. Educational market information - not financial advice. One-time payment, does not "
               "renew. All sales final.")
@@ -247,7 +247,7 @@ def handle_event(event):
         _auth.send_email(u["email"], "Your BRAIN Chart Only membership is active",
                          f"Hi {u['username']},\n\nThanks for joining BRAIN. Your Chart Only membership is active until "
                          f"{fmt_until(u['chart_until'])}.\n\nOpen your live charts: {_auth.public_url()}/charts\n\n"
-                         "It includes the live BTC and XRP charts with the indicators, the 'What do these mean?' guide and the "
+                         "It includes the live charts for every coin with the indicators, the 'What do these mean?' guide and the "
                          "chart patterns. Memberships don't renew on their own - we'll email you 2 days before it ends.\n\n"
                          "BRAIN is educational market information, not financial advice. All sales are final.\n\n- BRAIN")
         notify_owner(f"BRAIN: {u['username']} bought Chart Only",
