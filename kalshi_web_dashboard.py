@@ -6644,6 +6644,26 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px !imp
 .lx-mkt.lx-mkt-top { padding-top:2px !important; }
 .lx-mkt:hover .mkt-pane::before, .lx-mkt:focus-within .mkt-pane::before, .lx-mkt:focus .mkt-pane::before {
   content:"MARKET TREND"; display:block; font-family:var(--br-label); font-weight:800; font-size:10px; letter-spacing:1.4px; color:#dcbb91; margin-bottom:2px; }
+/* 2026-10-22 (user): S/R as shaded $ bands; locked side-by-side view fitted to the screen */
+.lw-chart { position:relative; }
+.lw-bands { position:absolute; left:0; top:0; bottom:0; pointer-events:none; z-index:2; overflow:hidden; }
+.lw-band { position:absolute; left:0; right:0; border-top:1px solid; border-bottom:1px solid; box-sizing:border-box; }
+.lw-band.res { background:rgba(240,84,84,0.14); border-color:rgba(240,84,84,0.6); }
+.lw-band.sup { background:rgba(61,214,156,0.13); border-color:rgba(61,214,156,0.6); }
+.lw-band span { position:absolute; right:6px; top:50%; transform:translateY(-50%); white-space:nowrap; font-family:var(--br-bold); font-weight:700;
+  font-size:10.5px; letter-spacing:0.3px; padding:1px 6px; border-radius:6px; background:rgba(20,15,18,0.78); }
+.lw-band.res span { color:#ff8a8a; } .lw-band.sup span { color:#6fe8b8; }
+@media (min-width:1300px) {
+  body.lock-view[data-view="BTC"] .card, body.lock-view[data-view="XRP"] .card {
+    max-height:calc(100vh - var(--card-off, 105px) - 14px) !important; overflow-y:auto !important; overscroll-behavior:contain;
+    scrollbar-width:thin; scrollbar-color:rgba(220,187,145,0.35) transparent; box-sizing:border-box; }
+  body.lock-view[data-view="BTC"] .card .lw-win, body.lock-view[data-view="XRP"] .card .lw-win {
+    top:var(--card-top, 105px) !important; height:calc(100vh - var(--card-off, 105px) - 14px) !important; max-height:none !important;
+    overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:rgba(220,187,145,0.35) transparent; }
+  body.lock-view[data-view="BTC"] .card .lw-chart, body.lock-view[data-view="XRP"] .card .lw-chart {
+    height:clamp(420px, calc(100vh - var(--card-off, 105px) - 150px), 980px) !important; }
+}
+@media (max-width:1299px) { #lock-view { display:none !important; } }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8422,15 +8442,35 @@ function setAssetView(v) {
 }
 // 2026-10-22 (user): BTC-only / XRP-only view - bot info on one side, the chart reader on the other; this swaps the sides
 // keep the docked chart window's top level with the top of the visible card
-setInterval(() => {
-  try {
-    const c = document.querySelector('body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"]');
-    if (!c) return;
-    const top = c.getBoundingClientRect().top, off = Math.round(top + window.scrollY);
-    document.documentElement.style.setProperty('--card-top', Math.max(12, Math.round(top)) + 'px');   // window follows the card's top
-    document.documentElement.style.setProperty('--card-off', off + 'px');                           // size stays fixed
-  } catch (e) {}
-}, 400);
+// 2026-10-22 (user: "not in sync"): runs on every scroll frame, not on a timer, so the window never lags behind the card
+function syncDock() {
+  const c = document.querySelector('body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"]');
+  if (!c) return;
+  const top = c.getBoundingClientRect().top, off = Math.round(top + window.scrollY), r = document.documentElement.style;
+  const t = Math.max(12, Math.round(top)) + 'px', f = off + 'px';
+  if (r.getPropertyValue('--card-top') !== t) r.setProperty('--card-top', t);
+  if (r.getPropertyValue('--card-off') !== f) r.setProperty('--card-off', f);
+}
+let dockRaf = 0;
+const dockKick = () => { if (!dockRaf) dockRaf = requestAnimationFrame(() => { dockRaf = 0; try { syncDock(); } catch (e) {} }); };
+window.addEventListener('scroll', dockKick, {passive: true});
+window.addEventListener('resize', dockKick);
+setInterval(dockKick, 1000);
+// "Lock view" (default): the card and the chart window sit side by side at the same height, both fitted to the screen;
+// each scrolls on its own. "Free scroll" = the old long page.
+function toggleLockView() {
+  const on = !document.body.classList.contains('lock-view');
+  document.body.classList.toggle('lock-view', on);
+  try { localStorage.setItem('lockView', on ? '1' : '0'); } catch (e) {}
+  const b = document.getElementById('lock-view'); if (b) b.innerHTML = on ? '&#128274; Locked view' : '&#8597; Free scroll';
+  window.scrollTo(0, 0); dockKick();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  let on = true; try { on = localStorage.getItem('lockView') !== '0'; } catch (e) {}
+  document.body.classList.toggle('lock-view', on);
+  const b = document.getElementById('lock-view'); if (b) b.innerHTML = on ? '&#128274; Locked view' : '&#8597; Free scroll';
+  dockKick();
+});
 function swapChartSide() {
   const left = !document.body.classList.contains('chart-left');
   document.body.classList.toggle('chart-left', left);
@@ -8539,8 +8579,14 @@ async function refresh() {
       try { savedSelStart = active.selectionStart; savedSelEnd = active.selectionEnd; } catch (e) {}
     }
   }
+  // 2026-10-22 (user: "when I scroll and read, it pushes me back up"): the card + chart window are rebuilt every second,
+  // which reset their own scroll bars to the top - remember them and put them back
+  const keepSc = {};
+  contentEl.querySelectorAll('.card[data-asset], .lw-win[data-asset]').forEach(el => { if (el.scrollTop) keepSc[el.classList[0] + el.dataset.asset] = el.scrollTop; });
   contentEl.innerHTML = data.html;
   try { lwAttach(); } catch (e) {}
+  contentEl.querySelectorAll('.card[data-asset], .lw-win[data-asset]').forEach(el => { const v = keepSc[el.classList[0] + el.dataset.asset]; if (v) el.scrollTop = v; });
+  try { syncDock(); } catch (e) {}
   try { tickClocks(); } catch (e) {}
   try { updateWrBadge(data.wr); } catch (e) {}
   if (savedId) {
@@ -8858,39 +8904,68 @@ function lwIndicators(o) {
   const cl = o.bars.map(b => b.close), t = o.bars.map(b => b.time);
   [[12, o.e1], [25, o.e2], [50, o.e3]].forEach(([n, s]) => { const e = lwEma(cl, n); s.setData(t.map((x, i) => ({time: x, value: e[i]})).slice(n)); });
   const now = Date.now();
-  if (now - (o.srTs || 0) > 15000) { o.srTs = now; try { lwLevels(o); } catch (e) {} }
+  if (now - (o.srTs || 0) > 10000) { o.srTs = now; try { lwLevels(o); } catch (e) {} }
   if (now - (o.pjTs || 0) > 2000) { o.pjTs = now; try { lwProject(o); } catch (e) {} }
 }
-// 2026-10-22 (user): support / resistance channels - price zones where swing highs / lows kept turning price (retest areas)
+// 2026-10-22 (user): "actual support and resistance channels - a dollar threshold, not lines far apart": the nearest price
+// zones (just above / just below price) where recent swing highs / lows kept turning price. Each is a shaded $ band.
 function lwLevels(o) {
-  (o.sr || []).forEach(l => { try { o.candle.removePriceLine(l); } catch (e) {} });
-  o.sr = [];
-  const B = o.bars.slice(-300), n = B.length;
+  o.zones = [];
+  const B = o.bars.slice(-180), n = B.length;
   if (n < 30) return;
-  const px = B[n - 1].close, piv = [], k = 3;
-  let atr = 0; for (let i = n - 30; i < n; i++) atr += B[i].high - B[i].low; atr /= 30;
+  const px = B[n - 1].close, piv = [], k = 2;
+  let atr = 0; for (let i = n - 20; i < n; i++) atr += B[i].high - B[i].low; atr /= 20;
   for (let i = k; i < n - k; i++) {
     let hi = true, lo = true;
     for (let j = i - k; j <= i + k; j++) { if (j === i) continue; if (B[j].high >= B[i].high) hi = false; if (B[j].low <= B[i].low) lo = false; }
     if (hi) piv.push(B[i].high); if (lo) piv.push(B[i].low);
   }
-  const tol = Math.max(px * 0.0006, atr * 0.6), zones = [];
+  const tol = Math.max(atr * 0.5, px * 0.00025), minW = Math.max(atr * 0.35, px * 0.0001), maxW = Math.max(atr * 1.1, minW * 2), zones = [];
   piv.sort((a, b) => a - b).forEach(p => {
-    const z = zones.find(z => p - z.hi <= tol);
+    const z = zones.find(z => p - z.hi <= tol && p - z.lo <= maxW);      // keeps every band tight (no chained mega-zones)
     if (z) { z.hi = Math.max(z.hi, p); z.n++; } else zones.push({lo: p, hi: p, n: 1});
   });
-  const strong = zones.filter(z => z.n >= 2);
-  const res = strong.filter(z => z.lo > px).sort((a, b) => a.lo - b.lo).slice(0, 2);
-  const sup = strong.filter(z => z.hi < px).sort((a, b) => b.hi - a.hi).slice(0, 2);
-  const add = (z, isR) => {
-    const c = isR ? 'rgba(240,84,84,0.75)' : 'rgba(61,214,156,0.75)', cf = isR ? 'rgba(240,84,84,0.35)' : 'rgba(61,214,156,0.35)';
-    const lab = (isR ? 'Resistance' : 'Support') + ' \u00b7 ' + z.n + ' touches';
-    if (z.hi - z.lo < tol * 0.3) { o.sr.push(o.candle.createPriceLine({price: (z.hi + z.lo) / 2, color: c, lineWidth: 2, lineStyle: 0, axisLabelVisible: false, title: lab})); return; }
-    o.sr.push(o.candle.createPriceLine({price: z.hi, color: isR ? c : cf, lineWidth: isR ? 2 : 1, lineStyle: 0, axisLabelVisible: false, title: isR ? lab : ''}));
-    o.sr.push(o.candle.createPriceLine({price: z.lo, color: isR ? cf : c, lineWidth: isR ? 1 : 2, lineStyle: 0, axisLabelVisible: false, title: isR ? '' : lab}));
+  // price above / below every swing point: the recent top / bottom is the zone to watch
+  const hi60 = Math.max(...B.slice(-60).map(b => b.high)), lo60 = Math.min(...B.slice(-60).map(b => b.low));
+  if (!zones.some(z => (z.lo + z.hi) / 2 > px) && hi60 > px) zones.push({lo: hi60 - minW, hi: hi60, n: 1});
+  if (!zones.some(z => (z.lo + z.hi) / 2 <= px) && lo60 < px) zones.push({lo: lo60, hi: lo60 + minW, n: 1});
+  zones.forEach(z => { if (z.hi - z.lo < minW) { const m = (z.hi + z.lo) / 2; z.lo = m - minW / 2; z.hi = m + minW / 2; } z.mid = (z.lo + z.hi) / 2; });
+  const near = 3.5 * atr;
+  const pick = (list) => {
+    const strong = list.filter(z => z.n >= 2);
+    const src = strong.length ? strong : list;
+    const out = src.slice(0, 1);
+    src.slice(1).forEach(z => { if (out.length < 2 && Math.abs(z.mid - px) <= near) out.push(z); });
+    return out;
   };
-  res.forEach(z => add(z, true)); sup.forEach(z => add(z, false));
+  const res = pick(zones.filter(z => z.mid > px).sort((a, b) => a.mid - b.mid));
+  const sup = pick(zones.filter(z => z.mid <= px).sort((a, b) => b.mid - a.mid));
+  res.forEach(z => z.r = true); sup.forEach(z => z.r = false);
+  o.zones = res.concat(sup);
+  lwBands(o);
 }
+// draws the zones as shaded bands over the chart (kept in step with zoom / scroll)
+function lwBands(o) {
+  const host = o.box.querySelector('.lw-chart');
+  if (!host) return;
+  let lay = o.bandLay;
+  if (!lay || lay.parentNode !== host) { lay = o.bandLay = document.createElement('div'); lay.className = 'lw-bands'; host.appendChild(lay); }
+  let ps = 60; try { ps = o.chart.priceScale('right').width(); } catch (e) {}
+  const H = host.clientHeight - 26;
+  lay.style.right = ps + 'px';
+  const html = (o.zones || []).map(z => {
+    const y1 = o.candle.priceToCoordinate(z.hi), y2 = o.candle.priceToCoordinate(z.lo);
+    if (y1 == null || y2 == null) return '';
+    const top = Math.max(0, Math.min(y1, y2)), bot = Math.min(H, Math.max(y1, y2));
+    if (bot <= 0 || top >= H) return '';
+    const h = Math.max(4, bot - top);
+    return '<div class="lw-band ' + (z.r ? 'res' : 'sup') + '" style="top:' + top.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px"><span>'
+      + (z.r ? 'Resistance' : 'Support') + ' ' + lwMoney(o.a, z.lo) + ' &ndash; ' + lwMoney(o.a, z.hi)
+      + (z.n >= 2 ? ' &middot; ' + z.n + ' touches' : '') + '</span></div>';
+  }).join('');
+  if (lay._h !== html) { lay.innerHTML = html; lay._h = html; }
+}
+setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o.box.isConnected) try { lwBands(o); } catch (e) {} }); }, 250);
 // 2026-10-22 (user): "the chart prediction of the next few minutes - like a pool-table guide line or a flashlight": the recent slope
 // carried forward + a cone that widens with this chart's own volatility. A rough guide, not a promise.
 function lwProject(o) {
@@ -8900,15 +8975,9 @@ function lwProject(o) {
   const xm = (m - 1) / 2, ym = cl.reduce((a, b) => a + b, 0) / m;
   let num = 0, den = 0; cl.forEach((y, i) => { num += (i - xm) * (y - ym); den += (i - xm) * (i - xm); });
   const slope = den ? num / den : 0;
-  const rets = []; for (let i = n - 40; i < n; i++) if (i > 0) rets.push(B[i].close - B[i - 1].close);
-  const mu = rets.reduce((a, b) => a + b, 0) / rets.length;
-  const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mu) * (b - mu), 0) / rets.length);
-  const last = B[n - 1], C = [{time: last.time, value: last.close}], U = [{time: last.time, value: last.close}], L = [{time: last.time, value: last.close}];
-  for (let k = 1; k <= K; k++) {
-    const c = last.close + slope * k * 0.85, w = sd * Math.sqrt(k);
-    C.push({time: last.time + k * g, value: c}); U.push({time: last.time + k * g, value: c + w}); L.push({time: last.time + k * g, value: c - w});
-  }
-  o.pjC.setData(C); o.pjU.setData(U); o.pjL.setData(L);
+  const last = B[n - 1], C = [{time: last.time, value: last.close}];
+  for (let k = 1; k <= K; k++) C.push({time: last.time + k * g, value: last.close + slope * k * 0.85});
+  o.pjC.setData(C);
   o.pjC.applyOptions({color: slope > 0 ? '#3dd69c' : (slope < 0 ? '#f05454' : '#fbf4ec')});
 }
 function lwCreate(a) {
@@ -8917,7 +8986,7 @@ function lwCreate(a) {
     + '<button class="lw-ha" title="Heikin Ashi candles - smoother trend view">Heikin Ashi</button>'
     + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
-    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line &middot; <span style="color:#f05454">red</span> / <span style="color:#3dd69c">green</span> bands = resistance / support &middot; cone = next 5 candles &middot; <span class="lwk-macd"></span></div>'
+    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line &middot; <span style="color:#f05454">red</span> / <span style="color:#3dd69c">green</span> shaded bands = resistance / support zones ($ range) &middot; dotted line = likely path, next 5 candles &middot; <span class="lwk-macd"></span></div>'
     // 2026-10-22 (user): tap to learn &ndash; EMA, the live RSI + MACD read, and why it matters in a 15-minute round
     + '<details class="lw-learn"><summary>What do these mean? <span>EMA &middot; RSI &middot; MACD &middot; 15-minute rounds</span></summary><div class="lw-learn-body">'
     + '<p><b>EMA lines</b> &ndash; the average price over the last 12, 25 and 50 candles, with the newest candles counting the most. '
@@ -8947,8 +9016,8 @@ function lwCreate(a) {
   o.e1 = ln('#f8f6f2'); o.e2 = ln('#e9d3a4'); o.e3 = ln('#ffd23f');      // 2026-10-22 (user): EMA 12 near-white / 25 cream / 50 yellow
   // 2026-10-22 (user): where price may go in the next few candles - a center line + a widening "flashlight" cone
   const pl = (c, w, st) => chart.addLineSeries({color: c, lineWidth: w, lineStyle: st, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
-  o.pjU = pl('rgba(233,165,187,0.55)', 1, 1); o.pjL = pl('rgba(233,165,187,0.55)', 1, 1); o.pjC = pl('#fbf4ec', 2, 2);
-  o.sr = []; o.srTs = 0; o.pjTs = 0;
+  o.pjC = pl('#fbf4ec', 2, 1);      // dotted trajectory only (user: no cone)
+  o.zones = []; o.srTs = 0; o.pjTs = 0;
   box.querySelectorAll('.lw-tabs button[data-tf]').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
   const hb = box.querySelector('.lw-ha');
   hb.classList.toggle('on', o.ha);
@@ -9063,7 +9132,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
   <button class="size-mode-btn" data-view="BTC" onclick="setAssetView('BTC')">BTC only</button>
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
   <button class="size-mode-btn" data-view="both" onclick="setAssetView('both')">Both</button>
-  <button id="chart-side" class="size-mode-btn chart-side-btn" type="button" onclick="swapChartSide()" title="Move the chart to the other side">&#8644; Chart side</button></div>
+  <button id="chart-side" class="size-mode-btn chart-side-btn" type="button" onclick="swapChartSide()" title="Move the chart to the other side">&#8644; Chart side</button><button id="lock-view" class="size-mode-btn chart-side-btn" type="button" onclick="toggleLockView()" title="Lock the card and chart side by side, fitted to the screen - or switch to one long page">&#128274; Locked view</button></div>
 <div id="content">Loading...</div>
 <div class="sound-bar">
   <button id="sound-enable-btn" onclick="toggleSound()">Sound OFF - tap to turn on</button>
