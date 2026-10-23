@@ -6602,6 +6602,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px !imp
   body[data-view="BTC"] .card .lw-chart, body[data-view="XRP"] .card .lw-chart { height:clamp(420px, calc(100vh - 330px), 760px) !important; }
 }
 @media (max-width:1299px) { .chart-side-btn { display:none !important; } }
+.ma-row { flex-wrap:wrap; }
+.ma-money { flex:1 1 100%; font-size:12px; color:#eee2d7; padding-left:2px; } .ma-money b { font-family:var(--br-bold); }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -11449,6 +11451,26 @@ def build_sb_jump(name):
             f'<b>{pct}</b></button>')
 
 
+def _call_money(rows, key):
+    """$100-a-call profit at the market price of the called side when it locked, and the average buy-in price."""
+    pnl, kps = 0.0, []
+    for h in rows:
+        kp = h.get(f"{key}_kp")
+        c = h.get(f"{key}_correct")
+        if c is None or not kp or not (0 < kp < 1):
+            continue
+        kps.append(kp)
+        pnl += (100 / kp - 100) if c else -100
+    return pnl, (sum(kps) / len(kps) if kps else None), len(kps)
+
+
+def _money_html(pnl, avg, n):
+    if not n:
+        return ""
+    return (f'<span class="{"up" if pnl >= 0 else "down"}"><b>{"+" if pnl >= 0 else "-"}${abs(pnl):,.0f}</b></span> on $100/call'
+            + (f' &middot; avg buy-in <b>{avg * 100:.0f}&cent;</b> <span class="hint">(market {avg * 100:.0f}% on that side)</span>' if avg else ""))
+
+
 def build_most_accurate(name):
     """2026-10-22 (user): tabs for the last 6 / 12 / 24 hours - which call has been MOST ACCURATE in that window
     (mini 1:00, early 4:00, sealed 8:00). Shows the numbers; it does not tell anyone what to follow."""
@@ -11459,7 +11481,7 @@ def build_most_accurate(name):
     for hrs in (6, 12, 24):
         rows = []
         for key, lab in defs:
-            g = []
+            g, hs = [], []
             for h in hist:
                 if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
                     continue
@@ -11468,14 +11490,16 @@ def build_most_accurate(name):
                 t = _window_close_utc(h.get("ticker"))
                 if t and now - t.timestamp() <= hrs * 3600:
                     g.append(bool(h[f"{key}_correct"]))
-            rows.append((key, lab, sum(g), len(g)))
+                    hs.append(h)
+            rows.append((key, lab, sum(g), len(g), _money_html(*_call_money(hs, key))))
         ok = [r for r in rows if r[3] >= 5]
         best = max(ok, key=lambda r: (r[2] / r[3], r[3]))[0] if ok else None
         cells = "".join(
             f'<div class="ma-row{" ma-best" if k == best else ""}"><span class="ma-lab">{lab}</span>'
             + (f'<b class="ma-pct">{w / n:.0%}</b><span class="ma-wl">{w}W &middot; {n - w}L</span>' if n else '<span class="ma-wl hint">no rounds yet</span>')
-            + ('<span class="ma-tag">MOST ACCURATE</span>' if k == best else "") + '</div>'
-            for k, lab, w, n in rows)
+            + ('<span class="ma-tag">MOST ACCURATE</span>' if k == best else "")
+            + (f'<div class="ma-money">{money}</div>' if money else "") + '</div>'
+            for k, lab, w, n, money in rows)
         panes.append(f'<div class="ma-pane" data-tf="{hrs}">{cells}'
                      + ('' if best else '<div class="hint" style="margin-top:4px;">Needs at least 5 graded rounds in this window.</div>') + '</div>')
     tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{h}" onclick="document.body.dataset.matf=\'{h}\'">{h} hrs</button>' for h in (6, 12, 24))
@@ -11510,11 +11534,7 @@ def build_scoreboard(name, d):
         _mbt = ""
         if key == "mini":
             if n:
-                _pn = [(h["mini_correct"], h.get("mini_kp")) for h in rows if h.get("mini_kp")]
-                _mp = sum((100 * (1 / kp - 1)) if ok else -100 for ok, kp in _pn)
-                if _pn:
-                    _mbt += (f'<div class="sc-stats">If you had followed it ($100 a call at the market price at 1:00): '
-                             f'<b class="{"up" if _mp >= 0 else "down"}">{"+" if _mp >= 0 else "-"}${abs(_mp):,.0f}</b> over {len(_pn)} rounds</div>')
+                pass                       # profit + avg buy-in now shown in the stats line like the other calls
             _cfg2 = mini2_config()
             # 2026-10-22 (user): no formula details on screen - only the record and what following it made
         if not n:
@@ -11526,9 +11546,9 @@ def build_scoreboard(name, d):
         streak = (f'<span class="sc-streak {"win" if ct else "loss"}">{cn} {("WIN" if cn == 1 else "WINS") if ct else ("LOSS" if cn == 1 else "LOSSES")} IN A ROW</span>')
         chips = "".join(_result_chip(bool(h[field]), h.get("actual_side")) for h in rows[-15:])
         pnl = ""
-        if key in ("early", "sealed"):
-            r_ = stage_record(hist, key)
-            pnl = f'<span class="{"up" if r_["pnl"] >= 0 else "down"}">{r_["pnl"]:+,.0f}</span> on $100/call'
+        if key in ("early", "sealed", "mini"):
+            _p, _avg, _np = _call_money(rows, key)
+            pnl = _money_html(_p, _avg, _np)
         elif d.get("bet_pnl"):
             pnl = f'<span class="{"up" if d["bet_pnl"]["total"] >= 0 else "down"}">{d["bet_pnl"]["total"]:+,.0f}</span> on $100/call'
         td = f'{sum(today)}-{len(today) - sum(today)}' if today else "0-0"
