@@ -1,6 +1,6 @@
 """BRAIN passes - one-time Stripe payments that unlock the live dashboard for a set number of days (added 2026-10-22).
 
-  * passes: 10 days $65, 30 days $160, 3.5 months (105 days) $379 (changed 2026-10-23 from 7 days $64.99 / 30 days $165) - one-time, never auto-renew
+  * passes: 10 days $65, 30 days $165, 3.5 months (105 days) $379 (30 days back to $165 on 2026-10-23, user; briefly $160) - one-time, never auto-renew
   * CHART ONLY (2026-10-23): 3.5 months (105 days) $35 - just the live charts for every coin (BTC, ETH, SOL, XRP, DOGE, BNB, HYPE, NEAR) with the indicators, the "What do these
     mean?" guide and the chart patterns. No BRAIN bot features. Its time is kept separately in user["chart_until"]; a full pass
     also includes the chart.
@@ -25,7 +25,7 @@ import auth as _auth
 
 PASSES = {                      # key -> (days, price in cents, label)
     "10d": (10, 6500, "10 days"),
-    "30d": (30, 16000, "30 days"),
+    "30d": (30, 16500, "30 days"),
     "105d": (105, 37900, "3.5 months"),
     "chart105": (105, 3500, "Chart Only - 3.5 months"),
 }
