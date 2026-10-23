@@ -11846,6 +11846,116 @@ def _cashout_report():
 
 threading.Thread(target=_cashout_loop, daemon=True).start()
 
+# ---- 2026-10-23 (user): "do a real test - was the profit difference because of updates? use the most profitable algorithm"
+# 1) every call's record + $100/call profit before vs after the Oct 22 1:05 PM call-logic change, and day by day (ET)
+# 2) search simple, explainable ways to follow the calls (buy-in price band, confidence floor, early + sealed agreeing),
+#    picked on the OLDER 70% of rounds and graded on the NEWEST 30% it never saw. Results -> log + profit_study.json
+PROFIT_STUDY_FILE = os.path.join(_DATA_ROOT, "data_cache", "profit_study.json")
+LOGIC_CHANGE_UTC = dt.datetime(2026, 10, 22, 13, 5, tzinfo=ZoneInfo("America/New_York")).timestamp()
+_profit_study = {}
+
+
+def _ps_rows(hist, key):
+    out = []
+    for h in hist:
+        c, kp, side = h.get(f"{key}_correct"), h.get(f"{key}_kp"), h.get(f"{key}_call")
+        if c is None or h.get(f"{key}_reversal") or not kp or not (0 < kp < 1) or side not in ("YES", "NO"):
+            continue
+        if key == "mini" and h.get("mini_v") != 2:
+            continue
+        t = _window_close_utc(h.get("ticker"))
+        if not t:
+            continue
+        p = h.get(f"{key}_p")
+        conf = (p if side == "YES" else 1 - p) if isinstance(p, (int, float)) else None
+        other = "sealed" if key == "early" else "early"
+        out.append({"t": t.timestamp(), "c": bool(c), "kp": kp, "conf": conf, "h": h,
+                    "agree": h.get(f"{other}_call") == side if h.get(f"{other}_call") else None})
+    return sorted(out, key=lambda r: r["t"])
+
+
+def _ps_sum(rows):
+    n = len(rows)
+    if not n:
+        return {"n": 0}
+    w = sum(r["c"] for r in rows)
+    pnl = sum((100 / r["kp"] - 100) if r["c"] else -100 for r in rows)
+    return {"n": n, "win": round(w / n, 3), "pnl": round(pnl), "per": round(pnl / n, 1),
+            "avg_kp": round(sum(r["kp"] for r in rows) / n, 3), "be": round(sum(r["kp"] for r in rows) / n, 3)}
+
+
+def profit_study():
+    et = ZoneInfo("America/New_York")
+    res = {"ts": time.time(), "coins": {}}
+    for name, hist in list(_history.items()):
+        cres = {}
+        for key in ("early", "sealed", "mini"):
+            rows = _ps_rows(hist, key)
+            if not rows:
+                continue
+            pre = [r for r in rows if r["t"] < LOGIC_CHANGE_UTC]
+            post = [r for r in rows if r["t"] >= LOGIC_CHANGE_UTC]
+            days = {}
+            for r in rows:
+                d = (dt.datetime.fromtimestamp(r["t"] - 900, et)).strftime("%m-%d")
+                days.setdefault(d, []).append(r)
+            cres[key] = {"all": _ps_sum(rows), "before_change": _ps_sum(pre), "after_change": _ps_sum(post),
+                         "by_day": {d: _ps_sum(v) for d, v in sorted(days.items())}}
+            print(f"[profit study] {name} {key}: ALL {cres[key]['all']} | BEFORE Oct22 1:05pm {cres[key]['before_change']} "
+                  f"| AFTER {cres[key]['after_change']}")
+            for d, v in cres[key]["by_day"].items():
+                print(f"[profit study] {name} {key} day {d}: {v}")
+            # rule search (train = oldest 70%, test = newest 30%)
+            if key == "mini" or len(rows) < 60:
+                continue
+            cut = int(len(rows) * 0.7)
+            train, test = rows[:cut], rows[cut:]
+            cands = []
+            for lo in [x / 100 for x in range(40, 90, 5)]:
+                for hi in [x / 100 for x in range(50, 100, 5)]:
+                    if hi <= lo + 0.05:
+                        continue
+                    for cf in (None, 0.6, 0.7, 0.8):
+                        for ag in (None, True):
+                            def keep(r, lo=lo, hi=hi, cf=cf, ag=ag):
+                                return (lo <= r["kp"] < hi and (cf is None or (r["conf"] is not None and r["conf"] >= cf))
+                                        and (ag is None or r["agree"] is True))
+                            tr = [r for r in train if keep(r)]
+                            if len(tr) < max(25, len(train) // 6):
+                                continue
+                            st = _ps_sum(tr)
+                            cands.append((st["pnl"], lo, hi, cf, ag, st, _ps_sum([r for r in test if keep(r)])))
+            cands.sort(key=lambda x: -x[0])
+            base_test = _ps_sum(test)
+            cres[key]["rule_test"] = {"base_test": base_test, "top": [
+                {"buy_in": f"{c[1]:.2f}-{c[2]:.2f}", "conf_min": c[3], "needs_agree": bool(c[4]), "train": c[5], "test": c[6]} for c in cands[:5]]}
+            print(f"[profit rule] {name} {key}: follow every call on unseen rounds -> {base_test}")
+            for c in cands[:5]:
+                print(f"[profit rule] {name} {key}: buy-in {c[1]:.2f}-{c[2]:.2f} conf>={c[3]} agree={bool(c[4])} "
+                      f"| train {c[5]} | UNSEEN {c[6]}")
+        res["coins"][name] = cres
+    _profit_study.clear()
+    _profit_study.update(res)
+    try:
+        with open(PROFIT_STUDY_FILE, "w") as f:
+            json.dump(res, f)
+    except Exception as e:
+        print(f"[profit study] save: {e!r}")
+
+
+def _profit_study_loop():
+    time.sleep(120)
+    while True:
+        try:
+            profit_study()
+        except Exception as e:
+            print(f"[profit study] {e!r}")
+        time.sleep(6 * 3600)
+
+
+threading.Thread(target=_profit_study_loop, daemon=True).start()
+
+
 
 def _tod_label(now_et):
     a = now_et.replace(minute=0)
