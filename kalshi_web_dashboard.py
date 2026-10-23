@@ -6620,6 +6620,30 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px !imp
   body[data-view="BTC"] .card .lw-chart, body[data-view="XRP"] .card .lw-chart { height:clamp(520px, calc(100vh - var(--card-off, 105px) - 190px), 980px) !important; }
   body[data-view="BTC"] .card .lw-win .pat-win-head b, body[data-view="XRP"] .card .lw-win .pat-win-head b { font-size:17px !important; }
 }
+/* 2026-10-22 (user): RSI + MACD readings - same serif number, equal widths, centered (no lopsided look) */
+.lw-corner { left:12px !important; }
+.lw-corner .lw-chips { gap:10px !important; }
+.lw-corner .lw-chip { width:92px !important; min-width:92px !important; padding:0 !important; text-align:center; }
+.lw-corner .lw-chip b, .lw-corner .lw-chip b.w, .lw-corner .lw-chip b.mgap {
+  font-family:var(--br-serif) !important; font-weight:800 !important; font-size:23px !important; letter-spacing:0 !important;
+  font-variation-settings:"opsz" 72, "SOFT" 50 !important; font-variant-numeric:lining-nums tabular-nums; white-space:nowrap; }
+.lw-corner .lw-chip b.mgap { font-size:19px !important; }
+.lw-corner .lw-chip .mk-sub { justify-content:center; }
+/* market trend: just the buttons; the words show on hover / tap as a small pop-up */
+.lx-mkt { position:relative; outline:none; }
+.lx-mkt .mkt-pane { display:none !important; }
+.lx-mkt:hover .mkt-pane, .lx-mkt:focus-within .mkt-pane, .lx-mkt:focus .mkt-pane {
+  display:block !important; position:absolute; left:-4px; right:-4px; top:calc(100% + 4px); transform:none; z-index:15; width:auto; max-width:none;
+  padding:7px 10px; border-radius:10px; background:#211b1e; border:1px solid rgba(220,187,145,0.4); box-shadow:0 8px 20px rgba(0,0,0,0.5);
+  font-size:12px !important; line-height:1.35; color:#fbf4ec; text-align:center; white-space:normal; }
+/* docked chart window: fills down to the bottom of the screen, level with the card */
+@media (min-width:1300px) {
+  body[data-view="BTC"] .card .lw-win, body[data-view="XRP"] .card .lw-win { height:calc(100vh - var(--card-top, 105px) - 14px) !important; box-sizing:border-box; }
+}
+.lx-mkt .lx-mkt-lbl { display:none !important; }
+.lx-mkt.lx-mkt-top { padding-top:2px !important; }
+.lx-mkt:hover .mkt-pane::before, .lx-mkt:focus-within .mkt-pane::before, .lx-mkt:focus .mkt-pane::before {
+  content:"MARKET TREND"; display:block; font-family:var(--br-label); font-weight:800; font-size:10px; letter-spacing:1.4px; color:#dcbb91; margin-bottom:2px; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8833,6 +8857,59 @@ function lwShow(o) { return o.ha ? lwHA(o.bars) : o.bars; }
 function lwIndicators(o) {
   const cl = o.bars.map(b => b.close), t = o.bars.map(b => b.time);
   [[12, o.e1], [25, o.e2], [50, o.e3]].forEach(([n, s]) => { const e = lwEma(cl, n); s.setData(t.map((x, i) => ({time: x, value: e[i]})).slice(n)); });
+  const now = Date.now();
+  if (now - (o.srTs || 0) > 15000) { o.srTs = now; try { lwLevels(o); } catch (e) {} }
+  if (now - (o.pjTs || 0) > 2000) { o.pjTs = now; try { lwProject(o); } catch (e) {} }
+}
+// 2026-10-22 (user): support / resistance channels - price zones where swing highs / lows kept turning price (retest areas)
+function lwLevels(o) {
+  (o.sr || []).forEach(l => { try { o.candle.removePriceLine(l); } catch (e) {} });
+  o.sr = [];
+  const B = o.bars.slice(-300), n = B.length;
+  if (n < 30) return;
+  const px = B[n - 1].close, piv = [], k = 3;
+  let atr = 0; for (let i = n - 30; i < n; i++) atr += B[i].high - B[i].low; atr /= 30;
+  for (let i = k; i < n - k; i++) {
+    let hi = true, lo = true;
+    for (let j = i - k; j <= i + k; j++) { if (j === i) continue; if (B[j].high >= B[i].high) hi = false; if (B[j].low <= B[i].low) lo = false; }
+    if (hi) piv.push(B[i].high); if (lo) piv.push(B[i].low);
+  }
+  const tol = Math.max(px * 0.0006, atr * 0.6), zones = [];
+  piv.sort((a, b) => a - b).forEach(p => {
+    const z = zones.find(z => p - z.hi <= tol);
+    if (z) { z.hi = Math.max(z.hi, p); z.n++; } else zones.push({lo: p, hi: p, n: 1});
+  });
+  const strong = zones.filter(z => z.n >= 2);
+  const res = strong.filter(z => z.lo > px).sort((a, b) => a.lo - b.lo).slice(0, 2);
+  const sup = strong.filter(z => z.hi < px).sort((a, b) => b.hi - a.hi).slice(0, 2);
+  const add = (z, isR) => {
+    const c = isR ? 'rgba(240,84,84,0.75)' : 'rgba(61,214,156,0.75)', cf = isR ? 'rgba(240,84,84,0.35)' : 'rgba(61,214,156,0.35)';
+    const lab = (isR ? 'Resistance' : 'Support') + ' \u00b7 ' + z.n + ' touches';
+    if (z.hi - z.lo < tol * 0.3) { o.sr.push(o.candle.createPriceLine({price: (z.hi + z.lo) / 2, color: c, lineWidth: 2, lineStyle: 0, axisLabelVisible: false, title: lab})); return; }
+    o.sr.push(o.candle.createPriceLine({price: z.hi, color: isR ? c : cf, lineWidth: isR ? 2 : 1, lineStyle: 0, axisLabelVisible: false, title: isR ? lab : ''}));
+    o.sr.push(o.candle.createPriceLine({price: z.lo, color: isR ? cf : c, lineWidth: isR ? 1 : 2, lineStyle: 0, axisLabelVisible: false, title: isR ? '' : lab}));
+  };
+  res.forEach(z => add(z, true)); sup.forEach(z => add(z, false));
+}
+// 2026-10-22 (user): "the chart prediction of the next few minutes - like a pool-table guide line or a flashlight": the recent slope
+// carried forward + a cone that widens with this chart's own volatility. A rough guide, not a promise.
+function lwProject(o) {
+  const B = o.bars, n = B.length;
+  if (n < 30) return;
+  const g = LW_SEC[o.tf] || 60, K = 5, cl = B.slice(-12).map(b => b.close), m = cl.length;
+  const xm = (m - 1) / 2, ym = cl.reduce((a, b) => a + b, 0) / m;
+  let num = 0, den = 0; cl.forEach((y, i) => { num += (i - xm) * (y - ym); den += (i - xm) * (i - xm); });
+  const slope = den ? num / den : 0;
+  const rets = []; for (let i = n - 40; i < n; i++) if (i > 0) rets.push(B[i].close - B[i - 1].close);
+  const mu = rets.reduce((a, b) => a + b, 0) / rets.length;
+  const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mu) * (b - mu), 0) / rets.length);
+  const last = B[n - 1], C = [{time: last.time, value: last.close}], U = [{time: last.time, value: last.close}], L = [{time: last.time, value: last.close}];
+  for (let k = 1; k <= K; k++) {
+    const c = last.close + slope * k * 0.85, w = sd * Math.sqrt(k);
+    C.push({time: last.time + k * g, value: c}); U.push({time: last.time + k * g, value: c + w}); L.push({time: last.time + k * g, value: c - w});
+  }
+  o.pjC.setData(C); o.pjU.setData(U); o.pjL.setData(L);
+  o.pjC.applyOptions({color: slope > 0 ? '#3dd69c' : (slope < 0 ? '#f05454' : '#fbf4ec')});
 }
 function lwCreate(a) {
   const box = document.createElement('div'); box.className = 'lw-box';
@@ -8840,7 +8917,7 @@ function lwCreate(a) {
     + '<button class="lw-ha" title="Heikin Ashi candles - smoother trend view">Heikin Ashi</button>'
     + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
-    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line &middot; <span class="lwk-macd"></span></div>'
+    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line &middot; <span style="color:#f05454">red</span> / <span style="color:#3dd69c">green</span> bands = resistance / support &middot; cone = next 5 candles &middot; <span class="lwk-macd"></span></div>'
     // 2026-10-22 (user): tap to learn &ndash; EMA, the live RSI + MACD read, and why it matters in a 15-minute round
     + '<details class="lw-learn"><summary>What do these mean? <span>EMA &middot; RSI &middot; MACD &middot; 15-minute rounds</span></summary><div class="lw-learn-body">'
     + '<p><b>EMA lines</b> &ndash; the average price over the last 12, 25 and 50 candles, with the newest candles counting the most. '
@@ -8868,6 +8945,10 @@ function lwCreate(a) {
   o.candle = chart.addCandlestickSeries({upColor: '#3dd69c', downColor: '#f05454', borderVisible: false, wickUpColor: 'rgba(61,214,156,0.85)', wickDownColor: 'rgba(240,84,84,0.85)'});
   const ln = c => chart.addLineSeries({color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
   o.e1 = ln('#f8f6f2'); o.e2 = ln('#e9d3a4'); o.e3 = ln('#ffd23f');      // 2026-10-22 (user): EMA 12 near-white / 25 cream / 50 yellow
+  // 2026-10-22 (user): where price may go in the next few candles - a center line + a widening "flashlight" cone
+  const pl = (c, w, st) => chart.addLineSeries({color: c, lineWidth: w, lineStyle: st, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
+  o.pjU = pl('rgba(233,165,187,0.55)', 1, 1); o.pjL = pl('rgba(233,165,187,0.55)', 1, 1); o.pjC = pl('#fbf4ec', 2, 2);
+  o.sr = []; o.srTs = 0; o.pjTs = 0;
   box.querySelectorAll('.lw-tabs button[data-tf]').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
   const hb = box.querySelector('.lw-ha');
   hb.classList.toggle('on', o.ha);
@@ -8881,7 +8962,7 @@ async function lwLoad(o) {
     const j = await (await fetch('/public/candles?asset=' + o.a + '&tf=' + o.tf, {cache: 'no-store'})).json();
     o.bars = (j.candles || []).map(c => ({time: c[0], open: c[1], high: c[2], low: c[3], close: c[4]}));
     o.candle.setData(lwShow(o)); lwIndicators(o); lwRead(o.a, o);
-    const n = o.bars.length; if (n) o.chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - 90), to: n + 3});
+    const n = o.bars.length; if (n) o.chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - 90), to: n + 8});
   } catch (e) {}
   lwPatterns(o);
 }
@@ -11287,7 +11368,7 @@ def build_cross_box(name, d):
 def build_round_strip(name, d):
     # 2026-10-22 (user): RSI + line crosses share one square; the streak tile moved up next to "time until call"
     return (f'<div class="round-strip calls-row">{build_stage_box(name, d, "early")}{build_stage_box(name, d, "sealed")}'
-            f'{build_flip_radar(name, d)}<div class="rs-tile rsi-lx"><div class="lx-mkt lx-mkt-top"><div class="lx-mkt-lbl">MARKET TREND</div>{build_market_box(name)}</div>{build_rsi_box(name, d)}{build_cross_box(name, d)}</div></div>')
+            f'{build_flip_radar(name, d)}<div class="rs-tile rsi-lx"><div class="lx-mkt lx-mkt-top" tabindex="0" title="Tap or hover for the trend details"><div class="lx-mkt-lbl">MARKET TREND</div>{build_market_box(name)}</div>{build_rsi_box(name, d)}{build_cross_box(name, d)}</div></div>')
 
 
 def _streak_stats(results):
