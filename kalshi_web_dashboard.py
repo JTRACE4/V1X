@@ -6604,6 +6604,15 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px !imp
 @media (max-width:1299px) { .chart-side-btn { display:none !important; } }
 .ma-row { flex-wrap:wrap; }
 .ma-money { flex:1 1 100%; font-size:12px; color:#eee2d7; padding-left:2px; } .ma-money b { font-family:var(--br-bold); }
+/* 2026-10-22 (user): chart RSI / MACD readings a bit bigger and level with each other */
+.lw-corner .lw-chips { display:flex !important; align-items:stretch !important; gap:18px !important; }
+.lw-corner .lw-chip { display:inline-grid !important; grid-template-rows:14px 28px 14px; align-items:center; justify-items:center; min-width:64px !important; }
+.lw-corner .lw-chip i { font-size:12px !important; letter-spacing:1.4px !important; line-height:14px !important; }
+.lw-corner .lw-chip b, .lw-corner .lw-chip b.w, .lw-corner .lw-chip b.mgap { font-size:23px !important; line-height:28px !important; margin:0 !important; }
+.lw-corner .lw-chip > span { font-size:10.5px !important; line-height:14px !important; }
+.lw-corner .lw-chip .mk-sub .lw-arr { width:11px !important; height:11px !important; }
+.lw-corner .lw-macd { font-size:13.5px !important; }
+.lw-corner .lw-chip b.mgap { font-size:19px !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
