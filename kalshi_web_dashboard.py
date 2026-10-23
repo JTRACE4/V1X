@@ -9289,7 +9289,7 @@ async function lwLoad(o) {
     const j = await (await fetch('/public/candles?asset=' + o.a + '&tf=' + o.tf, {cache: 'no-store'})).json();
     o.bars = (j.candles || []).map(c => ({time: c[0], open: c[1], high: c[2], low: c[3], close: c[4]}));
     o.candle.setData(lwShow(o)); lwIndicators(o); lwRead(o.a, o);
-    const n = o.bars.length; if (n) o.chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - 90), to: n + 8});
+    const n = o.bars.length; if (n) o.chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - 120), to: n + 10});   // 2026-10-23 (user): opens ~75% zoomed out
   } catch (e) {}
   lwPatterns(o);
 }
@@ -9394,6 +9394,32 @@ function lwAttach() {
 setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o.box.isConnected) lwTick(o); }); }, 2000);
 setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o.box.isConnected) lwPatterns(o); }); }, 15000);
 </script>
+<style>
+/* 2026-10-23 (user): BTC / XRP single view on desktop = the same layout as Duo - the card and the chart window are the SAME
+   width, same top, and the same 20px gap Duo uses between its two cards (body has 24px sides). Chart side still swaps. */
+@media (min-width:1300px) {
+  :root { --half:calc((100vw - 68px) / 2); }
+  body[data-view="BTC"] .card, body[data-view="XRP"] .card {
+    width:var(--half) !important; max-width:none !important; margin-left:0 !important; margin-right:auto !important; }
+  body[data-view="BTC"] .card .lw-win, body[data-view="XRP"] .card .lw-win {
+    left:calc(24px + var(--half) + 20px) !important; right:24px !important; width:auto !important; }
+  body.chart-left[data-view="BTC"] .card, body.chart-left[data-view="XRP"] .card {
+    margin-left:calc(var(--half) + 20px) !important; margin-right:0 !important; }
+  body.chart-left[data-view="BTC"] .card .lw-win, body.chart-left[data-view="XRP"] .card .lw-win {
+    left:24px !important; right:auto !important; width:var(--half) !important; }
+}
+/* 2026-10-23 (user): Charts tab - much wider on desktop (a strip of the BRAIN background still shows at the sides), sized for phones */
+.co-wrap { max-width:none !important; width:min(1680px, calc(100vw - 6vw)); box-sizing:border-box; padding:6px 0 40px !important; }
+.co-win { box-sizing:border-box; padding:14px 16px !important; border-radius:18px; background:rgba(33,27,30,0.94);
+  border:1px solid rgba(220,187,145,0.28); box-shadow:0 24px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,240,225,0.06); margin:0 !important; }
+.co-win .lw-chart { height:clamp(480px, calc(100vh - 290px), 920px) !important; }
+@media (max-width:760px) {
+  .co-wrap { width:100%; padding:4px 0 30px !important; }
+  .co-win { padding:10px 8px !important; border-radius:14px; }
+  .co-win .lw-chart { height:clamp(340px, 58vh, 520px) !important; }
+  .co-tabs { gap:4px; } .co-tabs button { padding:6px 11px; font-size:12.5px; }
+}
+</style>
 </head><body>
 <div class="app-bg" aria-hidden="true"><picture><source srcset="/static/hero.webp" type="image/webp"><img src="/static/hero.jpg" alt=""></picture></div><header class="g-top"><div class="g-brand"><img class="b-logo" src="/static/logo.png" width="52" height="52" alt="BRAIN"><div class="g-logo">BRAIN</div></div><div class="g-tag"><span>Market Watcher</span><span class="g-live">&#9679; LIVE</span></div><button id="snd-toggle" class="snd-toggle" type="button" onclick="toggleSound()" aria-pressed="false"><i class=ico data-i=sound-off></i> Sound OFF</button><div id="wr-badge" class="wr-badge" onclick="toggleWr()" title="win rate + streak - tap for full round history"></div></header>
 <div id="wr-panel" class="wr-panel"></div>
