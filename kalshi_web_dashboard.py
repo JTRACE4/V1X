@@ -11451,7 +11451,7 @@ def _lerp(x, x0, x1, y0, y1):
 # and RSI". The same support / resistance zones the live chart shades (lwLevels in the page: swing highs / lows clustered into
 # tight $ bands, "Rejected N times" / "Held N times"), plus RSI(14) and MACD(12,26,9) on the same 1-minute candles. Re-read at
 # most every 5 seconds per coin, so the radar costs nothing extra on the 1-second refresh.
-_chart_cache = {}
+_chart_read_cache = {}
 
 
 def _wilder_rsi(cl, n=14):
@@ -11521,7 +11521,7 @@ def _sr_zones(B):
 def chart_read(name):
     """{"rsi", "rsi_prev", "hist", "hist_prev", "macd", "zones", "atr", "last"} from 1-minute candles, or None."""
     now = time.time()
-    c = _chart_cache.get(name)
+    c = _chart_read_cache.get(name)
     if c and now - c[0] < 5:
         return c[1]
     out = None
@@ -11539,7 +11539,7 @@ def chart_read(name):
                    "atr": atr, "last": cs[-4:]}
     except Exception as e:
         print(f"[chart_read] {name}: {e!r}")
-    _chart_cache[name] = (now, out)
+    _chart_read_cache[name] = (now, out)
     return out
 
 
