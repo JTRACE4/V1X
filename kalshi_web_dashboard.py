@@ -4674,7 +4674,7 @@ def poll_loop():
                 stage_sig = stage_signals(kalshi_price, live_price, target, spot_closes, _f2, _tn["ex_up"] if _tn else None, _trend_v)
                 # 2026-10-22 (user): MINI CALL v2 - at 1:00, from the last 2 min of the previous round + this round's first minute,
                 # read through RSI / MACD / EMA trend / price vs the line (the backtest picks which reads count)
-                if target and 60 <= elapsed_seconds < 240 and (stage_calls.get("mini") or {}).get("v") != 2:
+                if MINI_CALL_ON and target and 60 <= elapsed_seconds < 240 and (stage_calls.get("mini") or {}).get("v") != 2:
                     try:
                         try:
                             _p3 = _flow.HUB.window_detail(asset["name"], 180)["pct"] if asset["name"] in _flow.ASSETS else None
@@ -11978,7 +11978,7 @@ def _tod_label(now_et):
 def _fav_rows(hist, keep, at_by=None):
     """Per call: record + $100/call profit (held to the end = primary; cashing out at 90c = secondary) for rounds kept."""
     out = []
-    for key, lab in (("mini", "Mini call &middot; 1:00"), ("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00")):
+    for key, lab in (("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00")):
         g, res, kps = [], [], []
         for h in hist:
             if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
@@ -12012,12 +12012,12 @@ def _fav_cells(rows, best):
     return "".join(
         f'<div class="ma-row{" ma-best" if r["key"] == best else ""}"><span class="ma-lab">{r["lab"]}'
         + ('<span class="ma-tag">BRAIN&rsquo;S FAVORITE</span>' if r["key"] == best else "") + '</span>'
-        + (f'<b class="ma-profit">{m(r["hold"])}</b>' if r["nm"] else "")
+        + (f'<!--OWNER--><b class="ma-profit">{m(r["hold"])}</b><!--/OWNER-->' if r["nm"] else "")
         + (f'<b class="ma-pct">{r["w"] / r["n"]:.0%}</b><span class="ma-wl">{r["w"]}W &middot; {r["n"] - r["w"]}L</span>' if r["n"] else '<span class="ma-wl hint">no rounds yet</span>')
         + ('<div class="ma-money">'
            + (f'<span class="ma-k">AVG IN</span> <b>{r["avg"] * 100:.0f}&cent;</b>' if r.get("avg") else "")
-           + (f'<span class="ma-k">BEST CO</span> <b>{r["at"] * 100:.0f}&cent;</b> {m(r["cash"])} <span class="hint">({r["hits"]}/{r["nm"]} hit)</span>'
-              if r.get("at") else '<span class="ma-k">BEST CO</span> <b>hold</b>')
+           + ((f'<span class="ma-k">BEST CO</span> <b>{r["at"] * 100:.0f}&cent;</b> <!--OWNER-->{m(r["cash"])} <!--/OWNER--><span class="hint">({r["hits"]}/{r["nm"]} hit)</span>'
+              if r.get("at") else '<span class="ma-k">BEST CO</span> <b>hold</b>'))
            + '</div>' if r["nm"] else "")
         + '</div>' for r in rows)
 
@@ -12050,7 +12050,7 @@ def _build_brain_favorite(name):
     bc = _best_at_cache.setdefault(name, {})
     if bc.get("k") != ck:
         bc["k"] = ck
-        bc["v"] = {k: _best_cashout(hist, k)[0] for k in ("mini", "early", "sealed")}
+        bc["v"] = {k: _best_cashout(hist, k)[0] for k in ("early", "sealed")}
     at_by = bc["v"]
     panes = []
     # 2026-10-23 (user): by calendar day (ET), not rolling hours; "All time" = exactly the scoreboard's numbers
@@ -12090,19 +12090,19 @@ def _build_brain_favorite(name):
         if ph:
             good = " &middot; ".join(f'<b>{lab12(H)}</b> <span class="{"up" if v >= 0 else "down"}">{"+" if v >= 0 else "-"}${abs(v):,.0f}</span>' for H, v in ph[:3])
             bad = " &middot; ".join(f'<b>{lab12(H)}</b> <span class="down">-${abs(v):,.0f}</span>' for H, v in ph[::-1][:2] if v < 0)
-            fav_line = (f'<div class="ma-sub">All-time favorite, <b>{short[all_best]} call</b>: best hours {good}'
-                        + (f' &middot; worst {bad}' if bad else "") + '</div>')
+            fav_line = (f'<!--OWNER--><div class="ma-sub">All-time favorite, <b>{short[all_best]} call</b>: best hours {good}'
+                        + (f' &middot; worst {bad}' if bad else "") + '</div><!--/OWNER-->')
     for H in range(24):
         strip = "".join(
             f'<button type="button" class="hr-cell{" on" if h2 == H else ""}{" pos" if v > 0 else ""}" '
             f'onclick="document.body.dataset.matf=\'h{h2}\'" title="{lab12(h2)} ET: '
-            + (f'{short[b]} call +${v:,.0f}' if b else 'no profitable call') + '">'
+            + (f'{short[b]} call<!--OWNER--> +${v:,.0f}<!--/OWNER-->' if b else 'no profitable call') + '">'
             f'<i style="height:{max(3, round(26 * abs(v) / mx)) if b else 3}px"></i><span>{lab12(h2)}</span></button>'
             for h2, b, v in tops)
         best = _fav_best(hour_rows[H], 3)
         nr = max((r["n"] for r in hour_rows[H]), default=0)
         panes.append(f'<div class="ma-pane" data-tf="h{H}"><div class="hr-strip">{strip}</div>'
-                     f'{fav_line}<div class="hint ma-sub">Most profitable call in each hour (last 30 days): {best_txt}</div>'
+                     f'{fav_line}<!--OWNER--><div class="hint ma-sub">Most profitable call in each hour (last 30 days): {best_txt}</div><!--/OWNER-->'
                      f'<div class="ma-sub"><b>{lab12(H).replace("a", " AM").replace("p", " PM")} ET</b> <span class="hint">&middot; {nr} {name} rounds that started in this hour, last 30 days</span></div>'
                      f'{_fav_cells(hour_rows[H], best)}</div>')
     tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{tf}" onclick="document.body.dataset.matf=\'{tf}\'">{lab}</button>'
@@ -12110,7 +12110,7 @@ def _build_brain_favorite(name):
     tabs += (f'<button type="button" class="ma-tab ma-tab-hr" data-tf="hr" '
              f'onclick="document.body.dataset.matf=\'h{now_et.hour}\'">By hour</button>')
     return (f'<div class="most-acc"><div class="ma-head"><span class="ma-title">BRAIN&rsquo;S FAVORITE</span><span class="ma-tabs">{tabs}</span></div>'
-            f'{"".join(panes)}<div class="hint ma-key">Big number = profit on $100 a call held to the end &middot; '
+            f'{"".join(panes)}<div class="hint ma-key"><!--OWNER-->Big number = profit on $100 a call held to the end &middot; <!--/OWNER-->'
             f'AVG IN = average buy-in price &middot; BEST CO = best cash-out point (tested 70&ndash;99&cent; vs holding)</div></div>')
 
 
@@ -12127,8 +12127,7 @@ def build_scoreboard(name, d):
     now_et = dt.datetime.now(dt.timezone.utc).astimezone(et)
     day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
     cols = []
-    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"),
-                               ("mini", "MINI CALL &middot; 1:00", "mini_correct"))
+    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"))
                               + ((("bot", "BOT CALL (auto-buy)", "correct"),) if SHOW_BOT_RECORD else ())):
         rows = [h for h in hist if h.get(field) is not None and not (key != "bot" and h.get(f"{key}_reversal"))]
         if key == "mini":
@@ -12171,7 +12170,7 @@ def build_scoreboard(name, d):
             f'<br><span class="hint">{n:,} round{"s" if n != 1 else ""}</span></span></div>'
             f'<div class="sc-cur">{streak}</div>'
             f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; today: <b>{td}</b>'
-            + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div>{_mbt}</div>')
+            + (f'<!--OWNER--> &middot; {pnl}<!--/OWNER-->' if pnl else "") + f'</div><div class="sc-chips">{chips}</div>{_mbt}</div>')
     # 2026-10-22 (user): reversals in their own column so the main win rate stays clean
     # 2026-10-22 (d, user: "reset the win to lose rate"): the reversal record restarts with the flip-history system
     def _after_reset(h):
@@ -12198,7 +12197,7 @@ def build_scoreboard(name, d):
             f'<div class="sc-main"><span class="sc-pct">{rw / len(rv):.0%}</span><span class="sc-wl"><b class="skw">{rw}W</b> &middot; '
             f'<b class="skl">{len(rv) - rw}L</b></span></div>')
         cols[-1] += (f'<div class="sc-stats">Best run: <b class="skw">{rbw}W</b> &middot; '
-                     + (f'<span class="{"up" if rpnl >= 0 else "down"}">{rpnl:+,.0f}</span> on $100/call &middot; ' if pays else "")
+                     + (f'<!--OWNER--><span class="{"up" if rpnl >= 0 else "down"}">{rpnl:+,.0f}</span> on $100/call &middot; <!--/OWNER-->' if pays else "")
                      + '</div>'
                      f'<div class="sc-chips">{"".join(_result_chip(x[0], x[1]) for x in rv[-15:])}</div></div>')
     no_call = sum(1 for h in hist if h.get("correct") is None)
@@ -12261,7 +12260,9 @@ def build_rounds_panel(name, d, part="all"):
             else '<span class="mc-wr">win rate: no graded rounds yet</span>')
     _mnote = ('<span class="mc-sub">A quick scan from history &ndash; not BRAIN&rsquo;s main call. '
               'The early (4:00) and sealed (8:00) calls are the main calls.</span>')
-    if _m2.get("v") == 2 and _m2.get("call"):
+    if not MINI_CALL_ON:
+        m2_html = ""
+    elif _m2.get("v") == 2 and _m2.get("call"):
         _up2 = _m2["call"] == "YES"
         m2_html = (f'<div class="mini-call mc-{"up" if _up2 else "down"}"><span class="mc-lbl">MINI CALL &middot; 1:00</span>'
                    f'<b class="mc-dir">{"<i class=va-u></i> UP" if _up2 else "<i class=va-d></i> DOWN"}</b>'
@@ -13943,6 +13944,7 @@ def radar_html(name, ticker):
 TARGET_MATCH_PCT = 0.05       # "the same price target" = exact, or within 5%
 
 
+MINI_CALL_ON = False           # 2026-10-23 (user): "get rid of the mini call" - not made, not shown
 MINI_CALL_N = 10               # 2026-10-22 (user): mini call from the last 10 rounds near the target
 TARGET_RECENT_PCT = 0.01       # 2026-10-22 (user): exact target first, then the closest within 1%, from the last 30 days
 TARGET_LOOKBACK_S = 30 * 86400
@@ -16004,7 +16006,8 @@ def main():
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=_live_odds_loop, daemon=True, name="live-odds").start()
     threading.Thread(target=_network_loop, daemon=True, name="network-clog").start()
-    threading.Thread(target=_mini_backfill_loop, daemon=True, name="mini-backfill").start()
+    if MINI_CALL_ON:
+        threading.Thread(target=_mini_backfill_loop, daemon=True, name="mini-backfill").start()
     try:
         _rsi_check.start()
     except Exception as _e:
