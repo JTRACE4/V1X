@@ -684,6 +684,44 @@ def _fast_get(url, params=None, **kwargs):
 
 _rq.get = _fast_get
 
+
+class KalshiTapeError(Exception):
+    pass
+
+
+_kget_lock = threading.Lock()
+_kget_last = [0.0]
+
+
+def _kget(path, params=None, need="trades", timeout=12):
+    """2026-10-23 tape audit: GET the market's public API, retrying on rate limits / server errors. Raises instead of
+    returning an error reply - an error reply used to look like 'no more trades' and leave partial totals behind."""
+    url = "https://external-api.kalshi.com/trade-api/v2" + path
+    last = None
+    for wait in (0, 0.6, 1.5, 3.0, 6.0):
+        if wait:
+            time.sleep(wait)
+        with _kget_lock:                                  # space calls out a little across all threads (~12/s max)
+            gap = 0.08 - (time.time() - _kget_last[0])
+            if gap > 0:
+                time.sleep(gap)
+            _kget_last[0] = time.time()
+        try:
+            r = _rq.get(url, params=params, timeout=timeout)
+            if r.status_code == 429 or r.status_code >= 500:
+                last = f"HTTP {r.status_code}"
+                continue
+            j = r.json()
+            if r.status_code != 200 or (need and need not in j):
+                last = f"HTTP {r.status_code} {str(j)[:120]}"
+                if r.status_code in (400, 404):
+                    break
+                continue
+            return j
+        except Exception as e:
+            last = repr(e)[:160]
+    raise KalshiTapeError(f"{path}: {last}")
+
 # tested 2026-08-15: classic RSI (oversold<30 -> expect bounce up, overbought
 # >70 -> expect drop) is backwards in these 15-min windows - 5-12% accuracy
 # across every config, both train/holdout. Matches an earlier mean-reversion
@@ -4217,7 +4255,7 @@ def poll_loop():
                 try:
                     if asset["name"] in _flow.ASSETS:
                         _flow.HUB.set_line(asset["name"], active["ticker"], target)
-                        _kalshi_round_flow(asset["name"], active["ticker"], open_time_dt.timestamp())
+                        _kalshi_round_flow_bg(asset["name"], active["ticker"], open_time_dt.timestamp())
                 except Exception:
                     pass
 
@@ -9318,49 +9356,91 @@ _PAT_WINDOW_TFS = ("1m", "5m", "15m", "1h", "3h", "6h", "12h", "1d", "1M")
 _kflow = {}     # asset name -> {"ticker","ts","yes","no","n"}: Kalshi taker dollars on YES vs NO so far this round
 
 
+def _tape_add(acc, t):
+    cnt = float(t.get("count_fp", 0) or 0)
+    p = float(t["yes_price_dollars"])
+    if t.get("taker_side") == "yes":
+        acc["yes"] += cnt * p
+    elif t.get("taker_side") == "no":
+        acc["no"] += cnt * (1 - p)
+    acc["n"] += 1
+    acc["up_all"] += cnt * p
+    acc["dn_all"] += cnt * (1 - p)
+    acc["contracts"] += cnt
+
+
+_kflow_busy = set()
+
+
+def _kalshi_round_flow_bg(asset_name, ticker, open_ts):
+    """Refresh the market tape off the price loop, so a slow or retried pull never holds up the clock / prices."""
+    c = _kflow.get(asset_name)
+    if (c and c["ticker"] == ticker and time.time() - c["ts"] < 6) or asset_name in _kflow_busy:
+        return
+    _kflow_busy.add(asset_name)
+
+    def _run():
+        try:
+            _kalshi_round_flow(asset_name, ticker, open_ts)
+        finally:
+            _kflow_busy.discard(asset_name)
+    threading.Thread(target=_run, daemon=True, name=f"tape-{asset_name}").start()
+
+
 def _kalshi_round_flow(asset_name, ticker, open_ts):
-    """Dollars Kalshi traders have taken on YES versus NO since this round opened (public trade tape; refreshed at most every 6s)."""
+    """Dollars the market's traders have taken on YES versus NO since this round opened (public trade tape; refreshed
+    at most every 6s). 2026-10-23 (tape audit): running totals - each refresh only pulls the trades since the last one
+    (de-duplicated by trade id), no page cap, and a failed pull keeps the last good totals instead of saving a partial count."""
     c = _kflow.get(asset_name)
     now = time.time()
     if c and c["ticker"] == ticker and now - c["ts"] < 6:
         return
-    keep = c if (c and c["ticker"] == ticker) else {"yes": 0.0, "no": 0.0, "n": 0}
+    fresh = not (c and c["ticker"] == ticker and c.get("ids") is not None)
+    acc = ({"ticker": ticker, "yes": 0.0, "no": 0.0, "n": 0, "up_all": 0.0, "dn_all": 0.0, "contracts": 0.0,
+            "ids": set(), "recent": [], "last_ts": open_ts} if fresh else dict(c))
+    acc["ids"] = set(acc["ids"])
+    acc["recent"] = list(acc["recent"])
+    since = max(open_ts, acc["last_ts"] - 3)
     try:
-        yes = no = 0.0
-        up_all = dn_all = contracts = 0.0          # 2026-10-22 (user): full money on each side (both sides of every trade)
-        n = 0
-        cursor = None
-        for _ in range(10):
-            params = {"ticker": ticker, "limit": 1000}
+        new, cursor = [], None
+        for _ in range(80):
+            params = {"ticker": ticker, "limit": 1000, "min_ts": int(since)}
             if cursor:
                 params["cursor"] = cursor
-            r = _rq.get("https://external-api.kalshi.com/trade-api/v2/markets/trades", params=params, timeout=10).json()
-            trades = r.get("trades", [])
-            if not trades:
-                break
-            old = False
-            for t in trades:
-                ts = dt.datetime.fromisoformat(t["created_time"].replace("Z", "+00:00")).timestamp()
-                if ts < open_ts:
-                    old = True
-                    continue
-                cnt = float(t.get("count_fp", 0) or 0)
-                p = float(t["yes_price_dollars"])
-                if t.get("taker_side") == "yes":
-                    yes += cnt * p
-                elif t.get("taker_side") == "no":
-                    no += cnt * (1 - p)
-                n += 1
-                up_all += cnt * p
-                dn_all += cnt * (1 - p)
-                contracts += cnt
+            r = _kget("/markets/trades", params)
+            tr = r.get("trades", [])
+            new.extend(tr)
             cursor = r.get("cursor")
-            if old or not cursor:
+            if not tr or not cursor:
                 break
-        _kflow[asset_name] = {"ticker": ticker, "ts": now, "yes": yes, "no": no, "n": n,
-                              "up_all": up_all, "dn_all": dn_all, "contracts": contracts}
-    except Exception:
-        _kflow[asset_name] = {"ticker": ticker, "ts": now, "yes": keep["yes"], "no": keep["no"], "n": keep["n"]}
+        else:
+            raise KalshiTapeError("more than 80 pages in one refresh")
+        newest = acc["last_ts"]
+        for t in reversed(new):                          # oldest first
+            tid = t.get("trade_id")
+            if tid in acc["ids"]:
+                continue
+            ts = dt.datetime.fromisoformat(t["created_time"].replace("Z", "+00:00")).timestamp()
+            if ts < open_ts:
+                continue
+            _tape_add(acc, t)
+            acc["ids"].add(tid)
+            acc["recent"].append((ts, tid))
+            newest = max(newest, ts)
+        acc["last_ts"] = newest
+        cut = newest - 30                                # only ids near the edge are needed to de-duplicate the overlap
+        acc["recent"] = [x for x in acc["recent"] if x[0] >= cut]
+        acc["ids"] = {x[1] for x in acc["recent"]}
+        acc["ts"] = now
+        acc["ok"] = True
+        _kflow[asset_name] = acc
+    except Exception as e:
+        if fresh:
+            _kflow[asset_name] = {"ticker": ticker, "ts": now, "yes": 0.0, "no": 0.0, "n": 0, "up_all": 0.0, "dn_all": 0.0,
+                                  "contracts": 0.0, "ids": None, "recent": [], "last_ts": open_ts, "ok": False}
+        else:
+            c["ts"] = now                                # keep the last good totals; try again next refresh
+        print(f"[market tape] {asset_name} {ticker}: {e!r}")
 
 
 # ---- 2026-10-23 (user): TAPE AUDIT - check the market order tape against the market's own official numbers.
@@ -9381,7 +9461,7 @@ def _tape_all(ticker, open_ts=None, close_ts=None, max_pages=60):
             params["max_ts"] = int(close_ts) + 5
         if cursor:
             params["cursor"] = cursor
-        r = _rq.get(_KAPI + "/markets/trades", params=params, timeout=15).json()
+        r = _kget("/markets/trades", params)
         pages += 1
         tr = r.get("trades", [])
         for t in tr:
@@ -9422,15 +9502,15 @@ def _tape_sums(trades, open_ts=None, close_ts=None):
     return {"n": n, "contracts": contracts, "up": up, "dn": dn, "ty": ty, "tn": tn, "outside": outside, "bad": bad}
 
 
-def _tape_live_replica(ticker, open_ts):
-    """The live panel's exact method (no min_ts, 10 pages of 1000, stop at the first trade before the open)."""
+def _tape_old_method(ticker, open_ts):
+    """The OLD live panel method (before 2026-10-23: no min_ts, 10 pages of 1000) - kept to show what it would have shown."""
     up = dn = ty = tn = contracts = 0.0
     n, cursor, capped = 0, None, False
     for i in range(10):
         params = {"ticker": ticker, "limit": 1000}
         if cursor:
             params["cursor"] = cursor
-        r = _rq.get(_KAPI + "/markets/trades", params=params, timeout=15).json()
+        r = _kget("/markets/trades", params)
         trades = r.get("trades", [])
         if not trades:
             break
@@ -9470,12 +9550,16 @@ def tape_audit(n_rounds=8):
             o_ts = c_ts - 900
             row = {"asset": name, "ticker": tk}
             try:
-                m = (_rq.get(_KAPI + "/markets/" + tk, timeout=15).json() or {}).get("market") or {}
+                m = _kget("/markets/" + tk, need="market").get("market") or {}
                 row["official"] = float(m.get("volume_fp") or 0)
                 row["result"] = m.get("result")
                 full, row["pages"], row["dup"] = _tape_all(tk, o_ts, c_ts)
                 row["full"] = _tape_sums(full, o_ts, c_ts)
-                row["rep"] = _tape_live_replica(tk, o_ts)
+                row["rep"] = _tape_old_method(tk, o_ts)
+                _kflow.pop("__audit", None)
+                _kalshi_round_flow("__audit", tk, o_ts)
+                _nw = _kflow.pop("__audit", None) or {}
+                row["new"] = {"contracts": _nw.get("contracts", 0.0), "ok": _nw.get("ok")}
             except Exception as e:
                 row["err"] = repr(e)[:200]
             rows.append(row)
@@ -9501,15 +9585,17 @@ def tape_audit_html(n_rounds=8):
     n_ok = n_all = 0
     for r in rows:
         if r.get("err"):
-            tr.append(f'<tr><td>{r["asset"]}</td><td>{r["ticker"]}</td><td colspan=8 style="color:#f05454">{_html_attr(r["err"])}</td></tr>')
+            tr.append(f'<tr><td>{r["asset"]}</td><td>{r["ticker"]}</td><td colspan=9 style="color:#f05454">{_html_attr(r["err"])}</td></tr>')
             continue
         f, rp, off = r["full"], r["rep"], r["official"]
         d1, d2 = pc(f["contracts"], off), pc(rp["contracts"], off)
+        d3 = pc(r["new"]["contracts"], off)
         n_all += 1
-        n_ok += d1 < 0.5 and d2 < 0.5
+        n_ok += d1 < 0.5 and d3 < 0.5
         tr.append(f'<tr><td>{r["asset"]}</td><td>{_round_label(r["ticker"])}<br><span class=h>{r["ticker"]}</span></td>'
                   f'<td>{off:,.0f}</td><td>{f["contracts"]:,.0f} {ok(d1)}</td><td>{rp["contracts"]:,.0f} {ok(d2)}'
                   + (' <b style="color:#f05454">CAPPED</b>' if rp["capped"] else "") + '</td>'
+                  f'<td>{r["new"]["contracts"]:,.0f} {ok(d3)}</td>'
                   f'<td>{f["n"]:,}</td><td>{_usd_short(f["up"])} / {_usd_short(f["dn"])}</td>'
                   f'<td>{_usd_short(f["ty"])} / {_usd_short(f["tn"])}</td>'
                   f'<td>{r["pages"]}p &middot; {r["dup"]} dup &middot; {f["outside"]} out &middot; {f["bad"]} bad</td>'
@@ -9525,12 +9611,12 @@ def tape_audit_html(n_rounds=8):
                   f'<td>shown {_usd_short(sh.get("up_all", 0))}/{_usd_short(sh.get("dn_all", 0))} &middot; fresh {_usd_short(f["up"])}/{_usd_short(f["dn"])}</td>'
                   f'<td>shown {sh.get("n", 0):,} &middot; fresh {f["n"]:,} trades</td></tr>')
     verdict = (f'<p><b>{n_ok} of {n_all}</b> finished rounds match the market&rsquo;s official volume within 0.5% '
-               f'(both a full pull and the live panel&rsquo;s own method).</p>')
+               f'(both a full pull and the panel&rsquo;s new method).</p>')
     st = ("<style>body{background:#1b1719;color:#eee2d7;font:14px system-ui;padding:16px}table{border-collapse:collapse;width:100%;margin:10px 0 24px}"
           "td,th{border-bottom:1px solid #3a2e3c;padding:6px;text-align:left;vertical-align:top}th{color:#c9a98a;font-size:12px}.h{color:#8e7f78;font-size:11px}</style>")
     return (f'<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><title>Tape audit</title>{st}'
             f'<h2>Market order tape audit</h2>{verdict}'
-            '<table><tr><th>Coin</th><th>Round</th><th>Official volume</th><th>Full pull (off by)</th><th>Live method (off by)</th>'
+            '<table><tr><th>Coin</th><th>Round</th><th>Official volume</th><th>Full pull (off by)</th><th>Old panel method</th><th>New panel method</th>'
             '<th>Trades</th><th>$ UP / DOWN</th><th>Takers UP / DOWN</th><th>Checks</th><th>Result</th></tr>' + "".join(tr) + '</table>'
             '<h3>Round in progress: panel vs fresh pull</h3><table><tr><th>Coin</th><th>Ticker</th><th>Panel age</th><th>Contracts</th><th>$ UP/DOWN</th><th>Trades</th></tr>'
             + "".join(lv) + '</table><p class=h>Official volume = the market&rsquo;s own contract count. Small live gaps are expected '
@@ -9547,7 +9633,7 @@ def _tape_audit_log():
                 print(f"[tape audit] {r['asset']} {r['ticker']} ERROR {r['err']}")
                 continue
             f, rp, off = r["full"], r["rep"], r["official"]
-            print(f"[tape audit] {r['asset']} {r['ticker']} official={off:.2f} full={f['contracts']:.2f} live_method={rp['contracts']:.2f}"
+            print(f"[tape audit] {r['asset']} {r['ticker']} official={off:.2f} full={f['contracts']:.2f} old_method={rp['contracts']:.2f} new_method={r['new']['contracts']:.2f}"
                   f" capped={rp['capped']} trades={f['n']} up=${f['up']:.2f} down=${f['dn']:.2f} takers_up=${f['ty']:.2f} takers_down=${f['tn']:.2f}"
                   f" pages={r['pages']} dup={r['dup']} outside={f['outside']} bad={f['bad']} result={r.get('result')}")
         for x in live:
@@ -11924,7 +12010,7 @@ def _money_html(pnl, avg, n):
 # ---- 2026-10-22 (user): "what would have happened if you cashed out at 90" - for every graded call, the highest / lowest
 # price the market traded at after the call was made (public trade tape, fetched once per finished round and cached).
 CASHOUT_AT = 0.90
-CASHOUT_FILE = os.path.join(_DATA_ROOT, "data_cache", "cashout_marks.json")
+CASHOUT_FILE = os.path.join(_DATA_ROOT, "data_cache", "cashout_marks_v2.json")   # v2 2026-10-23: old file had tapes cut short by API errors
 _CALL_SEC = {"mini": 60, "early": 240, "sealed": 480}
 try:
     with open(CASHOUT_FILE) as _f:
@@ -11941,11 +12027,11 @@ def _fetch_round_marks(ticker):
     c_ts = close.timestamp()
     o_ts = c_ts - 900
     pts, cursor = [], None
-    for _ in range(25):
+    for _ in range(80):
         params = {"ticker": ticker, "limit": 1000, "min_ts": int(o_ts), "max_ts": int(c_ts) + 5}
         if cursor:
             params["cursor"] = cursor
-        r = _rq.get("https://external-api.kalshi.com/trade-api/v2/markets/trades", params=params, timeout=12).json()
+        r = _kget("/markets/trades", params)
         tr = r.get("trades", [])
         for t in tr:
             ts = dt.datetime.fromisoformat(t["created_time"].replace("Z", "+00:00")).timestamp()
