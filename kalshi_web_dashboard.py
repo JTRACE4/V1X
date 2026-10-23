@@ -9163,6 +9163,11 @@ function lwHA(bars) {
   return out;
 }
 function lwShow(o) { return o.ha ? lwHA(o.bars) : o.bars; }
+// 2026-10-23: a chart moved between spots (or sized while hidden) could end up zoomed out to empty space - snap it back to the
+// default ~120-candle view whenever it is (re)attached, or if it ever drifts that far out
+function lwFit(o) {
+  try { const n = o.bars.length; if (n) o.chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - 120), to: n + 10}); } catch (e) {}
+}
 function lwIndicators(o) {
   const cl = o.bars.map(b => b.close), t = o.bars.map(b => b.time);
   [[12, o.e1], [25, o.e2], [50, o.e3]].forEach(([n, s]) => { const e = lwEma(cl, n); s.setData(t.map((x, i) => ({time: x, value: e[i]})).slice(n)); });
@@ -9299,6 +9304,7 @@ async function lwLoad(o) {
 }
 async function lwTick(o) {
   if (o.busy || !o.bars.length) return;
+  try { const vr = o.chart.timeScale().getVisibleLogicalRange(); if (vr && vr.from < -60) lwFit(o); } catch (e) {}
   o.busy = true;
   try {
     const t = await (await fetch('/public/ticker?asset=' + o.a, {cache: 'no-store'})).json();
@@ -9417,7 +9423,7 @@ function lwAttach() {
     }
     const a = slot.dataset.asset;
     const o = LW[a] || (LW[a] = lwCreate(a));
-    if (o.box.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(o.box); }
+    if (o.box.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(o.box); requestAnimationFrame(() => lwFit(o)); }
   });
 }
 setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o.box.isConnected) lwTick(o); }); }, 2000);
