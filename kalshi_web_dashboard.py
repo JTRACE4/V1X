@@ -6686,6 +6686,15 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px !imp
   content:"MARKET TREND"; display:block; font-family:var(--br-label); font-weight:800; font-size:10px; letter-spacing:1.4px; color:#dcbb91; margin-bottom:2px; }
 /* 2026-10-22 (user): S/R as shaded $ bands; locked side-by-side view fitted to the screen */
 .lw-chart { position:relative; }
+/* 2026-10-23 (user): RSI + MACD panels under the chart */
+.lw-sub { position:relative; height:96px; margin-top:4px; border-top:1px solid rgba(242,196,107,.12); }
+.lw-sub-macd { height:118px; }
+.lw-sub-lbl { position:absolute; top:3px; left:8px; z-index:3; pointer-events:none; font-size:11.5px; color:#bcaaa1; letter-spacing:.3px;
+  text-shadow:0 1px 3px rgba(0,0,0,.7); }
+.lw-sub-lbl b { color:#fbf4ec; font-weight:800; margin-right:6px; }
+.lw-sub-lbl .up { color:#3dd69c; font-weight:700; } .lw-sub-lbl .dn { color:#f05454; font-weight:700; } .lw-sub-lbl .nt { color:#d6cac4; }
+.lw-sub-lbl i.k-m, .lw-sub-lbl i.k-s { display:inline-block; width:12px; height:2px; vertical-align:3px; margin:0 3px 0 4px; border-radius:2px; }
+.lw-sub-lbl i.k-m { background:#8fc4f0; } .lw-sub-lbl i.k-s { background:#f2c46b; }
 .lw-bands { position:absolute; left:0; top:0; bottom:0; pointer-events:none; z-index:2; overflow:hidden; }
 .lw-band { position:absolute; left:0; right:0; border-top:1px solid; border-bottom:1px solid; box-sizing:border-box; }
 .lw-band.res { background:rgba(240,84,84,0.14); border-color:rgba(240,84,84,0.6); }
@@ -9131,9 +9140,75 @@ function lwHA(bars) {
   return out;
 }
 function lwShow(o) { return o.ha ? lwHA(o.bars) : o.bars; }
+// ---- 2026-10-23 (user): RSI + full MACD panels under the chart, in BRAIN's colors, kept in step with the chart's zoom / scroll.
+// RSI(14) Wilder: pink line, 70 / 30 dashed guides. MACD(12,26,9): blue MACD line, gold signal line, green / red histogram,
+// and a small marker every time the two lines cross (up = green, down = red).
+const LW_SUB = {layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: "Carlito, Calibri, 'Segoe UI', sans-serif", fontSize: 11},
+  grid: {vertLines: {color: 'rgba(242,196,107,.04)'}, horzLines: {color: 'rgba(242,196,107,.04)'}},
+  rightPriceScale: {borderColor: 'rgba(242,196,107,.18)', minimumWidth: 78, scaleMargins: {top: 0.12, bottom: 0.08}},
+  timeScale: {visible: false, borderColor: 'rgba(242,196,107,.18)'}, crosshair: {mode: 0}, handleScroll: false, handleScale: false};
+function lwRsiSeries(cl, n) {
+  const out = new Array(cl.length).fill(null);
+  if (cl.length < n + 1) return out;
+  let g = 0, l = 0;
+  for (let i = 1; i <= n; i++) { const d = cl[i] - cl[i - 1]; g += Math.max(d, 0); l += Math.max(-d, 0); }
+  g /= n; l /= n; out[n] = l === 0 ? 100 : 100 - 100 / (1 + g / l);
+  for (let i = n + 1; i < cl.length; i++) {
+    const d = cl[i] - cl[i - 1]; g = (g * (n - 1) + Math.max(d, 0)) / n; l = (l * (n - 1) + Math.max(-d, 0)) / n;
+    out[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l);
+  }
+  return out;
+}
+function lwSubCreate(o) {
+  const rEl = o.box.querySelector('.lw-sub-rsi'), mEl = o.box.querySelector('.lw-sub-macd');
+  const fmt2 = v => Number(v).toFixed(0);
+  o.rc = LightweightCharts.createChart(rEl, Object.assign({autoSize: true}, LW_SUB, {localization: {priceFormatter: fmt2}}));
+  o.rLine = o.rc.addLineSeries({color: '#e9a5bb', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false,
+    autoscaleInfoProvider: () => ({priceRange: {minValue: 0, maxValue: 100}})});
+  [[70, 'rgba(240,84,84,.55)'], [50, 'rgba(242,196,107,.22)'], [30, 'rgba(61,214,156,.55)']].forEach(([v, c]) =>
+    o.rLine.createPriceLine({price: v, color: c, lineWidth: 1, lineStyle: 2, axisLabelVisible: v !== 50, title: ''}));
+  const mFmt = v => { const x = Math.abs(v); return (v < 0 ? '−' : '') + (x >= 100 ? x.toFixed(0) : x >= 1 ? x.toFixed(2) : x >= 0.01 ? x.toFixed(4) : x.toFixed(6)); };
+  o.mc = LightweightCharts.createChart(mEl, Object.assign({autoSize: true}, LW_SUB, {localization: {priceFormatter: mFmt}}));
+  o.mHist = o.mc.addHistogramSeries({priceLineVisible: false, lastValueVisible: false, base: 0});
+  o.mLine = o.mc.addLineSeries({color: '#8fc4f0', lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
+  o.mSig = o.mc.addLineSeries({color: '#f2c46b', lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
+  // follow the main chart's zoom / scroll (logical index 0 = the first candle in all three)
+  o.chart.timeScale().subscribeVisibleLogicalRangeChange(r => { if (!r) return; [o.rc, o.mc].forEach(c => { try { c.timeScale().setVisibleLogicalRange(r); } catch (e) {} }); });
+}
+function lwSubUpdate(o, cl, t) {
+  if (!o.rc || !cl.length) return;
+  const rs = lwRsiSeries(cl, 14);
+  o.rLine.setData(t.map((x, i) => rs[i] == null ? {time: x} : {time: x, value: rs[i]}));
+  const r = rs[rs.length - 1];
+  const rWord = r == null ? '' : (r >= 70 ? 'overbought' : r <= 30 ? 'oversold' : r >= 55 ? 'leaning bullish' : r <= 45 ? 'leaning bearish' : 'neutral');
+  const rCls = r == null ? 'nt' : (r >= 70 ? 'dn' : r <= 30 ? 'up' : r >= 55 ? 'up' : r <= 45 ? 'dn' : 'nt');
+  o.box.querySelector('.lw-sub-rsi .lw-sub-lbl').innerHTML = '<b>RSI 14</b> <span class="' + rCls + '">' + (r == null ? '--' : r.toFixed(0) + ' &middot; ' + rWord) + '</span>';
+  if (cl.length < 35) return;
+  const e12 = lwEma(cl, 12), e26 = lwEma(cl, 26), m = cl.map((_, i) => e12[i] - e26[i]), sg = lwEma(m, 9);
+  const from = 26, hd = [], ml = [], sl = [], marks = [];
+  for (let i = 0; i < cl.length; i++) {
+    if (i < from) { hd.push({time: t[i]}); ml.push({time: t[i]}); sl.push({time: t[i]}); continue; }
+    const h = m[i] - sg[i], hp = i > 0 ? m[i - 1] - sg[i - 1] : h;
+    hd.push({time: t[i], value: h, color: h >= 0 ? (h >= hp ? 'rgba(61,214,156,.75)' : 'rgba(61,214,156,.35)') : (h <= hp ? 'rgba(240,84,84,.75)' : 'rgba(240,84,84,.35)')});
+    ml.push({time: t[i], value: m[i]}); sl.push({time: t[i], value: sg[i]});
+    if (i > from && (hp < 0) !== (h < 0)) marks.push({time: t[i], position: h >= 0 ? 'belowBar' : 'aboveBar', color: h >= 0 ? '#3dd69c' : '#f05454',
+      shape: h >= 0 ? 'arrowUp' : 'arrowDown', size: 0.6});
+  }
+  o.mHist.setData(hd); o.mLine.setData(ml); o.mSig.setData(sl);
+  try { o.mLine.setMarkers(marks.slice(-40)); } catch (e) {}
+  const n = cl.length - 1, h = m[n] - sg[n];
+  let ago = null;
+  for (let i = n; i > from; i--) { if ((m[i] - sg[i] < 0) !== (m[i - 1] - sg[i - 1] < 0)) { ago = n - i; break; } }
+  const lastUp = ago != null ? (m[n - ago] - sg[n - ago] >= 0) : h >= 0;
+  const cross = ago == null ? '' : ' &middot; crossed ' + (lastUp ? 'up' : 'down') + ' ' + (ago === 0 ? 'this candle' : ago + (ago === 1 ? ' candle ago' : ' candles ago'));
+  try { const vr = o.chart.timeScale().getVisibleLogicalRange(); if (vr) [o.rc, o.mc].forEach(c => c.timeScale().setVisibleLogicalRange(vr)); } catch (e) {}
+  o.box.querySelector('.lw-sub-macd .lw-sub-lbl').innerHTML = '<b>MACD 12 26 9</b> <i class="k-m"></i>MACD <i class="k-s"></i>signal <span class="' + (h >= 0 ? 'up' : 'dn') + '">'
+    + (h >= 0 ? 'above signal' : 'below signal') + cross + '</span>';
+}
 function lwIndicators(o) {
   const cl = o.bars.map(b => b.close), t = o.bars.map(b => b.time);
   [[12, o.e1], [25, o.e2], [50, o.e3]].forEach(([n, s]) => { const e = lwEma(cl, n); s.setData(t.map((x, i) => ({time: x, value: e[i]})).slice(n)); });
+  try { lwSubUpdate(o, cl, t); } catch (e) {}
   const now = Date.now();
   if (now - (o.srTs || 0) > 10000) { o.srTs = now; try { lwLevels(o); } catch (e) {} }
   if (now - (o.pjTs || 0) > 2000) { o.pjTs = now; try { lwProject(o); } catch (e) {} }
@@ -9216,6 +9291,9 @@ function lwCreate(a) {
     + '<button class="lw-ha" title="Heikin Ashi candles - smoother trend view">Heikin Ashi</button>'
     + '</div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
+    // 2026-10-23 (user): full RSI + MACD panels under the chart (lines, signal, histogram, the crosses marked)
+    + '<div class="lw-sub lw-sub-rsi"><div class="lw-sub-lbl"></div></div>'
+    + '<div class="lw-sub lw-sub-macd"><div class="lw-sub-lbl"></div></div>'
     + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; <span class="lwk-macd"></span></div>'
     // 2026-10-22 (user): tap to learn &ndash; EMA, the live RSI + MACD read, and why it matters in a 15-minute round
     + '<details class="lw-learn"><summary>What do these mean? <span>EMA &middot; RSI &middot; MACD &middot; 15-minute rounds</span></summary><div class="lw-learn-body">'
@@ -9234,7 +9312,7 @@ function lwCreate(a) {
   const el = box.querySelector('.lw-chart');
   const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: "Carlito, Calibri, 'Segoe UI', sans-serif", fontSize: 12},
     grid: {vertLines: {color: 'rgba(242,196,107,.05)'}, horzLines: {color: 'rgba(242,196,107,.05)'}},
-    rightPriceScale: {borderColor: 'rgba(242,196,107,.18)'},
+    rightPriceScale: {borderColor: 'rgba(242,196,107,.18)', minimumWidth: 78},
     timeScale: {borderColor: 'rgba(242,196,107,.18)', timeVisible: true, secondsVisible: false,
       tickMarkFormatter: t => (LW[a] && LW[a].tf === '1d') ? lwFmtD.format(new Date(t * 1000)) : lwFmtT.format(new Date(t * 1000))},
     localization: {timeFormatter: t => lwFmtT.format(new Date(t * 1000)), priceFormatter: v => lwMoney(a, v)}, crosshair: {mode: 0}});
@@ -9248,6 +9326,7 @@ function lwCreate(a) {
   const pl = (c, w, st) => chart.addLineSeries({color: c, lineWidth: w, lineStyle: st, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
   o.pjC = pl('#fbf4ec', 2, 1);      // dotted trajectory only (user: no cone)
   o.zones = []; o.srTs = 0; o.pjTs = 0;
+  try { lwSubCreate(o); } catch (e) {}
   box.querySelectorAll('.lw-tabs button[data-tf]').forEach(b => b.onclick = () => { o.tf = b.dataset.tf; try { localStorage.setItem('lwTf_' + a, o.tf); } catch (e) {} lwLoad(o); });
   const hb = box.querySelector('.lw-ha');
   hb.classList.toggle('on', o.ha);
