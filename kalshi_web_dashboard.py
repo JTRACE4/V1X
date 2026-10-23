@@ -7523,7 +7523,8 @@ function updateFlipWatch() {
       const callWord = callName === 'sealed' ? 'the sealed call' : (callName === 'early' ? 'the early call' : 'the call');
       const state = (goingUp ? 'U' : 'D') + (withCall === null ? '' : (withCall ? 'w' : 'a'));
       // 2026-10-23 (user): "when it says our side just say if it's up or down with the call or against"
-      const how = (goingUp ? 'up' : 'down') + (withCall === null ? '' : (withCall ? ', with the call' : ', against the call'));
+      // 2026-10-23 (d, user): short - just up or down, never "with / against the call" (too many words, confusing)
+      const how = goingUp ? 'up' : 'down';
       if (!w.said10 && left <= 10) {
         w.said10 = true; w.lastSpoke = now; w.lastState = state;
         speak(coin + ', ten seconds, ' + how + '.', true, 8000);
@@ -7535,8 +7536,12 @@ function updateFlipWatch() {
         // the market really switched sides -> THIS is the only spoken "flip"
         // 2026-10-23 (c, user): say "flipping" when it really flipped - the market has switched to the other side at a 60/40
         // spread or wider, and not in the round's first minute. A 50/50 wobble says nothing.
-        if (withCall === false) { if (strength !== null && strength >= 0.60 && left <= 840) speakUrgent(coin + ' is flipping ' + how + '.', 0); }
-        else speak(coin + ' going ' + how + '.', false, 15000);
+        // "flipping" while the market is 60-74% on the new side, "flipped" once it is 75%+
+        const fw = strength !== null && strength >= 0.75 ? ' flipped ' : ' is flipping ';
+        const sure = strength !== null && strength >= 0.60 && left <= 840;
+        if (withCall === false) { if (sure) speakUrgent(coin + fw + how + '.', 0); }
+        else if (withCall === true) speak(coin + ' flipped back ' + how + '.', false, 15000);
+        else if (sure) speak(coin + fw + how + '.', false, 15000);
       } else if (w.lastState === null) {
         w.lastState = state;                       // the flip alert itself already said this
       }
@@ -8063,9 +8068,9 @@ function _minuteLine(name) {
   if (r.left >= 840) return _newRoundLine(name);
   const mins = Math.round(r.left / 60), when = mins >= 1 ? mins + (mins === 1 ? ' minute' : ' minutes') + ' left' : r.left + ' seconds left';
   let line = _coinWord(name) + ', ' + when + '. ';
-  if (r.call) line += (r.above ? 'Up' : 'Down') + (((r.call === 'YES') === r.above) ? ', with the call.' : ', against the call.');
-  else line += 'Price ' + (r.above ? 'above' : 'below') + ' the line, no call yet.';
-  return line + ' Flip risk ' + r.pct + ' percent.';
+  line += (r.above ? 'Up.' : 'Down.');          // 2026-10-23 (d, user): just up or down - no "with / against the call"
+  // 2026-10-23 (d, user: "14% is not enough to care"): the flip risk is only said when it is serious - 40% or more
+  return line + (r.pct >= 40 ? ' Flip risk ' + r.pct + ' percent.' : '');
 }
 // 2026-10-23 (c, user): when a round starts say "new round" (not "15 minutes left") plus the market trend read on 1m / 5m / 15m /
 // 1h / 1D - straight from the MARKET TREND buttons on screen. Neutral (50/50) timeframes are left out; all neutral = just "new round".
@@ -8080,7 +8085,8 @@ function _trendLine(name) {
   });
   const join = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
   const parts = [];
-  const order = bull.length >= bear.length ? [['Bullish', bull], ['Bearish', bear]] : [['Bearish', bear], ['Bullish', bull]];
+  // 2026-10-23 (d, user): no "bullish / bearish" at the start of the round - plain up / down
+  const order = bull.length >= bear.length ? [['Up', bull], ['Down', bear]] : [['Down', bear], ['Up', bull]];
   order.forEach(([word, list]) => { if (list.length) parts.push(word + ' on ' + join(list)); });
   return parts.length ? ' ' + parts.join('. ') + '.' : '';
 }
@@ -8137,7 +8143,7 @@ function _orderVoice(name, side, usd) {
   orderSaid[name] = now; coinSpoke[name] = now;
   speak(() => {
     const q = _radarInfo(name);
-    return _coinWord(name) + ', big ' + (side === 'buy' ? 'buying' : 'selling') + ', ' + spokenUsd(usd) + '.' + (q && !isNaN(q.pct) ? ' Flip risk ' + q.pct + ' percent.' : '');
+    return _coinWord(name) + ', big ' + (side === 'buy' ? 'buying' : 'selling') + ', ' + spokenUsd(usd) + '.' + (q && !isNaN(q.pct) && q.pct >= 40 ? ' Flip risk ' + q.pct + ' percent.' : '');
   }, false, 10000);
 }
 setInterval(() => { if (!document.hidden) { try { minuteCheckins(); } catch (e) {} try { flipRiseAlerts(); } catch (e) {} } }, 1000);
@@ -9426,11 +9432,12 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="speakRaw('XRP is flipping down.')">Test flip alert</button>
       <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure.'),650)">Test early call</button>
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure.'),650)">Test sealed call</button>
-      <button onclick="speakRaw('Bitcoin, ninety seconds, up, with the call.')">Test 90-second check-in</button>
-      <button onclick="speakRaw('Bitcoin, 6 minutes left. Up, with the call. Flip risk 18 percent.')">Test minute check-in</button>
-      <button onclick="speakRaw('Bitcoin, new round. Bullish on 1 minute, 5 minute and 1 hour. Bearish on 1 day.')">Test new round</button>
-      <button onclick="speakRaw('XRP, big selling, 1.2 million dollars. Flip risk 24 percent.')">Test big order alert</button>
+      <button onclick="speakRaw('Bitcoin, ninety seconds, up.')">Test 90-second check-in</button>
+      <button onclick="speakRaw('Bitcoin, 6 minutes left. Up.')">Test minute check-in</button>
+      <button onclick="speakRaw('Bitcoin, new round. Up on 1 minute, 5 minute and 1 hour. Down on 1 day.')">Test new round</button>
+      <button onclick="speakRaw('XRP, big selling, 1.2 million dollars.')">Test big order alert</button>
       <button onclick="speakRaw('Bitcoin, flip risk rising, 46 percent. Possible flip.')">Test flip rising</button>
+      <button onclick="speakRaw('Bitcoin is flipping down.')">Test flipping</button>
       <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
       <button onclick="speakRaw('XRP is a toss-up, 2 minutes left. It just crossed the line.')">Test late toss-up</button>
       <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Bitcoin whales: 2.4 million bought, 600 thousand sold.'),1300)">Test whale BUY (cha-ching)</button>
