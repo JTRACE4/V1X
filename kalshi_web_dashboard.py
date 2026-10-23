@@ -7346,6 +7346,8 @@ function _voicePush(text, urgent, ttlMs, mustSay) {
   if (!t) return;
   const item = { text: t, fn: fn, until: Date.now() + (ttlMs || 20000), prio: !!(urgent || mustSay), words: t.split(/\s+/).filter(Boolean).length };
   if (urgent) voiceQ.unshift(item); else voiceQ.push(item);
+  // 2026-10-23 (user: "don't keep annoying the listener"): remember when each coin was last talked about, by any line
+  try { const _n = Date.now(); if (/\bBitcoin\b|\bBTC\b/.test(t)) window._spokeAt_BTC = _n; if (/\bXRP\b/.test(t)) window._spokeAt_XRP = _n; } catch (e) {}
   _voiceNext();
 }
 function speakRaw(text) { _voicePush(text, true, 60000); }   // test buttons: always speak, no toggle checks
@@ -8166,6 +8168,7 @@ const _earlyDir = {};      // coin -> {d: 'up'|'down', t} of this round's early 
 //  - "flip risk rising, possible flip" ONLY when it is proven: the radar shows 40%+ (or climbed 15+ points in 20s to 30%+)
 //    AND live price is moving fast toward the line with the tape behind it (data-shift). Once per 45s per coin.
 //  - big buy / sell bursts: only when the burst runs the same way as live price right now, said calmly, with the radar's number.
+const CHECKIN_MIN_MS = 120000, CHECKIN_MAX_MS = 240000, checkDir = {};
 const MINUTE_MS = 60000, RISE_GAP_MS = 120000, ORDER_GAP_MS = 30000, ORDER_GAP_PRECALL_MS = 90000;   // 2026-10-23 (user): don't overdo it
 const minuteSaid = {}, radarHist = {}, riseSaid = {}, orderSaid = {}, coinSpoke = {};
 function _radarInfo(name) {
@@ -8177,7 +8180,7 @@ function _radarInfo(name) {
   const shown = parseInt(el.getAttribute('data-shown') || '', 10);
   return { pct: isNaN(shown) ? Math.round(parseFloat(el.getAttribute('data-flip-chance-pct'))) : shown,
            tier: (el.getAttribute('data-tier') || '').toLowerCase(), shift: el.getAttribute('data-shift') === '1',
-           left: parseInt(el.getAttribute('data-left') || '0', 10), above: el.getAttribute('data-above') === '1',
+           left: parseInt(el.getAttribute('data-left') || '0', 10), kup: parseFloat(el.getAttribute('data-kup')), above: el.getAttribute('data-above') === '1',
            call: real ? call : null,
            // 2026-10-23 (user: "no flip risk before a call is made"): flip talk only once the early or sealed call is in
            made: (callName === 'sealed' || callName === 'early') && (call === 'YES' || call === 'NO'), round: (el.getAttribute('data-flip-chance-key') || '').split('::').slice(0, 2).join('::') };
@@ -8233,10 +8236,14 @@ function minuteCheckins() {
       }
     }
     if (!r.made) { minuteSaid[name] = undefined; return; }
-    if (minuteSaid[name] === undefined) { minuteSaid[name] = now - MINUTE_MS + 15000 + i * 30000; return; }
-    if (now - minuteSaid[name] < MINUTE_MS) return;
-    if (now - (coinSpoke[name] || 0) < 20000) { minuteSaid[name] = now - MINUTE_MS + 20000; return; }
-    minuteSaid[name] = now; coinSpoke[name] = now;
+    // 2026-10-23 (user): "Bitcoin up / down" check-ins slowed to every 2-5 minutes - about every 4 minutes normally, sooner
+    // (2 min) only if price switched sides since the last one - and never within 90s of anything else said about that coin
+    if (minuteSaid[name] === undefined) { minuteSaid[name] = now - CHECKIN_MAX_MS + 60000 + i * 30000; checkDir[name] = r.above; return; }
+    const since = now - minuteSaid[name], changed = checkDir[name] !== r.above;
+    if (since < CHECKIN_MIN_MS || (!changed && since < CHECKIN_MAX_MS)) return;
+    const lastAny = Math.max(coinSpoke[name] || 0, window['_spokeAt_' + name] || 0);
+    if (now - lastAny < 90000) return;
+    minuteSaid[name] = now; coinSpoke[name] = now; checkDir[name] = r.above;
     speak(() => _minuteLine(name), false, 20000);
   });
 }
@@ -8255,7 +8262,11 @@ function flipRiseAlerts() {
     // once per 2 minutes, unless the radar has jumped another 15+ points since the last time it was said
     if (!proven || r.left <= 10 || (now - (riseSaid[name] || 0) < RISE_GAP_MS && r.pct < (riseSaid[name + '%'] || 0) + 15)) return;
     riseSaid[name] = now; riseSaid[name + '%'] = r.pct; coinSpoke[name] = now; orderSaid[name] = now;
-    speak(() => { const q = _radarInfo(name); return (q && q.made && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip ' + (q.call === 'YES' ? 'down' : 'up') + '.' : null; },   /* 2026-10-23 (user): say which way */
+    speak(() => { const q = _radarInfo(name); if (!q || !q.made || q.pct < 30) return null;
+      const fd = q.call === 'YES' ? 'down' : 'up', mk = isNaN(q.kup) || q.kup < 0 ? null : (fd === 'up' ? q.kup : 1 - q.kup);
+      // 2026-10-23 (user): if the market is ALREADY 60%+ on that side it isn't a "possible" flip - just say where it is
+      if (mk !== null && mk >= 0.6) return _coinWord(name) + ' is ' + fd + '.';
+      return _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip ' + fd + '.'; },   /* 2026-10-23 (user): say which way */
           true, 10000);
   });
 }
@@ -12982,6 +12993,28 @@ def _tod_label(now_et):
     return f"{f(a - dt.timedelta(hours=1))}&ndash;{f(b + dt.timedelta(hours=1))}"
 
 
+def _disagree_html(hist, keep):
+    """2026-10-23 (user): rounds where the early and sealed calls pointed opposite ways - which one was right more often."""
+    e = sl = 0
+    for h in hist:
+        ec, sc = h.get("early_call"), h.get("sealed_call")
+        if not ec or not sc or ec == sc or h.get("early_correct") is None or h.get("sealed_correct") is None:
+            continue
+        t = _window_close_utc(h.get("ticker"))
+        if not t or not keep(t):
+            continue
+        if h["early_correct"]:
+            e += 1
+        elif h["sealed_correct"]:
+            sl += 1
+    n = e + sl
+    if not n:
+        return '<div class="ma-sub dis-line"><b>When early &amp; sealed disagree:</b> <span class="hint">no split calls in this window</span></div>'
+    lead = ("<b class=up>Early</b> right more" if e > sl else ("<b class=up>Sealed</b> right more" if sl > e else "<b>tied</b>"))
+    return (f'<div class="ma-sub dis-line"><b>When early &amp; sealed disagree</b> ({n} round{"s" if n != 1 else ""}): '
+            f'Early right <b>{e}</b> ({e / n:.0%}) &middot; Sealed right <b>{sl}</b> ({sl / n:.0%}) &middot; {lead}</div>')
+
+
 def _fav_rows(hist, keep, at_by=None):
     """Per call: record + $100/call profit (held to the end = primary; cashing out at 90c = secondary) for rounds kept."""
     out = []
@@ -13072,7 +13105,7 @@ def _build_brain_favorite(name):
         best = _fav_best(rows)
         if tf == "all":
             all_best = best
-        panes.append(f'<div class="ma-pane" data-tf="{tf}">{_fav_cells(rows, best)}'
+        panes.append(f'<div class="ma-pane" data-tf="{tf}">{_fav_cells(rows, best)}{_disagree_html(hist, keep)}'
                      + ('' if best else '<div class="hint" style="margin-top:4px;">No call has made a profit over at least 5 rounds in this window.</div>') + '</div>')
     # by hour (start of the round, ET), last 30 days
     hr_of = lambda t: (t - dt.timedelta(minutes=15)).astimezone(et).hour
@@ -13111,7 +13144,8 @@ def _build_brain_favorite(name):
         panes.append(f'<div class="ma-pane" data-tf="h{H}"><div class="hr-strip">{strip}</div>'
                      f'{fav_line}<!--OWNER--><div class="hint ma-sub">Most profitable call in each hour (last 30 days): {best_txt}</div><!--/OWNER-->'
                      f'<div class="ma-sub"><b>{lab12(H).replace("a", " AM").replace("p", " PM")} ET</b> <span class="hint">&middot; {nr} {name} rounds that started in this hour, last 30 days</span></div>'
-                     f'{_fav_cells(hour_rows[H], best)}</div>')
+                     f'{_fav_cells(hour_rows[H], best)}'
+                     f'{_disagree_html(hist, lambda t, H=H: now - t.timestamp() <= 30 * 86400 and hr_of(t) == H)}</div>')
     tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{tf}" onclick="document.body.dataset.matf=\'{tf}\'">{lab}</button>'
                    for tf, lab in (("today", "Today"), ("yday", "Yesterday"), ("7d", "7 days"), ("all", "All time")))
     tabs += (f'<button type="button" class="ma-tab ma-tab-hr" data-tf="hr" '
