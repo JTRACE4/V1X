@@ -7375,7 +7375,7 @@ function checkFlipAlerts() {
     if (key && !alertedFlips.has(key)) {
       alertedFlips.add(key);
       const assetName = key.split('::')[0];
-      if (assetSoundEnabled[assetName] !== false) {
+      if (assetSoundEnabled[assetName] !== false && _callMade(assetName)) {
         playAlienSound(assetName);
         speakUrgent(assetName + '. Flipped.');
       }
@@ -7607,7 +7607,7 @@ function checkRadarAlerts() {
     if (!k || radarSaid.has(k)) return;
     radarSaid.add(k);
     const name = el.getAttribute('data-name');
-    if (!(soundEnabled && assetSoundEnabled[name] !== false)) return;
+    if (!(soundEnabled && assetSoundEnabled[name] !== false) || !_callMade(name)) return;
     const coin = name === 'BTC' ? 'Bitcoin' : name;
     const usd = parseInt(el.getAttribute('data-usd') || '0', 10);
     speak((el.getAttribute('data-who') || 'A watched trader') + ' is on ' + (el.getAttribute('data-side') === 'UP' ? 'up' : 'down')
@@ -8025,7 +8025,7 @@ function checkRsiAlerts() {
         playRsiAlert(z);
         const coin = name === 'BTC' ? 'Bitcoin' : name;
         // 2026-10-22 (user: "make sure it announces when RSI is oversold, but don't overdo it"): short, always heard
-        setTimeout(() => { if (voiceAlertsEnabled && soundEnabled) _voicePush(coin + ' RSI ' + Math.round(v) + ', '
+        setTimeout(() => { if (voiceAlertsEnabled && soundEnabled && _callMade(name)) _voicePush(coin + ' RSI ' + Math.round(v) + ', '
           + (z === 'under' ? 'oversold.' : 'overbought.'), false, 15000, true); }, 600);
       }
     }
@@ -8080,7 +8080,7 @@ const alertedIncoming = new Set();
 //  - "flip risk rising, possible flip" ONLY when it is proven: the radar shows 40%+ (or climbed 15+ points in 20s to 30%+)
 //    AND live price is moving fast toward the line with the tape behind it (data-shift). Once per 45s per coin.
 //  - big buy / sell bursts: only when the burst runs the same way as live price right now, said calmly, with the radar's number.
-const MINUTE_MS = 60000, RISE_GAP_MS = 45000, ORDER_GAP_MS = 30000;
+const MINUTE_MS = 60000, RISE_GAP_MS = 120000, ORDER_GAP_MS = 30000, ORDER_GAP_PRECALL_MS = 90000;   // 2026-10-23 (user): don't overdo it
 const minuteSaid = {}, radarHist = {}, riseSaid = {}, orderSaid = {}, coinSpoke = {};
 function _radarInfo(name) {
   let el = null;
@@ -8096,6 +8096,8 @@ function _radarInfo(name) {
            // 2026-10-23 (user: "no flip risk before a call is made"): flip talk only once the early or sealed call is in
            made: (callName === 'sealed' || callName === 'early') && (call === 'YES' || call === 'NO'), round: (el.getAttribute('data-flip-chance-key') || '').split('::').slice(0, 2).join('::') };
 }
+// 2026-10-23 (user): until the early / sealed call is in, the only voice is the whale alerts
+function _callMade(name) { const q = _radarInfo(name); return !!(q && q.made); }
 function _coinWord(n) { return n === 'BTC' ? 'Bitcoin' : n; }
 function _minuteLine(name) {
   const r = _radarInfo(name);
@@ -8105,7 +8107,7 @@ function _minuteLine(name) {
   let line = _coinWord(name) + ', ' + when + '. ';
   line += (r.above ? 'Up.' : 'Down.');          // 2026-10-23 (d, user): just up or down - no "with / against the call"
   // 2026-10-23 (d, user: "14% is not enough to care"): the flip risk is only said when it is serious - 40% or more
-  return line + (r.made && r.pct >= 40 ? ' Flip risk ' + r.pct + ' percent.' : '');
+  return line;      // 2026-10-23 (user): the minute check-in never reads the flip risk - only flipRiseAlerts, when it matters
 }
 // 2026-10-23 (c, user): when a round starts say "new round" (not "15 minutes left") plus the market trend read on 1m / 5m / 15m /
 // 1h / 1D - straight from the MARKET TREND buttons on screen. Neutral (50/50) timeframes are left out; all neutral = just "new round".
@@ -8136,12 +8138,14 @@ function minuteCheckins() {
     if (roundSaid[name] !== r.round) {
       const fresh = roundSaid[name] !== undefined && r.left >= 840;     // a round that just opened (not the page loading mid-round)
       roundSaid[name] = r.round;
-      if (fresh) {
+      // 2026-10-23 (user): before the early call only whale alerts talk - no "new round" read, no check-ins
+      if (fresh && r.made) {
         minuteSaid[name] = now + i * 5000; coinSpoke[name] = now;
         setTimeout(() => speak(() => _newRoundLine(name), false, 25000), i * 5000);    // the two coins don't talk over each other
         return;
       }
     }
+    if (!r.made) { minuteSaid[name] = undefined; return; }
     if (minuteSaid[name] === undefined) { minuteSaid[name] = now - MINUTE_MS + 15000 + i * 30000; return; }
     if (now - minuteSaid[name] < MINUTE_MS) return;
     if (now - (coinSpoke[name] || 0) < 20000) { minuteSaid[name] = now - MINUTE_MS + 20000; return; }
@@ -8161,8 +8165,9 @@ function flipRiseAlerts() {
     while (h.pts.length && now - h.pts[0][0] > 20000) h.pts.shift();
     const low = Math.min(...h.pts.map(x => x[1]));
     const proven = r.shift && (r.pct >= 40 || (r.pct >= 30 && r.pct - low >= 15));
-    if (!proven || r.left <= 10 || now - (riseSaid[name] || 0) < RISE_GAP_MS) return;
-    riseSaid[name] = now; coinSpoke[name] = now; orderSaid[name] = now;
+    // once per 2 minutes, unless the radar has jumped another 15+ points since the last time it was said
+    if (!proven || r.left <= 10 || (now - (riseSaid[name] || 0) < RISE_GAP_MS && r.pct < (riseSaid[name + '%'] || 0) + 15)) return;
+    riseSaid[name] = now; riseSaid[name + '%'] = r.pct; coinSpoke[name] = now; orderSaid[name] = now;
     speak(() => { const q = _radarInfo(name); return (q && q.made && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip.' : null; },
           true, 10000);
   });
@@ -8170,7 +8175,8 @@ function flipRiseAlerts() {
 function _orderVoice(name, side, usd) {
   if (!soundEnabled || !voiceAlertsEnabled || assetSoundEnabled[name] === false) return;
   const now = Date.now();
-  if (now - (orderSaid[name] || 0) < ORDER_GAP_MS) return;
+  const _q0 = _radarInfo(name);
+  if (now - (orderSaid[name] || 0) < (_q0 && _q0.made ? ORDER_GAP_MS : ORDER_GAP_PRECALL_MS)) return;
   const el = document.querySelector('.flip-chance-value[data-flip-src="radar"][data-flip-chance-key^="' + name + '::"]');
   // only when live price (last 30s) is actually moving the same way as the burst - a big sell into a rising price is not news
   const dir = el ? el.getAttribute('data-micro') : '';
