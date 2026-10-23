@@ -6554,6 +6554,30 @@ body[data-view="BTC"] .chart-side-btn, body[data-view="XRP"] .chart-side-btn { d
   body[data-view="BTC"] .col-chart, body[data-view="XRP"] .col-chart { position:sticky; top:12px; }
 }
 @media (max-width:1099px) { .chart-side-btn { display:none !important; } }
+/* most accurate - 6 / 12 / 24 hr tabs */
+.most-acc { margin:0 0 14px; padding:10px 12px; border-radius:14px; background:var(--br-tile, rgba(56,45,50,0.88)); border:1px solid rgba(240,214,200,0.10); }
+.ma-head { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+.ma-title { font-family:var(--br-label); font-weight:900; font-size:13px; letter-spacing:1.8px; background:linear-gradient(90deg, #e9a5bb, #dcbb91);
+  -webkit-background-clip:text; background-clip:text; color:transparent; }
+.ma-tabs { display:inline-flex; gap:4px; }
+.ma-tab { font-family:var(--br-bold); font-weight:800; font-size:11px; padding:4px 10px; border-radius:999px; border:1px solid rgba(220,187,145,0.35);
+  background:transparent; color:#dcbb91; cursor:pointer; }
+.ma-pane { display:none; }
+body:not([data-matf]) .ma-pane[data-tf="6"], body[data-matf="6"] .ma-pane[data-tf="6"], body[data-matf="12"] .ma-pane[data-tf="12"], body[data-matf="24"] .ma-pane[data-tf="24"] { display:block; }
+body:not([data-matf]) .ma-tab[data-tf="6"], body[data-matf="6"] .ma-tab[data-tf="6"], body[data-matf="12"] .ma-tab[data-tf="12"], body[data-matf="24"] .ma-tab[data-tf="24"] {
+  background:linear-gradient(90deg, #e9a5bb, #dcbb91); color:#2a1b21; border-color:transparent; }
+.ma-row { display:flex; align-items:baseline; gap:10px; padding:5px 2px; border-bottom:1px solid rgba(255,255,255,0.06); }
+.ma-row:last-child { border-bottom:0; }
+.ma-lab { flex:1 1 auto; font-weight:700; color:#eee2d7; font-size:13px; }
+.ma-pct { font-family:var(--br-serif); font-weight:800; font-size:20px; color:#fbf4ec; }
+.ma-wl { font-size:12px; color:#bcaaa1; min-width:74px; text-align:right; }
+.ma-best .ma-pct { color:#3dd69c; }
+.ma-tag { font-size:9.5px; font-weight:900; letter-spacing:1.2px; padding:2px 7px; border-radius:999px; color:#2a1b21; background:linear-gradient(90deg, #e9a5bb, #dcbb91); }
+.flip-radar .fr-why { width:100%; box-sizing:border-box; margin-top:4px; padding:6px 8px; border-radius:10px; font-size:12px; line-height:1.35;
+  background:rgba(240,84,84,0.10); border:1px solid rgba(240,84,84,0.35); color:#fbf4ec; text-align:center; }
+.flip-radar .fr-why span { display:block; font-family:var(--br-label); font-weight:800; font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:#f05454; }
+.flip-radar .fr-why b { color:#f05454; font-family:var(--br-bold); }
+.flip-radar .fr-hist { font-size:11.5px !important; color:#bcaaa1 !important; margin-top:4px; } .flip-radar .fr-hist b { color:#fbf4ec; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -11046,11 +11070,66 @@ def build_flip_radar(name, d):
             + '<!--OWNER-->' + (f'<div class="fr-txt"><i class=ico data-i=warn></i> {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
             + f'<div class="fr-txt hint">{_html_attr(tip).replace("&amp;middot;", "&middot;")}</div><!--/OWNER-->'
-            + f'{spike}{kal}{_reversal_watch_html(name, d) if _early_in else ""}{marker}</div>')
+            + f'{_flip_why(name, d, call, pct)}{spike}{kal}{_flips_4h(name)}{_reversal_watch_html(name, d) if _early_in else ""}{marker}</div>')
 
 
 _ARROW_UP = '<svg class="v-arr" viewBox="0 0 20 20" aria-label="up"><path d="M10 3 L17.5 14 H2.5 Z" fill="currentColor"/></svg>'
 _ARROW_DN = '<svg class="v-arr" viewBox="0 0 20 20" aria-label="down"><path d="M10 17 L17.5 6 H2.5 Z" fill="currentColor"/></svg>'
+
+
+def _flips_4h(name):
+    """2026-10-22 (user): teach with history - how many of the last 4 hours of rounds flipped (price on one side of the line
+    at 4:00, settled on the other) and how many line crosses there were."""
+    try:
+        now = time.time()
+        rs = [r for r in (_rounds.get(name) or []) if (lambda t: t and now - t.timestamp() <= 4 * 3600)(_window_close_utc(r.get("ticker")))]
+        if not rs:
+            return ""
+        flips = 0
+        for r in rs:
+            pth = r.get("path") or []
+            at4 = next((p_[1] for p_ in pth if p_[0] >= 240), None)
+            act = r.get("actual")
+            if at4 is not None and act in ("YES", "NO") and abs(at4) > 1e-9 and ((at4 > 0) != (act == "YES")):
+                flips += 1
+        crosses = sum(r.get("crosses", 0) for r in rs)
+        return (f'<div class="fr-txt fr-hist">Last 4 hrs: <b>{flips}</b> of {len(rs)} round{"s" if len(rs) != 1 else ""} flipped after 4:00 '
+                f'&middot; {crosses} line cross{"es" if crosses != 1 else ""}</div>')
+    except Exception:
+        return ""
+
+
+def _flip_why(name, d, call, pct):
+    """2026-10-22 (user): show WHY the flip chance is rising - the biggest order working against the call right now:
+    a resting wall in the book, or big orders that just hit (whale / pile-in / sweep)."""
+    if pct is None or pct < 15 or call not in ("YES", "NO"):
+        return ""
+    against = "sell" if call == "YES" else "buy"
+    dec = 4 if name == "XRP" else 2
+    best = None
+    try:
+        bw = d.get("book_walls") or {}
+        w = bw.get("ask_wall") if against == "sell" else bw.get("bid_wall")
+        if w and w[1]:
+            best = (w[1], f'<b>{_usd_short(w[1])}</b> {against} wall waiting at {fmt_price(w[0], dec)} '
+                          f'({w[2] * 100:.2f}% {"above" if against == "sell" else "below"} the price)')
+    except Exception:
+        pass
+    try:
+        for a in _ENG.alerts_for(name, max_age=180, limit=40):
+            if a.get("side") != against or not a.get("usd") or a.get("kind") not in ("whale", "amass", "sweep", "absorbed", "moved", "burst", "liq"):
+                continue
+            if best is None or a["usd"] > best[0]:
+                lab = {"whale": f"{against} order just went through", "amass": f"of {against} orders piled in (30 s)",
+                       "sweep": f"{against} order just pushed the price", "absorbed": "order got eaten against it",
+                       "moved": f"{against} wall moved in on the price", "burst": f"more {'selling' if against == 'sell' else 'buying'} than the other side (10 s)",
+                       "liq": "of forced " + ("selling" if against == "sell" else "buying")}.get(a["kind"], "order against it")
+                best = (a["usd"], f'<b>{_usd_short(a["usd"])}</b> {lab}')
+    except Exception:
+        pass
+    if not best:
+        return ""
+    return f'<div class="fr-why"><span>Why it&#39;s rising:</span> {best[1]}</div>'
 
 
 def _mmss_words(sec):
@@ -11346,6 +11425,40 @@ def build_sb_jump(name):
             f'<b>{pct}</b></button>')
 
 
+def build_most_accurate(name):
+    """2026-10-22 (user): tabs for the last 6 / 12 / 24 hours - which call has been MOST ACCURATE in that window
+    (mini 1:00, early 4:00, sealed 8:00). Shows the numbers; it does not tell anyone what to follow."""
+    hist = _history.get(name, [])
+    now = time.time()
+    defs = (("mini", "Mini call &middot; 1:00"), ("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00"))
+    panes = []
+    for hrs in (6, 12, 24):
+        rows = []
+        for key, lab in defs:
+            g = []
+            for h in hist:
+                if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
+                    continue
+                if key == "mini" and h.get("mini_v") != 2:
+                    continue
+                t = _window_close_utc(h.get("ticker"))
+                if t and now - t.timestamp() <= hrs * 3600:
+                    g.append(bool(h[f"{key}_correct"]))
+            rows.append((key, lab, sum(g), len(g)))
+        ok = [r for r in rows if r[3] >= 5]
+        best = max(ok, key=lambda r: (r[2] / r[3], r[3]))[0] if ok else None
+        cells = "".join(
+            f'<div class="ma-row{" ma-best" if k == best else ""}"><span class="ma-lab">{lab}</span>'
+            + (f'<b class="ma-pct">{w / n:.0%}</b><span class="ma-wl">{w}W &middot; {n - w}L</span>' if n else '<span class="ma-wl hint">no rounds yet</span>')
+            + ('<span class="ma-tag">MOST ACCURATE</span>' if k == best else "") + '</div>'
+            for k, lab, w, n in rows)
+        panes.append(f'<div class="ma-pane" data-tf="{hrs}">{cells}'
+                     + ('' if best else '<div class="hint" style="margin-top:4px;">Needs at least 5 graded rounds in this window.</div>') + '</div>')
+    tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{h}" onclick="document.body.dataset.matf=\'{h}\'">{h} hrs</button>' for h in (6, 12, 24))
+    return (f'<div class="most-acc"><div class="ma-head"><span class="ma-title">MOST ACCURATE</span><span class="ma-tabs">{tabs}</span></div>'
+            f'{"".join(panes)}</div>')
+
+
 def build_scoreboard(name, d):
     """Win / loss record since launch for each call, the CURRENT streak of each (win or loss), the best and worst runs,
     today's record, and the last 15 results."""
@@ -11438,6 +11551,7 @@ def build_scoreboard(name, d):
         pull = ""
     return (f'<div class="scoreboard"><div class="rs-title">SCOREBOARD &middot; since launch ({since}) &middot; '
             f'<b>{len(hist):,}</b> round{"s" if len(hist) != 1 else ""} tracked{f' <span class="hint">(the bot made no call in {no_call:,} of them)</span>' if (no_call and SHOW_BOT_RECORD) else ''}</div>'
+            + build_most_accurate(name) +
             f'<div class="sc-grid">{"".join(cols)}</div>'
             f'<div class="sc-legend hint"><span class="u">green</span> ended UP &middot; <span class="d">red</span> ended DOWN &middot; white letter = right call</div>'
             + (f'<details class="sc-more" data-pat="SCORE|{name}"><summary class="hint">By hour</summary>{pull}</details>' if pull else "")
