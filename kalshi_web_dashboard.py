@@ -12738,11 +12738,11 @@ def render_html():
           {build_top_strip(name, d)}
           {stage_summary_row(name, d)}
           </div><div class="col-chart">
+          {build_order_tape(name, d)}
           {pattern_window_html}
           {build_rounds_panel(name, d)}
           </div></div>
           {build_scoreboard(name, d)}
-          {build_order_tape(name, d)}
           <!--OWNER--><details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
           {tug_html}
           {pressure_html}
