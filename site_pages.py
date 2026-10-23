@@ -605,7 +605,7 @@ TERMS = [
     ("Accuracy and availability", "Data can be late, missing or wrong; models can be wrong; and the service can slow down, "
      "freeze or go offline without warning. Past results, streaks and win rates never predict future results. BRAIN and its "
      "owner are not responsible for any loss or damage from using, or relying on, anything shown here."),
-    ("Passes and payments", "The live dashboard needs a pass: 7 days ($64.99), 30 days ($165) or 3.5 months ($379), paid "
+    ("Passes and payments", "The live dashboard needs a pass: 10 days ($65), 30 days ($160) or 3.5 months ($379), paid "
      "once through Stripe. Passes never renew on their own - buying another adds its days on top of any time you have left. "
      "ALL SALES ARE FINAL: no refunds, including for unused time."),
     ("Suspension and termination", "BRAIN can suspend or end any account or pass at any time, at the owner's discretion, "

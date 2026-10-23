@@ -1,9 +1,9 @@
 """BRAIN passes - one-time Stripe payments that unlock the live dashboard for a set number of days (added 2026-10-22).
 
-  * passes: 7 days $64.99, 30 days $165, 3.5 months (105 days) $379 - one-time, never auto-renew
+  * passes: 10 days $65, 30 days $160, 3.5 months (105 days) $379 (changed 2026-10-23 from 7 days $64.99 / 30 days $165) - one-time, never auto-renew
   * a member's access is a single date: user["access_until"] (epoch seconds). Buying adds the pass's days on top of
     whatever time is left. The owner always has access and can give anyone free days from /admin.
-  * checkout = Stripe Payment Links (env STRIPE_LINK_7D / STRIPE_LINK_30D / STRIPE_LINK_105D). The site adds
+  * checkout = Stripe Payment Links (env STRIPE_LINK_10D / STRIPE_LINK_30D / STRIPE_LINK_105D). The site adds
     ?client_reference_id=<username>&prefilled_email=<email> so the payment lands on the right account.
   * Stripe tells the site about each payment at POST /stripe/webhook. Every call is checked against
     STRIPE_WEBHOOK_SECRET (Stripe's signature) - a request without a valid signature changes nothing.
@@ -21,8 +21,8 @@ from zoneinfo import ZoneInfo
 import auth as _auth
 
 PASSES = {                      # key -> (days, price in cents, label)
-    "7d": (7, 6499, "7 days"),
-    "30d": (30, 16500, "30 days"),
+    "10d": (10, 6500, "10 days"),
+    "30d": (30, 16000, "30 days"),
     "105d": (105, 37900, "3.5 months"),
 }
 _BY_AMOUNT = {cents: k for k, (_d, cents, _l) in PASSES.items()}
@@ -41,8 +41,13 @@ def _auto():
 
 
 def link_for(key):
-    env = os.environ.get({"7d": "STRIPE_LINK_7D", "30d": "STRIPE_LINK_30D", "105d": "STRIPE_LINK_105D"}[key], "")
-    return env or (_auto().get("links") or {}).get(key, "")
+    env = os.environ.get({"10d": "STRIPE_LINK_10D", "30d": "STRIPE_LINK_30D", "105d": "STRIPE_LINK_105D"}[key], "")
+    return env or (_auto().get("links") or {}).get(_link_key(key), "")
+
+
+def _link_key(key):
+    """Stripe links are remembered per pass AND price, so a price change makes a fresh link instead of reusing the old one."""
+    return f"{key}@{PASSES[key][1]}"
 
 
 def webhook_secret():
@@ -79,7 +84,7 @@ def ensure_stripe():
     base = (_auth.public_url() or "https://brainswatch.com").rstrip("/")
     made = []
     for key, (days, cents, label) in PASSES.items():
-        if links.get(key):
+        if links.get(_link_key(key)):
             continue
         prod = _stripe("POST", "products", {"name": f"BRAIN {label} pass", "description": PRODUCT_DESC.format(label=label),
                                             "metadata[pass]": key, "tax_code": "txcd_10701401"})
@@ -92,7 +97,7 @@ def ensure_stripe():
             "custom_text[submit][message]": "One-time payment for " + label + " of access. Does not renew. "
                                             "All sales final. Educational information service, not financial advice.",
         })
-        links[key] = link["url"]
+        links[_link_key(key)] = link["url"]
         made.append(key)
         with _auth._lock:
             _auth.save()
