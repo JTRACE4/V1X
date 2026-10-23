@@ -6181,20 +6181,20 @@ body { background:#15110f !important; }
 .fw-hold { background:rgba(47,74,79,0.75); color:#efe6df; border:1px solid rgba(111,154,142,0.7); } .fw-hold .ico { color:#c9f7e6; }
 .fw-rev { background:rgba(154,90,68,0.8); color:#f6ece5; border:1px solid rgba(201,138,106,0.8); }
 body.has-flip-watch { padding-top:0; }
-/* 2026-10-23 (user): words in a pink gradient while holding with the call; only when it goes AGAINST the call do they turn
-   red + green (heading up) or red + orange (heading down) */
-.fw-item b, .fw-item .fw-dir, .fw-item .fw-rel, .fw-item .fw-st, .fw-item .fw-badge .fw-bt {
-  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-.fw-with b, .fw-with .fw-dir, .fw-with .fw-rel, .fw-with .fw-st, .fw-with .fw-hold .fw-bt,
-.fw-neutral b, .fw-neutral .fw-dir, .fw-neutral .fw-st {
-  background-image:linear-gradient(90deg, #ffd6e4 0%, #f2a5c0 50%, #e57fa6 100%); }
-.fw-with .fw-hold .ico { color:#f2a5c0; }
-.fw-ag-up b, .fw-ag-up .fw-dir, .fw-ag-up .fw-rel, .fw-ag-up .fw-st, .fw-ag-up .fw-badge .fw-bt {
-  background-image:linear-gradient(90deg, #ff6b6b 0%, #ff8f7a 35%, #6fe3a6 70%, #3dd69c 100%); }
-.fw-ag-dn b, .fw-ag-dn .fw-dir, .fw-ag-dn .fw-rel, .fw-ag-dn .fw-st, .fw-ag-dn .fw-badge .fw-bt {
-  background-image:linear-gradient(90deg, #ff5a5a 0%, #ff7a45 55%, #ffad42 100%); }
-.fw-with .fw-dir i, .fw-neutral .fw-dir i { background:#f2a5c0; }
-.fw-ag-up .fw-dir i { background:#ff6b6b; } .fw-ag-dn .fw-dir i { background:#ff5a5a; }
+/* 2026-10-23 (user): the PILL BACKGROUND is the gradient (not the letters) - pink while holding with the call; only when it goes
+   AGAINST the call does it turn red + green (heading up) or red + orange (heading down) */
+.fw-item.fw-with, .fw-item.fw-neutral { background:linear-gradient(90deg, rgba(255,214,228,0.92) 0%, rgba(242,165,192,0.92) 50%, rgba(229,127,166,0.92) 100%);
+  border-color:rgba(255,225,236,0.75); box-shadow:0 0 16px rgba(242,165,192,0.45), 0 4px 14px rgba(0,0,0,0.25); }
+.fw-item.fw-with, .fw-item.fw-with b, .fw-item.fw-with .fw-dir, .fw-item.fw-with .fw-rel, .fw-item.fw-with .fw-st,
+.fw-item.fw-neutral, .fw-item.fw-neutral b, .fw-item.fw-neutral .fw-dir, .fw-item.fw-neutral .fw-st { color:#2a1a20; }
+.fw-with .fw-dir i, .fw-neutral .fw-dir i { background:#2a1a20; }
+.fw-with .fw-hold { background:rgba(42,26,32,0.82); color:#ffd6e4; border-color:rgba(42,26,32,0.9); } .fw-with .fw-hold .ico { color:#ffd6e4; }
+.fw-item.fw-ag-up { background:linear-gradient(90deg, rgba(220,60,60,0.92) 0%, rgba(214,120,90,0.9) 45%, rgba(46,170,115,0.92) 100%); }
+.fw-item.fw-ag-dn { background:linear-gradient(90deg, rgba(210,50,50,0.92) 0%, rgba(232,100,52,0.92) 55%, rgba(240,150,50,0.92) 100%); }
+.fw-item.fw-against { border-color:rgba(255,230,220,0.6); box-shadow:0 0 16px rgba(240,90,70,0.45), 0 4px 14px rgba(0,0,0,0.25); }
+.fw-item.fw-against, .fw-item.fw-against b, .fw-item.fw-against .fw-dir, .fw-item.fw-against .fw-rel, .fw-item.fw-against .fw-st { color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.45); }
+.fw-against .fw-dir i { background:#fff; }
+.fw-against .fw-badge { background:rgba(30,16,16,0.55); color:#fff; border-color:rgba(255,255,255,0.5); }
 @media (max-width:760px) { .fw-item { font-size:11.5px; gap:6px; } .fw-badge { font-size:10.5px; } }
 @media (max-width:760px) { #sound-reminder { bottom:calc(72px + env(safe-area-inset-bottom, 0px)) !important; max-width:calc(100vw - 32px); } }
 @media (max-width:760px) {
