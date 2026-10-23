@@ -98,15 +98,15 @@ def ensure_stripe():
         if links.get(_link_key(key)):
             continue
         desc = CHART_DESC if key in CHART_PASSES else PRODUCT_DESC.format(label=label)
-        prod = _stripe("POST", "products", {"name": f"BRAIN {label} pass", "description": desc,
+        prod = _stripe("POST", "products", {"name": f"BRAIN {label} membership", "description": desc,
                                             "metadata[pass]": key, "tax_code": "txcd_10701401"})
         price = _stripe("POST", "prices", {"product": prod["id"], "unit_amount": cents, "currency": "usd",
                                            "metadata[pass]": key})
         link = _stripe("POST", "payment_links", {
             "line_items[0][price]": price["id"], "line_items[0][quantity]": 1,
             "metadata[pass]": key, "payment_intent_data[metadata][pass]": key,
-            "after_completion[type]": "redirect", "after_completion[redirect][url]": base + "/app?paid=1",
-            "custom_text[submit][message]": "One-time payment for " + label + " of access. Does not renew. "
+            "after_completion[type]": "redirect", "after_completion[redirect][url]": base + "/analysis?paid=1",
+            "custom_text[submit][message]": "One-time payment for " + label + " of membership. Does not renew. "
                                             "All sales final. Educational information service, not financial advice.",
         })
         links[_link_key(key)] = link["url"]
@@ -244,24 +244,24 @@ def handle_event(event):
         del _auth.DB["payments"][:-2000]
         _auth.save()
     if is_chart:
-        _auth.send_email(u["email"], "Your BRAIN Chart Only pass is active",
-                         f"Hi {u['username']},\n\nThanks for joining BRAIN. Your Chart Only pass is active until "
-                         f"{fmt_until(u['chart_until'])}.\n\nOpen your live charts: {_auth.public_url()}/app\n\n"
+        _auth.send_email(u["email"], "Your BRAIN Chart Only membership is active",
+                         f"Hi {u['username']},\n\nThanks for joining BRAIN. Your Chart Only membership is active until "
+                         f"{fmt_until(u['chart_until'])}.\n\nOpen your live charts: {_auth.public_url()}/charts\n\n"
                          "It includes the live BTC and XRP charts with the indicators, the 'What do these mean?' guide and the "
-                         "chart patterns. Passes don't renew on their own - we'll email you 2 days before it ends.\n\n"
+                         "chart patterns. Memberships don't renew on their own - we'll email you 2 days before it ends.\n\n"
                          "BRAIN is educational market information, not financial advice. All sales are final.\n\n- BRAIN")
         notify_owner(f"BRAIN: {u['username']} bought Chart Only",
-                     f"{u['username']} ({u['email']}) bought the {label} pass (${PASSES[key][1] / 100:.2f}).\n"
+                     f"{u['username']} ({u['email']}) bought the {label} membership (${PASSES[key][1] / 100:.2f}).\n"
                      f"Charts until {fmt_until(u['chart_until'])}.")
         return f"granted {label} to {u['username']}"
-    _auth.send_email(u["email"], "Your BRAIN pass is active",
-                     f"Hi {u['username']},\n\nThanks for joining BRAIN. Your {label} pass is active until "
-                     f"{fmt_until(u['access_until'])}.\n\nOpen the live dashboard: {_auth.public_url()}/app\n"
+    _auth.send_email(u["email"], "Your BRAIN membership is active",
+                     f"Hi {u['username']},\n\nThanks for joining BRAIN. Your {label} membership is active until "
+                     f"{fmt_until(u['access_until'])}.\n\nOpen BRAIN Analysis: {_auth.public_url()}/analysis\n"
                      f"Your BRAIN Playbook (PDF guide to every screen): {_auth.public_url()}/playbook.pdf\n\n"
-                     "Passes don't renew on their own - we'll email you 2 days before it ends.\n\n"
+                     "Memberships don't renew on their own - we'll email you 2 days before it ends.\n\n"
                      "BRAIN is educational market analysis, not financial advice. All sales are final.\n\n- BRAIN")
     notify_owner(f"BRAIN: {u['username']} bought {label}",
-                 f"{u['username']} ({u['email']}) bought the {label} pass (${PASSES[key][1] / 100:.2f}).\n"
+                 f"{u['username']} ({u['email']}) bought the {label} membership (${PASSES[key][1] / 100:.2f}).\n"
                  f"Access until {fmt_until(u['access_until'])}.")
     return f"granted {label} to {u['username']}"
 
@@ -300,11 +300,11 @@ def send_reminders():
         if chart_due:
             _auth.save()
     for u in chart_due:
-        _auth.send_email(u["email"], "Your BRAIN Chart Only pass ends soon",
-                         f"Hi {u['username']},\n\nYour Chart Only pass ends {fmt_until(chart_until(u))}.\n\n"
+        _auth.send_email(u["email"], "Your BRAIN Chart Only membership ends soon",
+                         f"Hi {u['username']},\n\nYour Chart Only membership ends {fmt_until(chart_until(u))}.\n\n"
                          f"Keep your charts: {_auth.public_url()}/pricing\n\n- BRAIN")
     for u in due:
-        _auth.send_email(u["email"], "Your BRAIN pass ends soon",
-                         f"Hi {u['username']},\n\nYour BRAIN pass ends {fmt_until(access_until(u))}.\n\n"
+        _auth.send_email(u["email"], "Your BRAIN membership ends soon",
+                         f"Hi {u['username']},\n\nYour BRAIN membership ends {fmt_until(access_until(u))}.\n\n"
                          f"Keep your access: {_auth.public_url()}/pricing\n\n- BRAIN")
     return len(due) + len(chart_due)

@@ -8808,7 +8808,7 @@ async function refresh() {
   let res, data;
   try {
     res = await fetch(window.CHART_ONLY ? '/data?view=charts' : '/data', ctl ? {signal: ctl.signal, cache: 'no-store'} : {cache: 'no-store'});
-    if (res.status === 401) { location.href = '/login?next=/app'; return; }
+    if (res.status === 401) { location.href = '/login?next=' + (window.CHART_ONLY ? '/charts' : '/analysis'); return; }
     if (res.status === 402) { location.href = '/pricing'; return; }
     data = await res.json();
   } finally { if (abortT) clearTimeout(abortT); }
@@ -10174,10 +10174,10 @@ def chart_only_html(full=False):
         tabs = "".join(f'<button type="button" data-co="{c}" onclick="coPick({slot},&#39;{c}&#39;)">{c}</button>' for c in _pub.CHART_PRODUCTS)
         return (f'<div class="lw-win co-win co-win{slot}"><div class="co-tabs" data-slot="{slot}">{tabs}</div>'
                 f'<div class="lw-slot co-slot" data-slot="{slot}" data-asset="{"BTC" if slot == 0 else "ETH"}"><span class="hint">Loading chart&hellip;</span></div></div>')
-    note = ('Live charts for every coin &middot; your BRAIN pass includes these. <a href="/app">Back to the live dashboard</a>'
+    note = ('Live charts for every coin &middot; your BRAIN membership includes these. <a href="/analysis">Back to BRAIN Analysis</a>'
             if full else
-            'Chart Only pass &middot; live charts, indicators and chart patterns. '
-            'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN passes</a>')
+            'Chart Only membership &middot; live charts, indicators and chart patterns. '
+            'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN memberships</a>')
     split = ('<div class="co-split" role="group" aria-label="How many charts">'
              '<button type="button" data-split="1" onclick="coSplit(1)" title="One chart"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>1</button>'
              '<button type="button" data-split="2" onclick="coSplit(2)" title="Two charts side by side"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="4" width="8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>2</button></div>')
@@ -15788,7 +15788,7 @@ def _send_body(handler, body, ctype, no_store=True):
 
 
 def _safe_next(n):
-    return n if (isinstance(n, str) and n.startswith("/") and not n.startswith("//") and len(n) < 200) else "/app"
+    return n if (isinstance(n, str) and n.startswith("/") and not n.startswith("//") and len(n) < 200) else "/analysis"
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -15989,7 +15989,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 ok_, msg_ = False, "?"
             print(f"[radar] {act} {nm}: {msg_}")
-            return self._redirect("/app")
+            return self._redirect("/analysis")
         if not self._same_origin():
             return self._send(403, "Blocked: request came from another site.", "text/plain")
         user = self._user()
@@ -16011,7 +16011,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 # 2026-10-22: accounts are instant now - access comes from buying a pass
                 u = _auth.create_user(f["username"].strip(), f["email"].strip(), f["password"], status="approved", note=f.get("note", ""))
                 _bill.notify_owner(f"BRAIN: new account {u['username']}", f"{u['username']} ({u['email']}) created an account. "
-                                   f"They need a pass to see the dashboard.\n\n{_auth.public_url()}/admin")
+                                   f"They need a membership to see the dashboard.\n\n{_auth.public_url()}/admin")
                 print(f"[auth] signup {u['username']}")
                 tok = _auth.new_device(u, self.headers.get("User-Agent", ""), ip)
                 return self._redirect("/pricing", _auth.cookie_header(tok, self._https()))
@@ -16029,7 +16029,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(200, _site.auth_page("reset", error="Use 8+ characters and type it the same twice.", values={"t": f.get("t", "")}))
                 _auth.set_password(u["username"], pw)
                 tok = _auth.new_device(u, self.headers.get("User-Agent", ""), ip)
-                return self._redirect("/app", _auth.cookie_header(tok, self._https()))
+                return self._redirect("/analysis", _auth.cookie_header(tok, self._https()))
             if path == "/setup":
                 code = os.environ.get("OWNER_SETUP_CODE") or ""
                 vals = {k: f.get(k, "") for k in ("username", "email")}
@@ -16042,7 +16042,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(200, _site.auth_page("setup", error=err, values=vals))
                 u = _auth.create_user(f["username"].strip(), f["email"].strip(), f["password"], role="owner", status="approved")
                 tok = _auth.new_device(u, self.headers.get("User-Agent", ""), ip)
-                return self._redirect("/app", _auth.cookie_header(tok, self._https()))
+                return self._redirect("/analysis", _auth.cookie_header(tok, self._https()))
         if not user:
             return self._json({"ok": False, "error": "login required"}, 401)
         if path == "/admin":
@@ -16102,6 +16102,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         global _live_flip_sell_mode, _live_flip_sell_price_target, _live_flip_hold_if_certain
         global _live_protect_min_confidence
         parsed = urllib.parse.urlparse(self.path)
+        # 2026-10-23 (user: no "app" in the address): /analysis = the BRAIN dashboard, /charts = the Charts page.
+        # Old /app links (bookmarks, emails, Stripe's return link) still work - a page visit is sent to the new address.
+        if parsed.path == "/app" and "text/html" in (self.headers.get("Accept") or ""):
+            _q = urllib.parse.parse_qs(parsed.query)
+            _to = "/charts" if (_q.get("view") or [""])[0] == "charts" else "/analysis"
+            _rest = "&".join(f"{k}={urllib.parse.quote(v[0])}" for k, v in _q.items() if k != "view")
+            return self._redirect(_to + ("?" + _rest if _rest else ""))
+        if parsed.path == "/analysis":
+            parsed = parsed._replace(path="/app")
+        elif parsed.path == "/charts":
+            parsed = parsed._replace(path="/app", query=(parsed.query + "&" if parsed.query else "") + "view=charts")
         user = self._user()
         if parsed.path in PUBLIC_GET or parsed.path.startswith("/static/"):
             return self._site_get(parsed, user)
@@ -16126,7 +16137,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json({}, 404)
         if not user:
             if "text/html" in (self.headers.get("Accept") or ""):          # a page visit -> the login window
-                return self._redirect("/login?next=" + urllib.parse.quote(parsed.path))
+                return self._redirect("/login?next=" + urllib.parse.quote(urllib.parse.urlparse(self.path).path))
             return self._json({"error": "login required"}, 401)            # a background data request
         if parsed.path in OWNER_ONLY and user.get("role") != "owner":
             return self._send(403, "Owner only.", "text/plain")

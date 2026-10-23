@@ -239,7 +239,7 @@ load();side();setInterval(side,300000);
 
 def landing(user=None):
     if user:
-        cta = '<a class="btn pink" href="/app">Open BRAIN</a><a class="btn teal" href="/logout">Log out</a>'
+        cta = '<a class="btn pink" href="/analysis">Open BRAIN</a><a class="btn teal" href="/logout">Log out</a>'
         hello = f'<p>Welcome back, {E(user["username"])}.</p>'
     else:
         cta = '<a class="btn pink" href="/pricing">Get access</a><a class="btn teal" href="/login">Log in</a>'
@@ -309,7 +309,7 @@ def auth_page(kind, error="", info="", values=None, extra=""):
                 '<input type="checkbox" name="agree" value="1" required style="width:auto;margin-top:3px"> '
                 '<span>I agree to the <a href="/terms" target="_blank">terms</a> - informational and educational use only.</span></label>'
                 '<button class="btn teal" type="submit">Request access</button>'
-                '<p class="small mute">Free account. The live dashboard needs a pass - you\'ll pick one next.</p></form>')
+                '<p class="small mute">Free account. The live dashboard needs a membership - you\'ll pick one next.</p></form>')
     elif kind == "forgot":
         form = ('<form method="post" action="/forgot">'
                 f'<label for="e">Your account email</label><input id="e" type="email" name="email" value="{E(v.get("email", ""))}" autocomplete="email" required>'
@@ -381,12 +381,12 @@ def app_tabs(user, active="live", pending=0):
     except Exception:
         chart_only = False
     if chart_only and (user or {}).get("role") != "owner":
-        main = [("charts", "/app", _ICO_CHART + "Charts")]
+        main = [("charts", "/charts", _ICO_CHART + "Charts")]
     else:
-        main = [("live", "/app", _ICO_GEAR + "Analysis"), ("charts", "/app?view=charts", _ICO_CHART + "Charts")]
+        main = [("live", "/analysis", _ICO_GEAR + "Analysis"), ("charts", "/charts", _ICO_CHART + "Charts")]
     right = []
     if user and user.get("role") != "owner":
-        right.append(("pricing", "/pricing", "My pass"))
+        right.append(("pricing", "/pricing", "My membership"))
     if user and user.get("role") == "owner":
         right.append(("admin", "/admin", "Admin" + (f'<span class="nb">{pending}</span>' if pending else "")))
     lk = lambda items: "".join(f'<a href="{h}" class="{"on" if k == active else ""}">{lab}</a>' for k, h, lab in items)
@@ -506,22 +506,22 @@ CHART_FEATURES = ["Live BTC + XRP charts (1m to 1D)", "EMA 12 / 25 / 50, RSI and
 def pricing_page(user, plans, until_text=None, active=False, chart_until_text=None):
     """plans: [(key, label, price, per_day_text, checkout_url_or_'')]. Keys starting with "chart" are the Chart Only pass."""
     if user and active:
-        status = (f'<div class="status">Your pass is active until <b>{E(until_text or "")}</b>. Buying another adds its days on top. '
+        status = (f'<div class="status">Your membership is active until <b>{E(until_text or "")}</b>. Buying another adds its days on top. '
                   f'&middot; <a href="/playbook.pdf" style="color:#c9f7e6;font-weight:800">Download your BRAIN Playbook</a></div>')
     elif user and chart_until_text:
-        status = (f'<div class="status">Your Chart Only pass is active until <b>{E(chart_until_text)}</b>. '
-                  f'&middot; <a href="/app" style="color:#c9f7e6;font-weight:800">Open your charts</a> &middot; upgrade below for the full BRAIN bot.</div>')
+        status = (f'<div class="status">Your Chart Only membership is active until <b>{E(chart_until_text)}</b>. '
+                  f'&middot; <a href="/charts" style="color:#c9f7e6;font-weight:800">Open your charts</a> &middot; upgrade below for the full BRAIN bot.</div>')
     elif user:
-        status = '<div class="status none">No active pass yet - pick one below to unlock the live dashboard.</div>'
+        status = '<div class="status none">No active membership yet - pick one below to unlock the live dashboard.</div>'
     else:
-        status = '<div class="status none">Create a free account first, then pick a pass.</div>'
+        status = '<div class="status none">Create a free account first, then pick a membership.</div>'
     cards = chart_card = ""
     for key, label, price, per, url in plans:
         if key.startswith("chart"):
             if not user:
                 cbtn = '<a class="go" href="/signup">Create account</a>'
             elif url:
-                cbtn = f'<a class="go" href="{E(url)}">Buy Chart Only</a>'
+                cbtn = f'<a class="go" href="{E(url)}">Join Chart Only</a>'
             else:
                 cbtn = '<span class="go off">Checkout opening soon</span>'
             chart_card = (f'<h2 class="co-h">Just the charts</h2><div class="grid"><div class="plan co">'
@@ -533,7 +533,7 @@ def pricing_page(user, plans, until_text=None, active=False, chart_until_text=No
         if not user:
             btn = '<a class="go" href="/signup">Create account</a>'
         elif url:
-            btn = f'<a class="go" href="{E(url)}">Buy {E(label)}</a>'
+            btn = f'<a class="go" href="{E(url)}">Join for {E(label)}</a>'
         else:
             btn = '<span class="go off">Checkout opening soon</span>'
         cards += (f'<div class="plan{" best" if best else ""}">' + ('<span class="tagb">BEST VALUE</span>' if best else "")
@@ -543,7 +543,7 @@ def pricing_page(user, plans, until_text=None, active=False, chart_until_text=No
              '<div class="top" style="padding:10px 16px"><a class="brand" href="/">' + brain_logo(34, "p") + '<b>BRAIN</b></a></div>')
             + '<div class="pr"><h1>Get BRAIN</h1><p class="lead">Live market intelligence for 15-minute BTC and XRP rounds.</p>'
             + status + f'<div class="grid">{cards}</div>{chart_card}'
-            + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Passes are one-time payments and never '
+            + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Memberships are one-time payments and never '
               'renew on their own - we email you 2 days before yours ends. <b>All sales are final, no refunds.</b> Accounts that misuse '
               'the service or put it at risk can be suspended or ended without a refund (see Terms). BRAIN is an information and '
               'data service: it gathers and shows what market data and its models are reading. Nothing here is financial advice, '
@@ -661,14 +661,14 @@ TERMS = [
     ("Accuracy and availability", "Data can be late, missing or wrong; models can be wrong; and the service can slow down, "
      "freeze or go offline without warning. Past results, streaks and win rates never predict future results. BRAIN and its "
      "owner are not responsible for any loss or damage from using, or relying on, anything shown here."),
-    ("Passes and payments", "The live dashboard needs a pass: 10 days ($65), 30 days ($160) or 3.5 months ($379), paid "
-     "once through Stripe. Passes never renew on their own - buying another adds its days on top of any time you have left. "
+    ("Memberships and payments", "The live dashboard needs a membership: 10 days ($65), 30 days ($160) or 3.5 months ($379); the Chart Only "
+     "membership (live charts only) is 3.5 months ($35). Each is paid once through Stripe. Memberships never renew on their own - buying another adds its days on top of any time you have left. "
      "ALL SALES ARE FINAL: no refunds, including for unused time."),
-    ("Suspension and termination", "BRAIN can suspend or end any account or pass at any time, at the owner's discretion, "
+    ("Suspension and termination", "BRAIN can suspend or end any account or membership at any time, at the owner's discretion, "
      "including for convenience. This covers, for example: misusing the site or the bot; sharing, reselling or copying what you "
      "see here; scraping or automating access; harassing, threatening or disrespecting the owner, staff, the bot or other members; "
      "anything that puts the service, its data or its systems at risk or could compromise them; or if BRAIN has to pause, change "
-     "or stop operating. When an account or pass is suspended or ended for any of these reasons, access stops right away and "
+     "or stop operating. When an account or membership is suspended or ended for any of these reasons, access stops right away and "
      "NO REFUND is given, including for unused time, except where the law requires otherwise."),
     ("Access", "Keep your login private - one account per person. Don't share your account or copy and resell what you see here."),
     ("Your data", "We store your username, email, a scrambled (hashed) password and which devices are signed in, only to run "
