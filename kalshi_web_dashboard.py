@@ -8696,6 +8696,8 @@ function setAssetView(v) {
 // keep the docked chart window's top level with the top of the visible card
 // 2026-10-22 (user: "not in sync"): runs on every scroll frame, not on a timer, so the window never lags behind the card
 function syncDock() {
+  try { const sb = (window.innerWidth - document.documentElement.clientWidth) + 'px';
+        if (document.documentElement.style.getPropertyValue('--sbw') !== sb) document.documentElement.style.setProperty('--sbw', sb); } catch (e) {}
   const c = document.querySelector('body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"]');
   if (!c) return;
   const top = c.getBoundingClientRect().top, off = Math.round(top + window.scrollY), r = document.documentElement.style;
@@ -9398,11 +9400,11 @@ setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o
 /* 2026-10-23 (user): BTC / XRP single view on desktop = the same layout as Duo - the card and the chart window are the SAME
    width, same top, and the same 20px gap Duo uses between its two cards (body has 24px sides). Chart side still swaps. */
 @media (min-width:1300px) {
-  :root { --half:calc((100vw - 68px) / 2); }
+  :root { --half:calc((100vw - var(--sbw, 0px) - 68px) / 2); }   /* --sbw = the page scrollbar's width (set by syncDock) */
   body[data-view="BTC"] .card, body[data-view="XRP"] .card {
     width:var(--half) !important; max-width:none !important; margin-left:0 !important; margin-right:auto !important; }
   body[data-view="BTC"] .card .lw-win, body[data-view="XRP"] .card .lw-win {
-    left:calc(24px + var(--half) + 20px) !important; right:24px !important; width:auto !important; }
+    left:calc(24px + var(--half) + 20px) !important; right:auto !important; width:var(--half) !important; }
   body.chart-left[data-view="BTC"] .card, body.chart-left[data-view="XRP"] .card {
     margin-left:calc(var(--half) + 20px) !important; margin-right:0 !important; }
   body.chart-left[data-view="BTC"] .card .lw-win, body.chart-left[data-view="XRP"] .card .lw-win {
