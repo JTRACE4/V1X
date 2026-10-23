@@ -6682,6 +6682,10 @@ body[data-matf="tod"] .ma-tab[data-tf="tod"] { background:linear-gradient(90deg,
 .ma-profit .up { color:#3dd69c; } .ma-profit .down { color:#f05454; }
 .ma-row .ma-pct { font-size:16px !important; min-width:44px; text-align:right; }
 .ma-money { font-size:11.5px !important; }
+.ma-money { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 14px; color:#eee2d7; }
+.ma-money .ma-k { font-family:var(--br-label); font-weight:800; font-size:9.5px; letter-spacing:1.2px; color:#dcbb91; margin-right:-8px; }
+.ma-money b { font-family:var(--br-bold); color:#fbf4ec; }
+.ma-key { margin-top:8px; font-size:11px; }
 .hr-strip { display:grid; grid-template-columns:repeat(24, minmax(0, 1fr)); gap:2px; margin:6px 0 4px; }
 .hr-cell { display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:46px; padding:2px 0; border-radius:6px;
   border:1px solid rgba(220,187,145,0.18); background:rgba(255,255,255,0.03); cursor:pointer; color:#bcaaa1; }
@@ -11805,6 +11809,9 @@ def _best_cashout(hist, key):
 
 
 def _cashout_report():
+    _tot = len(_cash_marks)
+    _empty = sum(1 for v in _cash_marks.values() if not v)
+    print(f"[cashout90] trade tapes: {_tot} rounds fetched, {_empty} had no trades (those count as held to the end)")
     for name, hist in list(_history.items()):
         for key in ("mini", "early", "sealed"):
             rows = [h for h in hist if not h.get(f"{key}_reversal") and (key != "mini" or h.get("mini_v") == 2)]
@@ -11833,7 +11840,7 @@ def _fav_rows(hist, keep, at_by=None):
     """Per call: record + $100/call profit (held to the end = primary; cashing out at 90c = secondary) for rounds kept."""
     out = []
     for key, lab in (("mini", "Mini call &middot; 1:00"), ("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00")):
-        g, res = [], []
+        g, res, kps = [], [], []
         for h in hist:
             if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
                 continue
@@ -11842,12 +11849,15 @@ def _fav_rows(hist, keep, at_by=None):
             t = _window_close_utc(h.get("ticker"))
             if t and keep(t):
                 g.append(bool(h[f"{key}_correct"]))
+                _kp = h.get(f"{key}_kp")
+                if _kp and 0 < _kp < 1:
+                    kps.append(_kp)
                 at = (at_by or {}).get(key)
                 r = _cash_pnl(h, key, at) if at else _cash_pnl(h, key)
                 if r:
                     res.append(r if at else (r[0], r[0] if r[1] is not None else None, False))
         known = [r for r in res if r[1] is not None]
-        out.append({"key": key, "lab": lab, "at": (at_by or {}).get(key), "w": sum(g), "n": len(g), "hold": sum(r[0] for r in res),
+        out.append({"key": key, "lab": lab, "at": (at_by or {}).get(key), "avg": (sum(kps) / len(kps) if kps else None), "w": sum(g), "n": len(g), "hold": sum(r[0] for r in res),
                     "cash": sum(r[1] for r in known) + sum(r[0] for r in res if r[1] is None),
                     "hits": sum(1 for r in known if r[2]), "nm": len(res)})
     return out
@@ -11865,10 +11875,11 @@ def _fav_cells(rows, best):
         + ('<span class="ma-tag">BRAIN&rsquo;S FAVORITE</span>' if r["key"] == best else "") + '</span>'
         + (f'<b class="ma-profit">{m(r["hold"])}</b>' if r["nm"] else "")
         + (f'<b class="ma-pct">{r["w"] / r["n"]:.0%}</b><span class="ma-wl">{r["w"]}W &middot; {r["n"] - r["w"]}L</span>' if r["n"] else '<span class="ma-wl hint">no rounds yet</span>')
-        + ((f'<div class="ma-money hint">$100 a call, held to the end &middot; best cash-out point {r["at"] * 100:.0f}&cent;: {m(r["cash"])} '
-            f'(hit {r["at"] * 100:.0f}&cent; in {r["hits"]} of {r["nm"]})</div>' if r.get("at") else
-            '<div class="ma-money hint">$100 a call, held to the end &middot; best cash-out point: <b>hold to the end</b> '
-            '(beat every cash-out from 70&cent; to 99&cent;)</div>') if r["nm"] else "")
+        + ('<div class="ma-money">'
+           + (f'<span class="ma-k">AVG IN</span> <b>{r["avg"] * 100:.0f}&cent;</b>' if r.get("avg") else "")
+           + (f'<span class="ma-k">BEST CO</span> <b>{r["at"] * 100:.0f}&cent;</b> {m(r["cash"])} <span class="hint">({r["hits"]}/{r["nm"]} hit)</span>'
+              if r.get("at") else '<span class="ma-k">BEST CO</span> <b>hold</b>')
+           + '</div>' if r["nm"] else "")
         + '</div>' for r in rows)
 
 
@@ -11942,7 +11953,8 @@ def _build_brain_favorite(name):
     tabs += (f'<button type="button" class="ma-tab ma-tab-hr" data-tf="hr" '
              f'onclick="document.body.dataset.matf=\'h{now_et.hour}\'">By hour</button>')
     return (f'<div class="most-acc"><div class="ma-head"><span class="ma-title">BRAIN&rsquo;S FAVORITE</span><span class="ma-tabs">{tabs}</span></div>'
-            f'{"".join(panes)}</div>')
+            f'{"".join(panes)}<div class="hint ma-key">Big number = profit on $100 a call held to the end &middot; '
+            f'AVG IN = average buy-in price &middot; BEST CO = best cash-out point (tested 70&ndash;99&cent; vs holding)</div></div>')
 
 
 build_most_accurate = build_brain_favorite
