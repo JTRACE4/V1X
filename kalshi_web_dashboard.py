@@ -693,7 +693,7 @@ _kget_lock = threading.Lock()
 _kget_last = [0.0]
 
 
-def _kget(path, params=None, need="trades", timeout=12):
+def _kget(path, params=None, need="trades", timeout=12, bg=False):
     """2026-10-23 tape audit: GET the market's public API, retrying on rate limits / server errors. Raises instead of
     returning an error reply - an error reply used to look like 'no more trades' and leave partial totals behind."""
     url = "https://external-api.kalshi.com/trade-api/v2" + path
@@ -701,8 +701,10 @@ def _kget(path, params=None, need="trades", timeout=12):
     for wait in (0, 0.6, 1.5, 3.0, 6.0):
         if wait:
             time.sleep(wait)
-        with _kget_lock:                                  # space calls out a little across all threads (~12/s max)
-            gap = 0.08 - (time.time() - _kget_last[0])
+        if bg:
+            time.sleep(0.35)                              # background jobs (cash-out marks, audit) leave room for the live tape
+        with _kget_lock:                                  # space calls out across all threads (~7/s max)
+            gap = 0.15 - (time.time() - _kget_last[0])
             if gap > 0:
                 time.sleep(gap)
             _kget_last[0] = time.time()
@@ -9461,7 +9463,7 @@ def _tape_all(ticker, open_ts=None, close_ts=None, max_pages=60):
             params["max_ts"] = int(close_ts) + 5
         if cursor:
             params["cursor"] = cursor
-        r = _kget("/markets/trades", params)
+        r = _kget("/markets/trades", params, bg=True)
         pages += 1
         tr = r.get("trades", [])
         for t in tr:
@@ -9510,7 +9512,7 @@ def _tape_old_method(ticker, open_ts):
         params = {"ticker": ticker, "limit": 1000}
         if cursor:
             params["cursor"] = cursor
-        r = _kget("/markets/trades", params)
+        r = _kget("/markets/trades", params, bg=True)
         trades = r.get("trades", [])
         if not trades:
             break
@@ -9550,7 +9552,7 @@ def tape_audit(n_rounds=8):
             o_ts = c_ts - 900
             row = {"asset": name, "ticker": tk}
             try:
-                m = _kget("/markets/" + tk, need="market").get("market") or {}
+                m = _kget("/markets/" + tk, need="market", bg=True).get("market") or {}
                 row["official"] = float(m.get("volume_fp") or 0)
                 row["result"] = m.get("result")
                 full, row["pages"], row["dup"] = _tape_all(tk, o_ts, c_ts)
@@ -9625,9 +9627,9 @@ def tape_audit_html(n_rounds=8):
 
 def _tape_audit_log():
     """Once after start: run the audit and print it, so the result is in the server log too."""
-    time.sleep(240)
+    time.sleep(600)
     try:
-        rows, live = tape_audit(12)
+        rows, live = tape_audit(6)
         for r in rows:
             if r.get("err"):
                 print(f"[tape audit] {r['asset']} {r['ticker']} ERROR {r['err']}")
@@ -12020,18 +12022,40 @@ except Exception:
 
 
 def _fetch_round_marks(ticker):
-    """{"60": [max_yes, min_yes], "240": [...], "480": [...]} for one finished round, from its trade tape."""
+    """{"60": [max_yes, min_yes], "240": [...], "480": [...]} for one finished round.
+    2026-10-23 (tape audit): from the market's 1-minute candles (high / low traded price) - ONE request per round instead of
+    paging through tens of thousands of BTC trades, which tripped the market's rate limit. Falls back to the trade tape."""
     close = _window_close_utc(ticker)
     if not close:
         return None
     c_ts = close.timestamp()
     o_ts = c_ts - 900
+    series = ticker.split("-")[0]
+    try:
+        r = _kget(f"/series/{series}/markets/{ticker}/candlesticks",
+                  {"start_ts": int(o_ts), "end_ts": int(c_ts) + 60, "period_interval": 1}, need="candlesticks", bg=True)
+        cs = []
+        for c in r.get("candlesticks") or []:
+            pr = c.get("price") or {}
+            hi, lo = pr.get("high_dollars"), pr.get("low_dollars")
+            if hi is None or lo is None:
+                continue
+            cs.append((float(c["end_period_ts"]) - o_ts, float(hi), float(lo)))
+        if cs:
+            out = {}
+            for cp in (60, 240, 480):
+                sub = [x for x in cs if x[0] > cp and x[0] <= 900 + 1]
+                out[str(cp)] = [max(x[1] for x in sub), min(x[2] for x in sub)] if sub else None
+            return out
+    except KalshiTapeError as e:
+        if "HTTP 429" in str(e):
+            raise
     pts, cursor = [], None
     for _ in range(80):
         params = {"ticker": ticker, "limit": 1000, "min_ts": int(o_ts), "max_ts": int(c_ts) + 5}
         if cursor:
             params["cursor"] = cursor
-        r = _kget("/markets/trades", params)
+        r = _kget("/markets/trades", params, bg=True)
         tr = r.get("trades", [])
         for t in tr:
             ts = dt.datetime.fromisoformat(t["created_time"].replace("Z", "+00:00")).timestamp()
@@ -12079,7 +12103,9 @@ def _cashout_loop():
                     _cash_marks[t] = _fetch_round_marks(t)
                 except Exception as _e:
                     print(f"[cashout90] {t}: {_e!r}")
-                time.sleep(0.35)
+                    if "429" in repr(_e):
+                        time.sleep(60)                     # rate limited: back off, the live tape comes first
+                time.sleep(0.5)
             if todo:
                 try:
                     os.makedirs(os.path.dirname(CASHOUT_FILE), exist_ok=True)
