@@ -6578,6 +6578,13 @@ body:not([data-matf]) .ma-tab[data-tf="6"], body[data-matf="6"] .ma-tab[data-tf=
 .flip-radar .fr-why span { display:block; font-family:var(--br-label); font-weight:800; font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:#f05454; }
 .flip-radar .fr-why b { color:#f05454; font-family:var(--br-bold); }
 .flip-radar .fr-hist { font-size:11.5px !important; color:#bcaaa1 !important; margin-top:4px; } .flip-radar .fr-hist b { color:#fbf4ec; }
+/* 2026-10-22 (user): Both view keeps its old top-to-bottom order (chart before scoreboard); single view = two columns */
+body[data-view="both"] .cols, body:not([data-view]) .cols { display:flex; flex-direction:column; }
+body[data-view="both"] .col-info, body[data-view="both"] .col-chart, body:not([data-view]) .col-info, body:not([data-view]) .col-chart { display:contents; }
+body[data-view="both"] .cols .scoreboard, body:not([data-view]) .cols .scoreboard { order:99; }
+@media (max-width:1099px) {
+  .cols { display:flex !important; flex-direction:column; } .col-info, .col-chart { display:contents !important; } .cols .scoreboard { order:99; }
+}
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -11559,7 +11566,7 @@ def build_scoreboard(name, d):
 
 
 @_never_break
-def build_rounds_panel(name, d):
+def build_rounds_panel(name, d, part="all"):
     """Price vs the line for this round (live) and the last 6 finished rounds: one small chart each, the white line =
     the Kalshi line, green above / red below, a dot at every line cross, dashed marks at 4:00 and 8:00."""
     hist_by = {h.get("ticker"): h for h in _history.get(name, [])}
@@ -11608,10 +11615,13 @@ def build_rounds_panel(name, d):
         m2_html = '<div class="mini-call mc-flat"><span class="mc-lbl">MINI CALL &middot; 1:00</span><span class="mc-sub">Call lands at 1:00.</span></div>'
     else:
         m2_html = ""
-    return (f'<div class="rounds-panel"><div class="top-w-title">BEEN HERE BEFORE</div>'
-            + m2_html + _TGT_BODY.get(name, "") +
-            f'<div class="bhb-sub">This round vs the line <span class="hint">(white line = the line &middot; dots = times price crossed it)</span></div>'
+    bhb = f'<div class="rounds-panel bhb-panel"><div class="top-w-title">BEEN HERE BEFORE</div>' + m2_html + _TGT_BODY.get(name, "") + '</div>'
+    line = (f'<div class="rounds-panel line-panel"><div class="top-w-title">THIS ROUND VS THE LINE</div>'
+            f'<div class="bhb-sub"><span class="hint">(white line = the line &middot; dots = times price crossed it)</span></div>'
             f'<div class="rc-grid rc-one">{"".join(cells)}</div>{past_html}</div>')
+    # 2026-10-22 (user): BEEN HERE BEFORE (mini call + rounds near the target) sits with the bot info on the left;
+    # THIS ROUND VS THE LINE stays with the chart on the right
+    return bhb if part == "bhb" else (line if part == "line" else bhb + line)
 
 
 def _call_tag(c, actual, key="early"):
@@ -12851,12 +12861,13 @@ def render_html():
           {build_round_strip(name, d)}
           {build_top_strip(name, d)}
           {stage_summary_row(name, d)}
-          </div><div class="col-chart">
           {build_order_tape(name, d)}
-          {pattern_window_html}
-          {build_rounds_panel(name, d)}
-          </div></div>
+          {build_rounds_panel(name, d, part="bhb")}
           {build_scoreboard(name, d)}
+          </div><div class="col-chart">
+          {pattern_window_html}
+          {build_rounds_panel(name, d, part="line")}
+          </div></div>
           <!--OWNER--><details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
           {tug_html}
           {pressure_html}
