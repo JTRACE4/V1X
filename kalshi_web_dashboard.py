@@ -4197,6 +4197,11 @@ def _verify_history_step():
         _verify_stat["log"] = now
         left = sum(1 for hh in _history.values() for x in hh if x.get("ticker") and not x.get("verified"))
         done = sum(1 for hh in _history.values() for x in hh if x.get("verified"))
+        try:
+            _fh = _flow.HUB.feed_health()
+            print(f"[FEEDS] {_fh['n_live']}/{_fh['n_total']} exchange trade feeds live: {', '.join(_fh['live'])}")
+        except Exception:
+            pass
         print(f"[VERIFY] progress: {done} rounds confirmed against the market, {left} still to check, "
               f"{_verify_stat['fixed']} grade(s) corrected since this restart")
     if not todo:
@@ -12571,29 +12576,36 @@ def build_cross_box(name, d):
                 _chk = f'<div class="lx-sub hint" title="How often the market favorite won at 8:00, by line crosses so far (backtest, 1-minute closes)">favorite won: {" &middot; ".join(_bits)}</div>'
     except Exception:
         pass
-    # 2026-10-23 (user): no cross for 5+ minutes -> say what that means: has the market DECIDED, is it STABILIZING, or is it just
-    # sitting on the line - plus how much it is moving (volatility from the last 5 minutes of the price path)
+    # 2026-10-23 (user): the box always says how long since the last line cross and what that means, getting firmer as the
+    # quiet stretch grows: under 2 min = still live, 2-5 min = settling, 5+ min = decided / stabilizing / sitting on the line.
+    # Volatility = how much price moved over the last 5 minutes.
     _quiet = ""
     try:
         el = d.get("elapsed_seconds")
         ev = ls.get("events") or []
         path = ls.get("path") or []
-        if el is not None and path:
+        if el is not None and path and el >= 60:
             since = el - (ev[-1][0] if ev else 0)
-            if since >= 300:
-                recent = [x[1] for x in path if x[0] >= el - 300] or [path[-1][1]]
-                swing = max(recent) - min(recent)             # % of the line, last 5 min
-                dist = path[-1][1]
-                way = "UP" if dist > 0 else "DOWN"
-                vol, vcls = (("LOW", "up") if swing < 0.05 else (("MEDIUM", "warn") if swing < 0.15 else ("HIGH", "down")))
-                if abs(dist) >= 0.06:
-                    verdict = f"MARKET DECIDED &middot; holding {way}"
-                elif abs(dist) >= 0.02:
-                    verdict = f"STABILIZING {way}"
-                else:
-                    verdict = "SITTING ON THE LINE"
-                _quiet = (f'<div class="lx-quiet"><b>{verdict}</b><span>No cross for {int(since // 60)} min &middot; volatility '
-                          f'<b class="{vcls}">{vol}</b></span></div>')
+            recent = [x[1] for x in path if x[0] >= el - 300] or [path[-1][1]]
+            swing = max(recent) - min(recent)             # % of the line, last 5 min
+            dist = path[-1][1]
+            way = "UP" if dist > 0 else "DOWN"
+            vol, vcls = (("LOW", "up") if swing < 0.05 else (("MEDIUM", "warn") if swing < 0.15 else ("HIGH", "down")))
+            mins, secs = int(since // 60), int(since % 60)
+            ago = f"{mins}:{secs:02d}"
+            if since < 120:
+                verdict = "STILL LIVE &middot; could cross again"
+            elif since < 300:
+                verdict = f"SETTLING {way}" if abs(dist) >= 0.02 else "HOVERING NEAR THE LINE"
+            elif abs(dist) >= 0.06:
+                verdict = f"MARKET DECIDED &middot; holding {way}"
+            elif abs(dist) >= 0.02:
+                verdict = f"STABILIZING {way}"
+            else:
+                verdict = "SITTING ON THE LINE"
+            lead = (f"No cross yet ({ago} in)" if not ev else f"Last cross {ago} ago")
+            _quiet = (f'<div class="lx-quiet"><b>{verdict}</b><span>{lead} &middot; volatility '
+                      f'<b class="{vcls}">{vol}</b></span></div>')
     except Exception:
         _quiet = ""
     return (f'<div class="rs-tile lx-box {cls}"><div class="rs-title">LINE CROSSES</div><div class="lx-num">{n}</div>'
