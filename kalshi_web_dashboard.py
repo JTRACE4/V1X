@@ -4676,7 +4676,11 @@ def poll_loop():
                 # read through RSI / MACD / EMA trend / price vs the line (the backtest picks which reads count)
                 if target and 60 <= elapsed_seconds < 240 and (stage_calls.get("mini") or {}).get("v") != 2:
                     try:
-                        _m2 = mini2_live(asset["symbol"], live_price, target)
+                        try:
+                            _p3 = _flow.HUB.window_detail(asset["name"], 180)["pct"] if asset["name"] in _flow.ASSETS else None
+                        except Exception:
+                            _p3 = None
+                        _m2 = mini2_live(asset["symbol"], live_price, target, flow_pct=_p3, trend=_trend_v)
                         if _m2:
                             _m2kp = None
                             if kalshi_price is not None:
@@ -11375,19 +11379,10 @@ def build_scoreboard(name, d):
                     _mbt += (f'<div class="sc-stats">If you had followed it ($100 a call at the market price at 1:00): '
                              f'<b class="{"up" if _mp >= 0 else "down"}">{"+" if _mp >= 0 else "-"}${abs(_mp):,.0f}</b> over {len(_pn)} rounds</div>')
             _cfg2 = mini2_config()
-            _pt = ((_cfg2.get("patterns_test") or {}).get("BTC") or {})
-            if _pt.get("rounds") and _pt["reads"][0] is not None and _pt["reads_plus_patterns"][0] is not None:
-                _mbt += (f'<div class="sc-stats hint">Since BRAIN started logging chart patterns ({_pt["rounds"]} BTC rounds): '
-                         f'reads alone <b>{_pt["reads"][0]:.0%}</b> &middot; reads + chart patterns <b>{_pt["reads_plus_patterns"][0]:.0%}</b>'
-                         + (f' &middot; patterns alone {_pt["patterns_only"][0]:.0%} of the {_pt["patterns_only"][1]} rounds they spoke up'
-                            if _pt["patterns_only"][0] is not None else "") + '</div>')
-            if _cfg2.get("hold") is not None:
-                _mbt += (f'<div class="sc-stats hint">30-day test (BTC, rounds it never saw): <b>{_cfg2["hold"]:.0%}</b> right using '
-                         f'{", ".join(MINI2_LABEL[k] for k in _cfg2["keys"])} &middot; just following price vs the line: '
-                         f'{_cfg2["line_only"]["hold"]:.0%}</div>')
+            # 2026-10-22 (user): no formula details on screen - only the record and what following it made
         if not n:
             cols.append(f'<div class="sc-col"><div class="sc-title">{label}</div><div class="sc-empty">'
-                        + ("Fresh start Oct 22, 8:15 PM &ndash; called at 1:00 from the last 2 minutes of the previous round + the first minute, read through RSI, MACD, EMA trend and price vs the line." if key == "mini" else "No results yet.")
+                        + ("Fresh start Oct 22, 8:15 PM &ndash; called at 1:00 each round." if key == "mini" else "No results yet.")
                         + f'</div>{_mbt}</div>')
             continue
         ct, cn, bw, bl = _streak_stats(res)
@@ -11494,10 +11489,9 @@ def build_rounds_panel(name, d):
         _up2 = _m2["call"] == "YES"
         m2_html = (f'<div class="mini-call mc-{"up" if _up2 else "down"}"><span class="mc-lbl">MINI CALL &middot; 1:00</span>'
                    f'<b class="mc-dir">{"<i class=va-u></i> UP" if _up2 else "<i class=va-d></i> DOWN"}</b>'
-                   f'<span class="mc-pct">{_m2.get("agree")}/{_m2.get("of")} agree</span>'
-                   f'<span class="mc-sub">{" &middot; ".join(_m2.get("reasons") or [])}</span></div>')
+                   f'<span class="mc-pct">{"STRONG" if (_m2.get("of") and _m2.get("agree", 0) / _m2["of"] >= 0.75) else "LEAN"}</span></div>')
     elif (d.get("elapsed_seconds") or 0) < 60:
-        m2_html = '<div class="mini-call mc-flat"><span class="mc-lbl">MINI CALL &middot; 1:00</span><span class="mc-sub">Reading the last 2 minutes + the first minute &ndash; the call lands at 1:00.</span></div>'
+        m2_html = '<div class="mini-call mc-flat"><span class="mc-lbl">MINI CALL &middot; 1:00</span><span class="mc-sub">Call lands at 1:00.</span></div>'
     else:
         m2_html = ""
     return (f'<div class="rounds-panel"><div class="top-w-title">BEEN HERE BEFORE</div>'
@@ -13508,7 +13502,7 @@ def history_check(name, spot, line, elapsed):
 # you can see whether it beats simpler ways of calling.
 MINI2_FILE = os.path.join(_DATA_ROOT, "data_cache", "mini2.json")
 MINI2_KEYS = ("move3", "line", "rsi", "macd", "macd_slope", "ema")
-MINI2_LABEL = {"move3": "last 3 min of price", "line": "price vs the line", "rsi": "RSI", "macd": "MACD",
+MINI2_LABEL = {"pressure": "buy pressure", "mtrend": "market trend", "move3": "last 3 min of price", "line": "price vs the line", "rsi": "RSI", "macd": "MACD",
                "macd_slope": "MACD turning", "ema": "EMA trend", "patterns": "chart patterns"}
 MINI2_SINCE = 1792714500          # 2026-10-23 00:15 UTC (8:15 PM ET Oct 22) - the v2 record starts here
 
@@ -13711,7 +13705,7 @@ def mini2_pattern_test():
     return out
 
 
-def mini2_live(sym, live_price, line):
+def mini2_live(sym, live_price, line, flow_pct=None, trend=None):
     """Live votes at ~1:00 from the 1-minute history (+ the live price as the latest close)."""
     try:
         cs = (_mtf.windows.get(sym) or {}).get("1m") or []
@@ -13745,10 +13739,16 @@ def mini2_live(sym, live_price, line):
         v["_pat"] = pn[:3]
     except Exception as _pe:
         print(f"[mini2] patterns: {_pe!r}")
+    # 2026-10-22 (user): heavily weigh buy pressure across the end of the last round + this round, mixed with market trend
+    if flow_pct is not None:
+        v["pressure"] = 1 if flow_pct >= 0.55 else (-1 if flow_pct <= 0.45 else 0)
+        keys = keys + ["pressure", "pressure"]
+    if trend:
+        v["mtrend"] = 1 if trend > 0 else -1
+        keys = keys + ["mtrend"]
     call, agree, of = mini2_combine(v, keys)
     reasons = [f'{MINI2_LABEL[k]} {"up" if v[k] > 0 else ("down" if v[k] < 0 else "flat")}' for k in keys]
-    if v.get("patterns"):
-        reasons.append(f'chart patterns lean {"up" if v["patterns"] > 0 else "down"} ({", ".join(v.get("_pat") or [])}) &ndash; info only')
+    reasons = []                    # 2026-10-22 (user): don't explain how the mini call works on screen
     return {"call": call, "agree": agree, "of": of, "keys": keys, "reasons": reasons,
             "rsi": round(v["_rsi"], 1) if v["_rsi"] is not None else None}
 
@@ -13912,7 +13912,7 @@ def target_history_html(name, d):
                 f'<span class="mc-sub">Price is {abs(_hc["dist"]) * 100:.3f}% {"above" if _hc["dist"] >= 0 else "below"} the line {_hc["minute"]} min into the round. '
                 f'Of {_hc["n"]:,} rounds in the last 30 days that were in this same spot, {_hc["pct"] * 100:.0f}% ended {_w}.</span></div>')
     # 2026-10-22: the old at-the-open box is retired on BOTH coins - only the 1:00 mini call (+ the BTC history check) show
-    mini = _hcl if _hc else ''
+    mini = ''                       # 2026-10-22 (user): no history check - only the mini call shows
     _TGT_MINI[name] = mini
     rows = '<div class="th-chips">'
     for r in near:
