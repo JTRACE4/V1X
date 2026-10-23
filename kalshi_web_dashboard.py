@@ -6585,6 +6585,23 @@ body[data-view="both"] .cols .scoreboard, body:not([data-view]) .cols .scoreboar
 @media (max-width:1099px) {
   .cols { display:flex !important; flex-direction:column; } .col-info, .col-chart { display:contents !important; } .cols .scoreboard { order:99; }
 }
+/* 2026-10-22 (user: "it looked jumbled - keep the sizing it had - make the chart its own window on the side"):
+   the card is back to one column at its old size; in BTC-only / XRP-only on a wide desktop the live chart becomes its own
+   window docked beside the card (swap side with the Chart-side button). Both view + phones: unchanged, chart in the card. */
+.cols { display:block !important; } .col-info, .col-chart { display:block !important; }
+body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px !important; }
+@media (min-width:1300px) {
+  body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:none !important; width:min(1100px, 56vw) !important; flex:0 0 auto !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; margin-left:1.5vw !important; margin-right:auto !important; justify-self:start !important; }
+  body[data-view="BTC"] .card .lw-win, body[data-view="XRP"] .card .lw-win {
+    position:fixed !important; top:96px; right:1.5vw; left:calc(min(1100px, 56vw) + 6vw); width:auto !important;
+    max-height:calc(100vh - 112px); overflow-y:auto; z-index:30; margin:0 !important; padding:14px 16px !important;
+    border-radius:18px !important; background:rgba(33,27,30,0.97) !important; border:1px solid rgba(220,187,145,0.28) !important;
+    box-shadow:0 24px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,240,225,0.06) !important; }
+  body.chart-left[data-view="BTC"] .card, body.chart-left[data-view="XRP"] .card { margin-left:calc(100vw - min(1100px, 56vw) - 3vw) !important; margin-right:auto !important; }
+  body.chart-left[data-view="BTC"] .card .lw-win, body.chart-left[data-view="XRP"] .card .lw-win { left:1.5vw; right:auto; width:calc(100vw - min(1100px, 56vw) - 6vw) !important; }
+  body[data-view="BTC"] .card .lw-chart, body[data-view="XRP"] .card .lw-chart { height:clamp(420px, calc(100vh - 330px), 760px) !important; }
+}
+@media (max-width:1299px) { .chart-side-btn { display:none !important; } }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -12856,7 +12873,6 @@ def render_html():
             </div>
             <div class="head-right"></div>
           </div>
-          <div class="cols"><div class="col-info">
           {build_pressure_bar(name, d, part="top")}
           {build_round_strip(name, d)}
           {build_top_strip(name, d)}
@@ -12864,10 +12880,8 @@ def render_html():
           {build_order_tape(name, d)}
           {build_rounds_panel(name, d, part="bhb")}
           {build_rounds_panel(name, d, part="line")}
-          {build_scoreboard(name, d)}
-          </div><div class="col-chart">
           {pattern_window_html}
-          </div></div>
+          {build_scoreboard(name, d)}
           <!--OWNER--><details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
           {tug_html}
           {pressure_html}
