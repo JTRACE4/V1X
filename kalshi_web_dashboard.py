@@ -8777,7 +8777,7 @@ async function refresh() {
   const abortT = ctl ? setTimeout(() => ctl.abort(), 8000) : null;
   let res, data;
   try {
-    res = await fetch('/data', ctl ? {signal: ctl.signal, cache: 'no-store'} : {cache: 'no-store'});
+    res = await fetch(window.CHART_ONLY ? '/data?view=charts' : '/data', ctl ? {signal: ctl.signal, cache: 'no-store'} : {cache: 'no-store'});
     if (res.status === 401) { location.href = '/login?next=/app'; return; }
     if (res.status === 402) { location.href = '/pricing'; return; }
     data = await res.json();
@@ -9034,7 +9034,7 @@ window.onload = function() {
 const LW = {}, LW_TFS = ['1m', '5m', '15m', '1h', '1d'], LW_SEC = {'1m': 60, '5m': 300, '15m': 900, '1h': 3600, '1d': 86400};
 const lwFmtT = new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit'});
 const lwFmtD = new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric'});
-function lwMoney(a, v) { const d = a === 'XRP' ? 4 : 2; return v == null ? '--' : '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); }
+function lwMoney(a, v) { const d = a === 'XRP' ? 4 : (a === 'DOGE' ? 5 : (a === 'NEAR' ? 3 : 2)); return v == null ? '--' : '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); }
 function lwEma(vals, n) { const k = 2 / (n + 1); const out = []; let e = null; vals.forEach((v, i) => { e = e === null ? v : v * k + e * (1 - k); out.push(e); }); return out; }
 function lwRsi(cl, n) {
   if (cl.length < n + 1) return null;
@@ -9349,9 +9349,15 @@ async function lwPatterns(o) {
     + '</details>';
   o.pats.querySelectorAll('details > summary').forEach(x => { if (openNow.has(x.textContent)) x.parentNode.open = true; });
 }
+// 2026-10-23 (user): Chart Only page - one chart, every coin. The picked coin is remembered on this device.
+const CO_COINS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB', 'HYPE', 'NEAR'];
+function coCoin() { let c = 'BTC'; try { c = localStorage.getItem('coCoin') || 'BTC'; } catch (e) {} return CO_COINS.includes(c) ? c : 'BTC'; }
+function coPick(c) { try { localStorage.setItem('coCoin', c); } catch (e) {} lwAttach(); }
 function lwAttach() {
   if (typeof LightweightCharts === 'undefined') return;
+  document.querySelectorAll('.co-tabs button[data-co]').forEach(b => b.classList.toggle('on', b.dataset.co === coCoin()));
   document.querySelectorAll('.lw-slot[data-asset]').forEach(slot => {
+    if (slot.classList.contains('co-slot')) slot.dataset.asset = coCoin();
     const a = slot.dataset.asset;
     const o = LW[a] || (LW[a] = lwCreate(a));
     if (o.box.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(o.box); }
@@ -10032,13 +10038,21 @@ body.chart-only #wr-panel, body.chart-only #vol-warn { display:none !important; 
 .co-note { color:#d6cac4; font-size:13.5px; padding:10px 14px; border-radius:14px; background:rgba(30,46,50,.42);
   border:1px solid rgba(255,255,255,.14); }
 .co-note a { color:#e9a5bb; font-weight:800; }
+.co-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+.co-tabs button { padding:7px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(30,46,50,.42);
+  color:#e9ded8; font-weight:800; letter-spacing:.5px; cursor:pointer; font:inherit; font-weight:800; }
+.co-tabs button.on { background:#e9a5bb; color:#2a2226; border-color:#e9a5bb; }
 """
 
 
 def chart_only_html():
+    """One live chart with a coin picker - every coin the market runs 15-minute rounds on, plus NEAR. The coin you pick is
+    remembered on this device; the chart itself is mounted by the page script (lwAttach) so it survives the 1s refresh."""
+    tabs = "".join(f'<button type="button" data-co="{c}" onclick="coPick(&#39;{c}&#39;)">{c}</button>' for c in _pub.CHART_PRODUCTS)
     return ('<div class="co-wrap"><div class="co-note">Chart Only pass &middot; live charts, indicators and chart patterns. '
             'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN passes</a></div>'
-            + "".join(build_pattern_window(a["name"]) for a in DASHBOARD_ASSETS if a["name"] in LIVE_ASSETS) + '</div>')
+            f'<div class="lw-win co-win"><div class="co-tabs">{tabs}</div>'
+            '<div class="lw-slot co-slot" data-asset="BTC"><span class="hint">Loading chart&hellip;</span></div></div></div>')
 
 
 def build_pattern_window(asset_name):
@@ -10064,7 +10078,7 @@ def chart_patterns_payload(asset_name, tf):
     hit = _chart_pat_cache.get((asset_name, tf))
     if hit and time.time() - hit[0] < 4:
         return hit[1]
-    sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(asset_name)
+    sym = _pub.CHART_PRODUCTS.get(asset_name)
     cs = (_mtf.windows.get(sym) or {}).get(tf) if sym else None
     out = {"tf": tf, "items": [], "worked": [], "rule": f"{int(CHART_PAT_MIN_PCT * 100)}%+ formed, proven {int(CHART_PAT_MIN_RATE * 100)}%+ right"}
     if cs and len(cs) >= 25:
@@ -15964,7 +15978,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if parsed.path.startswith("/public/"):
             qs_ = urllib.parse.parse_qs(parsed.query)
             a_ = (qs_.get("asset") or ["BTC"])[0].upper()
-            a_ = a_ if a_ in _pub.PRODUCTS else "BTC"
+            a_ = a_ if a_ in _pub.CHART_PRODUCTS else "BTC"
             try:
                 if parsed.path == "/public/ticker":
                     return self._json(_pub.ticker(a_))
@@ -15989,6 +16003,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # 2026-10-22: the live dashboard needs an active pass (the owner always has access)
         # 2026-10-23: a Chart Only pass opens just the live charts (the page shell, its data and the chart patterns)
         _chart_only = _bill.chart_only(user) and user.get("role") != "owner"
+        _co_view = _chart_only or ("view=charts" in (parsed.query or "") and user.get("role") == "owner")   # owner preview
         if not _bill.has_access(user) and parsed.path not in ("/guide",) and not (_chart_only and parsed.path in CHART_ONLY_GET):
             if "text/html" in (self.headers.get("Accept") or ""):
                 return self._redirect("/pricing")
@@ -16036,7 +16051,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed.query)
             a_, tf_ = (qs.get("asset") or [""])[0], (qs.get("tf") or ["1m"])[0]
             try:
-                pl = chart_patterns_payload(a_, tf_) if a_ in LIVE_ASSETS else {"items": [], "worked": []}
+                pl = chart_patterns_payload(a_, tf_) if a_ in _pub.CHART_PRODUCTS else {"items": [], "worked": []}
             except Exception as _cpe:
                 print(f"[chart patterns] {_cpe!r}")
                 pl = {"items": [], "worked": []}
@@ -16135,7 +16150,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif parsed.path == "/data":
-            if _chart_only:
+            if _co_view:
                 _html, _wr = chart_only_html(), {}
             else:
                 _pg_full, _pg_public, _wr = _cached_page()
@@ -16561,7 +16576,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             _pend = sum(1 for u_ in _auth.DB["users"].values() if u_.get("status") == "pending") if user.get("role") == "owner" else 0
             _own = "true" if user.get("role") == "owner" else "false"
-            _co = _bill.chart_only(user) and user.get("role") != "owner"
+            _co = (_bill.chart_only(user) and user.get("role") != "owner") or (user.get("role") == "owner" and "view=charts" in (parsed.query or ""))
             body = (PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json())
                     .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';window.SARGE_REAL = ' + ('true' if _sarge_real() else 'false')
                              + ';window.CHART_ONLY = ' + ('true' if _co else 'false') + ';', 1)
@@ -16687,7 +16702,8 @@ def main():
         print(f"[flow] could not start: {_e!r}")
     global _mtf
     try:
-        _mtf = MTFMonitor([a["symbol"] for a in DASHBOARD_ASSETS if a["name"] in LIVE_ASSETS], get_tick_history)
+        _mtf = MTFMonitor([a["symbol"] for a in DASHBOARD_ASSETS if a["name"] in LIVE_ASSETS], get_tick_history,
+                          slow=[v for k, v in _pub.CHART_PRODUCTS.items() if k not in LIVE_ASSETS])
         _mtf.names = {a["symbol"]: a["name"] for a in DASHBOARD_ASSETS}
         threading.Thread(target=_mtf.run_forever, daemon=True).start()
     except Exception as _e:

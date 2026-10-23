@@ -12,6 +12,12 @@ import requests
 
 HEADERS = {"User-Agent": "brain-dashboard/1.0"}
 PRODUCTS = {"BTC": "BTC-USD", "XRP": "XRP-USD"}
+# 2026-10-23 (user): the Chart Only page charts every coin the market runs 15-minute rounds on (+ NEAR). Coinbase first;
+# a coin Coinbase doesn't list (e.g. HYPE) falls back to Kraken's public candles / ticker.
+CHART_PRODUCTS = {"BTC": "BTC-USD", "ETH": "ETH-USD", "SOL": "SOL-USD", "XRP": "XRP-USD", "DOGE": "DOGE-USD",
+                  "BNB": "BNB-USD", "HYPE": "HYPE-USD", "NEAR": "NEAR-USD"}
+_KRAKEN_PAIR = {"BTC": "XBTUSD", "DOGE": "XDGUSD"}
+_no_cb = set()          # coins Coinbase answered "not found" for - go straight to Kraken
 _cache = {}
 _lock = threading.Lock()
 _fn = {}            # get_state(name) -> dashboard state dict, get_ticks(symbol) -> [(ts, price)]
@@ -47,21 +53,63 @@ def _get(url, params=None, timeout=12):
 TF = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
 
 
+def _kraken_candles(asset, g):
+    pair = _KRAKEN_PAIR.get(asset, asset + "USD")
+    j = _get("https://api.kraken.com/0/public/OHLC", {"pair": pair, "interval": g // 60}).json()
+    res = {k: v for k, v in (j.get("result") or {}).items() if k != "last"}
+    if not res:
+        raise RuntimeError(f"kraken: {j.get('error')}")
+    rows = next(iter(res.values()))
+    return sorted([[int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4])] for r in rows])[-300:]
+
+
+def _cb_failed(asset, e):
+    code = getattr(getattr(e, "response", None), "status_code", None)
+    if code in (400, 404):
+        _no_cb.add(asset)
+
+
 def candles(asset, tf):
-    prod = PRODUCTS.get(asset)
+    prod = CHART_PRODUCTS.get(asset)
     g = TF.get(tf)
     if not prod or not g:
         return []
 
     def go():
-        rows = _get(f"https://api.exchange.coinbase.com/products/{prod}/candles", {"granularity": g}).json()
-        return sorted([[int(r[0]), float(r[3]), float(r[2]), float(r[1]), float(r[4])] for r in rows])[-300:]
+        if asset not in _no_cb:
+            try:
+                rows = _get(f"https://api.exchange.coinbase.com/products/{prod}/candles", {"granularity": g}).json()
+                return sorted([[int(r[0]), float(r[3]), float(r[2]), float(r[1]), float(r[4])] for r in rows])[-300:]
+            except Exception as e:
+                _cb_failed(asset, e)
+                if asset not in _no_cb:
+                    raise
+        return _kraken_candles(asset, g)
     return _cached(f"c:{asset}:{tf}", 15 if g <= 60 else 60, go) or []
 
 
-def stats24(asset):
-    prod = PRODUCTS.get(asset)
+def quick_price(asset):
+    """Latest trade price for a chart-only coin (cached 3s) - Coinbase ticker, else Kraken."""
+    prod = CHART_PRODUCTS.get(asset)
     if not prod:
+        return None
+
+    def go():
+        if asset not in _no_cb:
+            try:
+                return float(_get(f"https://api.exchange.coinbase.com/products/{prod}/ticker", timeout=6).json()["price"])
+            except Exception as e:
+                _cb_failed(asset, e)
+                if asset not in _no_cb:
+                    raise
+        j = _get("https://api.kraken.com/0/public/Ticker", {"pair": _KRAKEN_PAIR.get(asset, asset + "USD")}, timeout=6).json()
+        return float(next(iter((j.get("result") or {}).values()))["c"][0])
+    return _cached(f"q:{asset}", 3, go)
+
+
+def stats24(asset):
+    prod = CHART_PRODUCTS.get(asset)
+    if not prod or asset in _no_cb:
         return {}
 
     def go():
@@ -74,11 +122,13 @@ def stats24(asset):
 
 def ticker(asset):
     """Live price, the current Kalshi line and countdown, a rolling 60s average - no calls."""
-    st = _fn.get("get_state", lambda n: {})(asset) or {}
-    sym = PRODUCTS.get(asset)
+    st = (_fn.get("get_state", lambda n: {})(asset) or {}) if asset in PRODUCTS else {}
+    sym = CHART_PRODUCTS.get(asset)
     ticks = _fn.get("get_ticks", lambda s: [])(sym) if sym else []
     now = time.time()
     price = ticks[-1][1] if ticks and now - ticks[-1][0] < 60 else st.get("spot_price")
+    if price is None and asset not in PRODUCTS:
+        price = quick_price(asset)
     secs, last = [], None
     i = 0
     for sec in range(int(now) - 59, int(now) + 1):

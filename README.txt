@@ -123,3 +123,6 @@ UPDATE 2026-10-23 (c) - CHART ONLY pass
   "What do these mean?", chart patterns). No calls, flip radar, scoreboard, alerts, voice or Playbook.
 - Time is kept in user["chart_until"] (separate from the full pass). Admin shows CHART ONLY, and "Give days" has a BRAIN / Chart Only pick.
 - Stripe: created automatically with the other passes when STRIPE_SECRET_KEY is set (or set STRIPE_LINK_CHART).
+- Chart Only page (2026-10-23 d): one live chart with a coin picker - BTC, ETH, SOL, XRP, DOGE, BNB, HYPE, NEAR (remembered per
+  device). Coinbase candles, Kraken fallback for coins Coinbase doesn't list. Chart patterns read the extra coins every ~15s in the
+  background and only show once each coin has its own track record. Owner preview: /app?view=charts

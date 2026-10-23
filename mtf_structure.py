@@ -594,8 +594,10 @@ class PatternHistory:
 
 # ------------------------------------------------------------------ the monitor thread
 class MTFMonitor:
-    def __init__(self, products, tick_getter):
-        self.products = list(products)           # e.g. ["BTC-USD", "XRP-USD"]
+    def __init__(self, products, tick_getter, slow=()):
+        self.products = list(products) + [p for p in slow if p not in products]   # e.g. ["BTC-USD", "XRP-USD"]
+        self.slow = set(slow) - set(products)    # 2026-10-23: chart-only coins - read every 3rd step (~15s), never in the way
+        self._n = 0
         self.tick_getter = tick_getter           # fn(symbol) -> [(ts, price), ...]
         self.books = {p: CandleBook() for p in self.products}
         self.raw = {p: {} for p in self.products}
@@ -646,7 +648,21 @@ class MTFMonitor:
         return s
 
     def step(self):
+        self._n += 1
         for p in self.products:
+            if p in self.slow:
+                if self._n % 3:
+                    continue
+                try:
+                    self._step_one(p)
+                except Exception as e:  # noqa: BLE001 - a chart-only coin must never stop BTC / XRP
+                    print(f"[MTF] {p}: {e!r}")
+                continue
+            self._step_one(p)
+        self._finish_step()
+
+    def _step_one(self, p):
+        if True:
             b = self.books[p]
             if not b.seeded:
                 b.seed_coinbase(p)
@@ -686,6 +702,8 @@ class MTFMonitor:
                         cs_[-1] = [ts_, o_, max(h_, px_), min(l_, px_), px_]
                 win[tf] = cs_
             self.windows[p] = win
+
+    def _finish_step(self):
         _px = {self.names.get(p, p.split("-")[0]): v for p, v in self.price.items()}
         self.stats.resolve(_px)
         try:
