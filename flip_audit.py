@@ -209,6 +209,93 @@ def flips(rounds, out, live_tables=None):
                        f"unseen {hb[0]} won {hb[1]:.0%} {hb[2] * 100:+.1f}c")
 
 
+# ------------------------------------------------------------------------------------------------ candidate fixes
+def _cell(f):
+    """Flip-history cell for the FAVORITE at a mark: favorite price band x distance to the line x crosses so far."""
+    fav_yes = f["kp"] >= 0.5
+    fp = bt.price_of(fav_yes, f["kp"])
+    b = 0 if fp < 0.6 else 1 if fp < 0.7 else 2 if fp < 0.8 else 3 if fp < 0.9 else 4
+    ad = abs(f["dist"])
+    d = 0 if ad <= 0.0002 else 1 if ad <= 0.0005 else 2 if ad <= 0.001 else 3
+    wrong = (f["dist"] > 0) != fav_yes and ad > 0.00003
+    c = min(2, int(f.get("crosses") or 0))
+    return f"{b}{d}{c}{int(wrong)}", fav_yes, fp
+
+
+def fixes(rounds, out):
+    tr_r, ho_r = _split(rounds)
+    out.append("== CANDIDATE FIXES (built on the older 70%, scored ONLY on the newest 30% they never saw) ==")
+    for mark, name in ((240, "EARLY"), (480, "SEALED")):
+        # flip-history table for the favorite
+        tab = {}
+        for r in tr_r:
+            f = r["f"].get(mark)
+            if not f or f.get("kp") is None:
+                continue
+            key, fav_yes, fp = _cell(f)
+            c = tab.setdefault(key, [0, 0, 0.0])
+            c[0] += 1
+            c[1] += int((r["m"]["result"] == "yes") != fav_yes)
+            c[2] += fp
+        def flip_rate(f):
+            key, fav_yes, fp = _cell(f)
+            c = tab.get(key)
+            if not c or c[0] < 15:
+                return None, fp, fav_yes
+            return (c[1] + 4 * (1 - fp)) / (c[0] + 4), fp, fav_yes      # pulled toward the market's own price
+        # (a) skip calls on the favorite when history says it flips 5+ points more often than its price allows
+        base, kept, skipped = [], [], []
+        brier_m = brier_t = 0.0; nb = 0
+        for r in ho_r:
+            f = r["f"].get(mark)
+            if not f or f.get("kp") is None:
+                continue
+            call, _t, _p = bt.stage_call(f)
+            res_yes = r["m"]["result"] == "yes"
+            fr, fp, fav_yes = flip_rate(f)
+            if fr is not None:
+                flipped = res_yes != fav_yes
+                brier_m += ((1 - fp) - flipped) ** 2; brier_t += (fr - flipped) ** 2; nb += 1
+            if not call:
+                continue
+            row = (((call == "YES") == res_yes), bt.price_of(call == "YES", f["kp"]))
+            base.append(row)
+            on_fav = (call == "YES") == fav_yes
+            if on_fav and fr is not None and fr > (1 - fp) + 0.05:
+                skipped.append(row)
+            else:
+                kept.append(row)
+        out.append(f"  {name}: " + _fmt("calls as now", base))
+        out.append(f"  {name}: " + _fmt("calls kept if we skip favorites the flip history marks risky", kept))
+        out.append(f"  {name}: " + _fmt("   ...the calls that would be skipped", skipped))
+        if nb:
+            out.append(f"  {name}: flip prediction error (lower = better): market price {brier_m / nb:.4f} vs flip history {brier_t / nb:.4f} ({nb} rounds)")
+        # (b) against-trend: sit out vs take the trend side vs take the call
+        sit = {"call": [], "trend": []}
+        for r in ho_r:
+            f = r["f"].get(mark)
+            if not f:
+                continue
+            call, _t, _p = bt.stage_call(f)
+            tr = (f.get("sig") or {}).get("trend") or 0
+            res_yes = r["m"]["result"] == "yes"
+            if call and tr and (tr > 0) != (call == "YES"):
+                sit["call"].append(((call == "YES") == res_yes, bt.price_of(call == "YES", f["kp"])))
+                sit["trend"].append(((tr > 0) == res_yes, bt.price_of(tr > 0, f["kp"])))
+        out.append(f"  {name} against-trend, unseen rounds: " + _fmt("take the call", sit["call"]) + " | " + _fmt("take the trend side", sit["trend"]))
+        # (c) coin-flip skips: trend side
+        cf = []
+        for r in ho_r:
+            f = r["f"].get(mark)
+            if not f:
+                continue
+            call, _t, _p = bt.stage_call(f)
+            tr = (f.get("sig") or {}).get("trend") or 0
+            if not call and tr:
+                cf.append(((tr > 0) == (r["m"]["result"] == "yes"), bt.price_of(tr > 0, f["kp"])))
+        out.append(f"  {name} coin-flip skips, unseen rounds: " + _fmt("take the trend side", cf))
+
+
 def run(live_rounds=None):
     out = [f"BRAIN audit {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}"]
     try:
@@ -217,7 +304,7 @@ def run(live_rounds=None):
         rounds = []
         out.append(f"backtest data not readable: {e!r}")
     out.append(f"backtest rounds available: {len(rounds)}")
-    for fn, args in ((stayout_backtest, (rounds, out)), (stayout_live, (live_rounds, out)), (flips, (rounds, out))):
+    for fn, args in ((stayout_backtest, (rounds, out)), (stayout_live, (live_rounds, out)), (flips, (rounds, out)), (fixes, (rounds, out))):
         try:
             if fn is stayout_live or rounds:
                 fn(*args)
