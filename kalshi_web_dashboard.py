@@ -6675,6 +6675,47 @@ body[data-matf="tod"] .ma-tab[data-tf="tod"] { background:linear-gradient(90deg,
 .mini-call .mc-wr { font-size:12.5px; color:#eee2d7; } .mini-call .mc-wr b { font-family:var(--br-serif); font-size:16px; color:#fbf4ec; }
 .lw-corner .lw-chips { gap:2px !important; }
 .lw-corner .lw-chip { width:auto !important; min-width:66px !important; padding:0 4px !important; }
+/* 2026-10-23 (user): BRAIN's favorite - held-to-the-end profit is the headline; hour picker for the backtest */
+.ma-row { align-items:center !important; flex-wrap:wrap; }
+.ma-lab { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ma-profit { font-family:var(--br-serif); font-weight:800; font-size:22px; min-width:96px; text-align:right; }
+.ma-profit .up { color:#3dd69c; } .ma-profit .down { color:#f05454; }
+.ma-row .ma-pct { font-size:16px !important; min-width:44px; text-align:right; }
+.ma-money { font-size:11.5px !important; }
+.hr-strip { display:grid; grid-template-columns:repeat(24, minmax(0, 1fr)); gap:2px; margin:6px 0 4px; }
+.hr-cell { display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:46px; padding:2px 0; border-radius:6px;
+  border:1px solid rgba(220,187,145,0.18); background:rgba(255,255,255,0.03); cursor:pointer; color:#bcaaa1; }
+.hr-cell i { display:block; width:60%; border-radius:2px; background:rgba(188,170,161,0.35); }
+.hr-cell.pos i { background:#3dd69c; }
+.hr-cell span { font-size:9px; font-family:var(--br-bold); margin-top:2px; }
+.hr-cell.on { border-color:#e9a5bb; background:rgba(233,165,187,0.16); color:#fbf4ec; }
+@media (max-width:760px) { .hr-strip { grid-template-columns:repeat(12, minmax(0, 1fr)); } .hr-cell { height:40px; } .hr-cell span { font-size:9px; }
+  .ma-lab { flex:1 1 100%; } .ma-profit { font-size:20px; min-width:0; text-align:left; } .ma-row .ma-pct { min-width:0; } }
+body[data-matf="h0"] .ma-pane[data-tf="h0"] { display:block; }
+body[data-matf="h1"] .ma-pane[data-tf="h1"] { display:block; }
+body[data-matf="h2"] .ma-pane[data-tf="h2"] { display:block; }
+body[data-matf="h3"] .ma-pane[data-tf="h3"] { display:block; }
+body[data-matf="h4"] .ma-pane[data-tf="h4"] { display:block; }
+body[data-matf="h5"] .ma-pane[data-tf="h5"] { display:block; }
+body[data-matf="h6"] .ma-pane[data-tf="h6"] { display:block; }
+body[data-matf="h7"] .ma-pane[data-tf="h7"] { display:block; }
+body[data-matf="h8"] .ma-pane[data-tf="h8"] { display:block; }
+body[data-matf="h9"] .ma-pane[data-tf="h9"] { display:block; }
+body[data-matf="h10"] .ma-pane[data-tf="h10"] { display:block; }
+body[data-matf="h11"] .ma-pane[data-tf="h11"] { display:block; }
+body[data-matf="h12"] .ma-pane[data-tf="h12"] { display:block; }
+body[data-matf="h13"] .ma-pane[data-tf="h13"] { display:block; }
+body[data-matf="h14"] .ma-pane[data-tf="h14"] { display:block; }
+body[data-matf="h15"] .ma-pane[data-tf="h15"] { display:block; }
+body[data-matf="h16"] .ma-pane[data-tf="h16"] { display:block; }
+body[data-matf="h17"] .ma-pane[data-tf="h17"] { display:block; }
+body[data-matf="h18"] .ma-pane[data-tf="h18"] { display:block; }
+body[data-matf="h19"] .ma-pane[data-tf="h19"] { display:block; }
+body[data-matf="h20"] .ma-pane[data-tf="h20"] { display:block; }
+body[data-matf="h21"] .ma-pane[data-tf="h21"] { display:block; }
+body[data-matf="h22"] .ma-pane[data-tf="h22"] { display:block; }
+body[data-matf="h23"] .ma-pane[data-tf="h23"] { display:block; }
+body[data-matf="h0"] .ma-tab-hr, body[data-matf="h1"] .ma-tab-hr, body[data-matf="h2"] .ma-tab-hr, body[data-matf="h3"] .ma-tab-hr, body[data-matf="h4"] .ma-tab-hr, body[data-matf="h5"] .ma-tab-hr, body[data-matf="h6"] .ma-tab-hr, body[data-matf="h7"] .ma-tab-hr, body[data-matf="h8"] .ma-tab-hr, body[data-matf="h9"] .ma-tab-hr, body[data-matf="h10"] .ma-tab-hr, body[data-matf="h11"] .ma-tab-hr, body[data-matf="h12"] .ma-tab-hr, body[data-matf="h13"] .ma-tab-hr, body[data-matf="h14"] .ma-tab-hr, body[data-matf="h15"] .ma-tab-hr, body[data-matf="h16"] .ma-tab-hr, body[data-matf="h17"] .ma-tab-hr, body[data-matf="h18"] .ma-tab-hr, body[data-matf="h19"] .ma-tab-hr, body[data-matf="h20"] .ma-tab-hr, body[data-matf="h21"] .ma-tab-hr, body[data-matf="h22"] .ma-tab-hr, body[data-matf="h23"] .ma-tab-hr { background:linear-gradient(90deg, #e9a5bb, #dcbb91); color:#2a1b21; border-color:transparent; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -11744,6 +11785,25 @@ def _cashout_loop():
         time.sleep(300)
 
 
+CASHOUT_TRY = [x / 100 for x in range(70, 100)]
+
+
+def _best_cashout(hist, key):
+    """2026-10-23 (user): the cash-out point that actually made the most, tested from 70c to 99c against simply holding.
+    Returns (best price or None for "hold to the end", its total, hold total, rounds)."""
+    rows = [h for h in hist if not h.get(f"{key}_reversal") and (key != "mini" or h.get("mini_v") == 2)]
+    base = [(h, r) for h in rows for r in [_cash_pnl(h, key)] if r and r[1] is not None]
+    if not base:
+        return (None, 0.0, 0.0, 0)
+    hold = sum(r[0] for _h, r in base)
+    best_at, best_v = None, hold
+    for at in CASHOUT_TRY:
+        v = sum(_cash_pnl(h, key, at)[1] for h, _r in base)
+        if v > best_v + 0.5:
+            best_at, best_v = at, v
+    return (best_at, best_v, hold, len(base))
+
+
 def _cashout_report():
     for name, hist in list(_history.items()):
         for key in ("mini", "early", "sealed"):
@@ -11754,6 +11814,9 @@ def _cashout_report():
             hold, cash, hits = sum(r[0] for r in res), sum(r[1] for r in res), sum(1 for r in res if r[2])
             print(f"[cashout90] {name} {key}: n={len(res)} hold ${hold:+,.0f} | cash out at 90c ${cash:+,.0f} "
                   f"| reached 90c {hits}x | diff ${cash - hold:+,.0f}")
+            ba, bv, _hd, _n = _best_cashout(hist, key)
+            print(f"[cashout best] {name} {key}: " + (f"best cash-out {ba * 100:.0f}c ${bv:+,.0f} vs hold ${_hd:+,.0f}" if ba
+                                                         else f"holding beats every cash-out 70-99c (hold ${_hd:+,.0f})"))
 
 
 threading.Thread(target=_cashout_loop, daemon=True).start()
@@ -11766,62 +11829,118 @@ def _tod_label(now_et):
     return f"{f(a - dt.timedelta(hours=1))}&ndash;{f(b + dt.timedelta(hours=1))}"
 
 
+def _fav_rows(hist, keep, at_by=None):
+    """Per call: record + $100/call profit (held to the end = primary; cashing out at 90c = secondary) for rounds kept."""
+    out = []
+    for key, lab in (("mini", "Mini call &middot; 1:00"), ("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00")):
+        g, res = [], []
+        for h in hist:
+            if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
+                continue
+            if key == "mini" and h.get("mini_v") != 2:
+                continue
+            t = _window_close_utc(h.get("ticker"))
+            if t and keep(t):
+                g.append(bool(h[f"{key}_correct"]))
+                at = (at_by or {}).get(key)
+                r = _cash_pnl(h, key, at) if at else _cash_pnl(h, key)
+                if r:
+                    res.append(r if at else (r[0], r[0] if r[1] is not None else None, False))
+        known = [r for r in res if r[1] is not None]
+        out.append({"key": key, "lab": lab, "at": (at_by or {}).get(key), "w": sum(g), "n": len(g), "hold": sum(r[0] for r in res),
+                    "cash": sum(r[1] for r in known) + sum(r[0] for r in res if r[1] is None),
+                    "hits": sum(1 for r in known if r[2]), "nm": len(res)})
+    return out
+
+
+def _fav_best(rows, min_n=5):
+    ok = [r for r in rows if r["n"] >= min_n and r["nm"] and r["hold"] > 0]
+    return max(ok, key=lambda r: r["hold"])["key"] if ok else None
+
+
+def _fav_cells(rows, best):
+    m = lambda v: f'<span class="{"up" if v >= 0 else "down"}">{"+" if v >= 0 else "-"}${abs(v):,.0f}</span>'
+    return "".join(
+        f'<div class="ma-row{" ma-best" if r["key"] == best else ""}"><span class="ma-lab">{r["lab"]}'
+        + ('<span class="ma-tag">BRAIN&rsquo;S FAVORITE</span>' if r["key"] == best else "") + '</span>'
+        + (f'<b class="ma-profit">{m(r["hold"])}</b>' if r["nm"] else "")
+        + (f'<b class="ma-pct">{r["w"] / r["n"]:.0%}</b><span class="ma-wl">{r["w"]}W &middot; {r["n"] - r["w"]}L</span>' if r["n"] else '<span class="ma-wl hint">no rounds yet</span>')
+        + ((f'<div class="ma-money hint">$100 a call, held to the end &middot; best cash-out point {r["at"] * 100:.0f}&cent;: {m(r["cash"])} '
+            f'(hit {r["at"] * 100:.0f}&cent; in {r["hits"]} of {r["nm"]})</div>' if r.get("at") else
+            '<div class="ma-money hint">$100 a call, held to the end &middot; best cash-out point: <b>hold to the end</b> '
+            '(beat every cash-out from 70&cent; to 99&cent;)</div>') if r["nm"] else "")
+        + '</div>' for r in rows)
+
+
+_best_at_cache = {}
+_fav_html_cache = {}
+
+
 def build_brain_favorite(name):
-    """2026-10-22 (user): "BRAIN's favorite" = the MOST PROFITABLE call for this coin, over the last 6 / 12 / 24 hours or at
-    this time of day (same hours, last 30 days), counting both holding to the end and cashing out at 90c. Numbers only."""
+    """Rebuilt at most once a minute (or when a round is added) - the hour-by-hour backtest is too heavy for every 1s refresh."""
+    hist = _history.get(name, [])
+    ck = (len(hist), int(time.time() // 60), hist[-1].get("sealed_correct") if hist else None)
+    c = _fav_html_cache.get(name)
+    if c and c[0] == ck:
+        return c[1]
+    html = _build_brain_favorite(name)
+    _fav_html_cache[name] = (ck, html)
+    return html
+
+
+def _build_brain_favorite(name):
+    """2026-10-22/23 (user): BRAIN's favorite = the MOST PROFITABLE call for this coin ($100 a call, held to the end - the
+    primary number; cashing out at 90c shown underneath). Last 6 / 12 / 24 hours (24 hrs = the scoreboard's "last 24 hrs"),
+    and BY HOUR: pick any hour of the day (ET) and see the last 30 days of rounds that started in that hour. Numbers only."""
     hist = _history.get(name, [])
     now = time.time()
     et = ZoneInfo("America/New_York")
     now_et = dt.datetime.now(et)
-    defs = (("mini", "Mini call &middot; 1:00"), ("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00"))
-
-    def in_tod(t):
-        if now - t.timestamp() > 30 * 86400:
-            return False
-        dh = (t.astimezone(et).hour - now_et.hour) % 24
-        return dh in (0, 1, 23)
-
+    ck = (name, len(hist), int(now // 300))
+    bc = _best_at_cache.setdefault(name, {})
+    if bc.get("k") != ck:
+        bc["k"] = ck
+        bc["v"] = {k: _best_cashout(hist, k)[0] for k in ("mini", "early", "sealed")}
+    at_by = bc["v"]
     panes = []
-    tfs = (("6", "6 hrs", lambda t: now - t.timestamp() <= 6 * 3600), ("12", "12 hrs", lambda t: now - t.timestamp() <= 12 * 3600),
-           ("24", "24 hrs", lambda t: now - t.timestamp() <= 24 * 3600), ("tod", "This time of day", in_tod))
-    for tf, _lab, keep in tfs:
-        rows = []
-        for key, lab in defs:
-            g, res = [], []
-            for h in hist:
-                if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
-                    continue
-                if key == "mini" and h.get("mini_v") != 2:
-                    continue
-                t = _window_close_utc(h.get("ticker"))
-                if t and keep(t):
-                    g.append(bool(h[f"{key}_correct"]))
-                    r = _cash_pnl(h, key)
-                    if r:
-                        res.append(r)
-            hold = sum(r[0] for r in res)
-            known = [r for r in res if r[1] is not None]
-            cash = sum(r[1] for r in known) + sum(r[0] for r in res if r[1] is None)
-            hits = sum(1 for r in known if r[2])
-            rows.append({"key": key, "lab": lab, "w": sum(g), "n": len(g), "hold": hold, "cash": cash, "hits": hits, "nm": len(res)})
-        ok = [r for r in rows if r["n"] >= 5]
-        best, how = None, ""
-        if ok:
-            b = max(ok, key=lambda r: max(r["hold"], r["cash"]))
-            if max(b["hold"], b["cash"]) > 0:
-                best, how = b["key"], ("cash out at 90&cent;" if b["cash"] > b["hold"] else "hold to the end")
-        m = lambda v: f'<span class="{"up" if v >= 0 else "down"}"><b>{"+" if v >= 0 else "-"}${abs(v):,.0f}</b></span>'
-        cells = "".join(
-            f'<div class="ma-row{" ma-best" if r["key"] == best else ""}"><span class="ma-lab">{r["lab"]}</span>'
-            + (f'<b class="ma-pct">{r["w"] / r["n"]:.0%}</b><span class="ma-wl">{r["w"]}W &middot; {r["n"] - r["w"]}L</span>' if r["n"] else '<span class="ma-wl hint">no rounds yet</span>')
-            + (f'<span class="ma-tag">BRAIN&rsquo;S FAVORITE &middot; {how}</span>' if r["key"] == best else "")
-            + (f'<div class="ma-money">$100/call &middot; held to the end {m(r["hold"])} &middot; cashed out at 90&cent; {m(r["cash"])}'
-               f' <span class="hint">(hit 90&cent; in {r["hits"]} of {r["nm"]})</span></div>' if r["nm"] else "")
-            + '</div>' for r in rows)
-        sub = (f'<div class="hint ma-sub">{name} rounds between {_tod_label(now_et)} ET, last 30 days</div>' if tf == "tod" else "")
-        panes.append(f'<div class="ma-pane" data-tf="{tf}">{sub}{cells}'
-                     + ('' if best else '<div class="hint" style="margin-top:4px;">Needs at least 5 graded rounds with a profit in this window.</div>') + '</div>')
-    tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{tf}" onclick="document.body.dataset.matf=\'{tf}\'">{lab}</button>' for tf, lab, _k in tfs)
+    for tf, hrs in (("6", 6), ("12", 12), ("24", 24)):
+        rows = _fav_rows(hist, lambda t, hrs=hrs: now - t.timestamp() <= hrs * 3600, at_by)
+        best = _fav_best(rows)
+        panes.append(f'<div class="ma-pane" data-tf="{tf}">{_fav_cells(rows, best)}'
+                     + ('' if best else '<div class="hint" style="margin-top:4px;">No call has made a profit over at least 5 rounds in this window.</div>') + '</div>')
+    # by hour (start of the round, ET), last 30 days
+    hr_of = lambda t: (t - dt.timedelta(minutes=15)).astimezone(et).hour
+    hour_rows = {}
+    for H in range(24):
+        hour_rows[H] = _fav_rows(hist, lambda t, H=H: now - t.timestamp() <= 30 * 86400 and hr_of(t) == H, at_by)
+    lab12 = lambda H: (f"{(H % 12) or 12}{'a' if H < 12 else 'p'}")
+    tops = []
+    for H in range(24):
+        b = _fav_best(hour_rows[H], 3)
+        bv = max((r["hold"] for r in hour_rows[H] if r["key"] == b), default=0) if b else 0
+        tops.append((H, b, bv))
+    mx = max([abs(v) for _h, _b, v in tops] + [1])
+    ranked = [x for x in sorted(tops, key=lambda x: -x[2]) if x[2] > 0][:3]
+    short = {"mini": "Mini", "early": "Early", "sealed": "Sealed"}
+    best_txt = (" &middot; ".join(f'<b>{lab12(H)}</b> {short[b]} <span class="up">+${v:,.0f}</span>' for H, b, v in ranked)
+                if ranked else "not enough rounds yet")
+    for H in range(24):
+        strip = "".join(
+            f'<button type="button" class="hr-cell{" on" if h2 == H else ""}{" pos" if v > 0 else ""}" '
+            f'onclick="document.body.dataset.matf=\'h{h2}\'" title="{lab12(h2)} ET: '
+            + (f'{short[b]} call +${v:,.0f}' if b else 'no profitable call') + '">'
+            f'<i style="height:{max(3, round(26 * abs(v) / mx)) if b else 3}px"></i><span>{lab12(h2)}</span></button>'
+            for h2, b, v in tops)
+        best = _fav_best(hour_rows[H], 3)
+        nr = max((r["n"] for r in hour_rows[H]), default=0)
+        panes.append(f'<div class="ma-pane" data-tf="h{H}"><div class="hr-strip">{strip}</div>'
+                     f'<div class="hint ma-sub">Most profitable hours (last 30 days): {best_txt}</div>'
+                     f'<div class="ma-sub"><b>{lab12(H).replace("a", " AM").replace("p", " PM")} ET</b> <span class="hint">&middot; {nr} {name} rounds that started in this hour, last 30 days</span></div>'
+                     f'{_fav_cells(hour_rows[H], best)}</div>')
+    tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{tf}" onclick="document.body.dataset.matf=\'{tf}\'">{lab}</button>'
+                   for tf, lab in (("6", "6 hrs"), ("12", "12 hrs"), ("24", "24 hrs")))
+    tabs += (f'<button type="button" class="ma-tab ma-tab-hr" data-tf="hr" '
+             f'onclick="document.body.dataset.matf=\'h{now_et.hour}\'">By hour</button>')
     return (f'<div class="most-acc"><div class="ma-head"><span class="ma-title">BRAIN&rsquo;S FAVORITE</span><span class="ma-tabs">{tabs}</span></div>'
             f'{"".join(panes)}</div>')
 
@@ -11847,7 +11966,8 @@ def build_scoreboard(name, d):
             rows = [h for h in rows if h.get("mini_v") == 2]          # 2026-10-22: fresh start for the reworked mini call
         res = [bool(h[field]) for h in rows]
         n, w = len(res), sum(res)
-        today = [bool(h[field]) for h in rows if (_window_close_utc(h.get("ticker")) or day0) > day0]
+        _now24 = time.time()   # 2026-10-23 (user): "last 24 hrs" - same window + rules as BRAIN's favorite 24 hrs tab
+        today = [bool(h[field]) for h in rows if _window_close_utc(h.get("ticker")) and _now24 - _window_close_utc(h.get("ticker")).timestamp() <= 86400]
         if key == "bot":
             first_k = since
         else:
@@ -11879,7 +11999,7 @@ def build_scoreboard(name, d):
             f'<div class="sc-main"><span class="sc-pct">{w / n:.0%}</span><span class="sc-wl"><b class="skw">{w}W</b> &middot; <b class="skl">{n - w}L</b>'
             f'<br><span class="hint">{n:,} round{"s" if n != 1 else ""}</span></span></div>'
             f'<div class="sc-cur">{streak}</div>'
-            f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; today: <b>{td}</b>'
+            f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; last 24 hrs: <b>{td}</b>'
             + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div>{_mbt}</div>')
     # 2026-10-22 (user): reversals in their own column so the main win rate stays clean
     # 2026-10-22 (d, user: "reset the win to lose rate"): the reversal record restarts with the flip-history system
