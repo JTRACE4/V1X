@@ -7652,7 +7652,8 @@ function updateFlipWatch() {
     }
   });
   let bar = document.getElementById('flip-watch');
-  const names = Object.keys(live);
+  // 2026-10-23 (user): the pills only show once there is an early or sealed call to hold or go against
+  const names = Object.keys(live).filter(n => (live[n].callName === 'early' || live[n].callName === 'sealed') && live[n].withCall !== null);
   if (!names.length) { if (bar) bar.remove(); document.body.classList.remove('has-flip-watch'); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'flip-watch'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
   document.body.classList.add('has-flip-watch');
