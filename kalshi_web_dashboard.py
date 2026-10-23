@@ -8187,7 +8187,35 @@ function _orderVoice(name, side, usd) {
     return _coinWord(name) + ', big ' + (side === 'buy' ? 'buying' : 'selling') + ', ' + spokenUsd(usd) + '.' + (q && q.made && !isNaN(q.pct) && q.pct >= 40 ? ' Flip risk ' + q.pct + ' percent.' : '');
   }, false, 10000);
 }
-setInterval(() => { if (!document.hidden) { try { minuteCheckins(); } catch (e) {} try { flipRiseAlerts(); } catch (e) {} } }, 1000);
+// 2026-10-23 (user): after the call, "sellers getting stronger" / "buyers still building" - only when it is a significant push
+// that can move the round: one side 62%+ of the pressure bar, up 8+ points in the last 45s, live price moving the same way,
+// and (if it runs against the call) the flip radar already 30%+. Once per 3 minutes per coin.
+const PRESS_GAP_MS = 180000, pressHist = {}, pressSaid = {};
+function pressureAlerts() {
+  if (!soundEnabled || !voiceAlertsEnabled) return;
+  const now = Date.now();
+  ['BTC', 'XRP'].forEach(name => {
+    if (assetSoundEnabled[name] === false) return;
+    const r = _radarInfo(name), el = document.querySelector('.press-top[data-asset-press="' + name + '"]');
+    if (!r || !r.made || !el || r.left <= 20) { delete pressHist[name]; return; }
+    const buy = parseFloat(el.getAttribute('data-buy'));
+    if (isNaN(buy)) return;
+    const h = pressHist[name] = (pressHist[name] && pressHist[name].round === r.round) ? pressHist[name] : { round: r.round, pts: [] };
+    h.pts.push([now, buy]);
+    while (h.pts.length && now - h.pts[0][0] > 45000) h.pts.shift();
+    if (now - h.pts[0][0] < 30000) return;                       // need a real 30-45s window first
+    const side = buy >= 50 ? 'buy' : 'sell', str = side === 'buy' ? buy : 100 - buy;
+    const was = side === 'buy' ? h.pts[0][1] : 100 - h.pts[0][1];
+    const micro = (document.querySelector('.flip-chance-value[data-flip-src="radar"][data-flip-chance-key^="' + name + '::"]') || {getAttribute: () => ''}).getAttribute('data-micro');
+    if (str < 62 || str - was < 8 || micro !== (side === 'buy' ? 'up' : 'down')) return;
+    const against = (r.call === 'YES') !== (side === 'buy');
+    if (against && r.pct < 30) return;
+    if (now - (pressSaid[name] || 0) < PRESS_GAP_MS || now - (coinSpoke[name] || 0) < 20000) return;
+    pressSaid[name] = now; coinSpoke[name] = now;
+    speak(_coinWord(name) + (side === 'buy' ? ', buyers still building.' : ', sellers getting stronger.'), against, 10000);
+  });
+}
+setInterval(() => { if (!document.hidden) { try { minuteCheckins(); } catch (e) {} try { flipRiseAlerts(); } catch (e) {} try { pressureAlerts(); } catch (e) {} } }, 1000);
 
 function checkIncomingAlerts() {
   document.querySelectorAll('.incoming-alert').forEach(el => {
@@ -13327,7 +13355,7 @@ def build_pressure_bar(asset_name, d=None, part="all"):
     elif mc is not None:
         mc_html = '<div class="press-health hint">Math check: fetching each exchange&#39;s own 24h numbers (first check about 30 seconds after start)...</div>'
     top_html = (
-        f'<div class="row press-row press-top" data-asset-press="{asset_name}">'
+        f'<div class="row press-row press-top" data-asset-press="{asset_name}" data-buy="{buy:.1f}">'
         f'<div class="press-head"><b>BUY PRESSURE</b> <span class="hint">{win_lbl}</span> '
         f'<span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
         f'<div class="press-qty"><span class="up"><i class=va-u></i> <b>{_coin_amt(coin, m["buy_qty"])} {coin}</b> bought <span class="hint">({_usd_short(m["buy"])})</span></span>'
