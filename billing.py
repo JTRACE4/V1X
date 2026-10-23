@@ -122,7 +122,66 @@ def ensure_stripe():
         made.append("webhook")
         with _auth._lock:
             _auth.save()
-    return f"{mode} mode ready" + (f" (created {', '.join(made)})" if made else "")
+    try:
+        retired = retire_stale()
+    except Exception as _re:                      # cleanup must never block checkout
+        retired = []
+        print(f"[billing] stale cleanup failed: {_re!r}")
+    return (f"{mode} mode ready" + (f" (created {', '.join(made)})" if made else "")
+            + (f" (retired old {', '.join(retired)})" if retired else ""))
+
+
+def _list(path, params=None):
+    """All objects from a Stripe list endpoint (follows has_more)."""
+    import urllib.parse as _u
+    out, after = [], None
+    while True:
+        q = dict(params or {}, limit=100)
+        if after:
+            q["starting_after"] = after
+        page = _stripe("GET", path + "?" + _u.urlencode(q), None)
+        out += page.get("data") or []
+        if not page.get("has_more") or not out:
+            return out
+        after = out[-1]["id"]
+
+
+def retire_stale():
+    """After a price change: switch off the old BRAIN payment links and archive the old prices/products, so nobody can
+    pay an old price. Only touches objects BRAIN made itself (metadata pass = one of ours). Safe to run at every start."""
+    current = {k: cents for k, (_d, cents, _l) in PASSES.items()}
+    stale_prices, keep_products, retired = set(), set(), []
+    ours = [p for p in _list("prices", {"active": "true"}) if (p.get("metadata") or {}).get("pass") in current]
+    for pr in ours:
+        if pr.get("unit_amount") == current[pr["metadata"]["pass"]]:
+            keep_products.add(pr.get("product"))
+    for pr in ours:
+        key = pr["metadata"]["pass"]
+        if pr.get("unit_amount") == current[key]:
+            continue
+        stale_prices.add(pr["id"])
+        _stripe("POST", f"prices/{pr['id']}", {"active": "false"})
+        retired.append(f"{key} ${pr.get('unit_amount', 0) / 100:.0f}")
+        prod = pr.get("product")
+        if prod and prod not in keep_products:
+            _stripe("POST", f"products/{prod}", {"active": "false"})
+    for pl in _list("payment_links", {"active": "true"}):
+        if (pl.get("metadata") or {}).get("pass") not in current:
+            continue
+        items = _stripe("GET", f"payment_links/{pl['id']}/line_items", None).get("data") or []
+        price_ids = {((it.get("price") or {}).get("id")) for it in items}
+        price_ok = any(((it.get("price") or {}).get("active")) and (it.get("price") or {}).get("unit_amount")
+                       == current[pl["metadata"]["pass"]] for it in items)
+        if (price_ids & stale_prices) or not price_ok:
+            _stripe("POST", f"payment_links/{pl['id']}", {"active": "false"})
+    with _auth._lock:                             # forget remembered links for old prices
+        links = ((_auth.DB.get("stripe") or {}).get(_mode()) or {}).get("links") or {}
+        old = [lk for lk in links if lk.partition("@")[0] in current and lk != _link_key(lk.partition("@")[0])]
+        for lk in old:
+            links.pop(lk, None)
+        if old:
+            _auth.save()
+    return retired
 
 
 def checkout_url(key, user):
