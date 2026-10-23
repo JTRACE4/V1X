@@ -4838,6 +4838,23 @@ def poll_loop():
                             pass
                         _sitout = ("the call goes against the trend" + (f" (calls like that have won only {_aw:.0%})" if _aw else ""))
                     _lean = _call
+                    # 2026-10-23 (user: "if the stay-out hasn't been saving money, make the correct call instead"): the daily
+                    # audit scores sitting out vs taking the call vs the trend side on rounds it never saw, and this follows it.
+                    if _sitout:
+                        try:
+                            import flip_audit as _fa
+                            _mode = ((_fa.decisions().get("stayout") or {}).get(_sk)) or "sit"
+                        except Exception:
+                            _mode = "sit"
+                        if _mode == "call":
+                            _why = f"{_why} + against the trend, but taking the call has paid more than sitting out lately"
+                            _sitout = None
+                        elif _mode == "trend":
+                            _call = "YES" if stage_sig["trend"] > 0 else "NO"
+                            _tier = "WEAK"
+                            _why = (f"leaned {'UP' if _lean == 'YES' else 'DOWN'} against the trend - the trend side has paid more than "
+                                    f"sitting out lately, so BRAIN calls {'UP' if _call == 'YES' else 'DOWN'}")
+                            _sitout = None
                     if _sitout:
                         _why = f"leaning {'UP' if _call == 'YES' else 'DOWN'}, but {_sitout} - sit this one out"
                         _call, _tier, _rev = None, None, None
@@ -11983,6 +12000,14 @@ def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_mult
     beats its own price by 8+ points, and only at a mark where the table also won on the newest rounds it never saw."""
     if not spot or not line or kalshi_yes is None:
         return None
+    # 2026-10-23 (user: "the reversal thing was not helping"): the daily audit turns underdog calls off unless a flip signal
+    # beats luck on rounds it never saw (30-day check: no rule did, and the old table fired 0 times on unseen rounds)
+    try:
+        import flip_audit as _fa
+        if not (_fa.decisions().get("reversal_on") or {}).get(stage or "sealed"):
+            return None
+    except Exception:
+        return None
     try:
         _dec = _bt.decisions()
     except Exception:
@@ -12072,6 +12097,19 @@ def build_flip_radar(name, d):
     if not fr:
         return '<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div><div class="fr-big flat">--</div></div>'
     pct, level, cls = fr["score"], fr["tier"], fr["cls"]
+    # 2026-10-23 (audit, 30 days / 2,840 rounds): the market's own price predicts flips as well as anything BRAIN reads (flip
+    # history error 0.1497 vs market 0.1491). So the radar never shows LESS than the market's odds on the other side - it can
+    # only add to them when the live reads see more pressure than the market has priced.
+    _kpm = d.get("kalshi_price")
+    if _kpm is not None:
+        _mkt = ((1 - _kpm) if call == "YES" else _kpm) * 100
+        if _mkt > pct:
+            pct = min(99.0, _mkt)
+            fr["drivers"] = [f"market odds on the other side: {_mkt:.0f}%"] + fr["drivers"]
+            for lim, t_, c_ in FLIP_TIERS:
+                if pct <= lim:
+                    level, cls = t_, c_
+                    break
     rm = d.get("rsi_multi") or {}
     r1 = rm.get("rsi1")
     extra = []

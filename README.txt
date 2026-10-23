@@ -126,3 +126,12 @@ UPDATE 2026-10-23 (c) - CHART ONLY pass
 - Chart Only page (2026-10-23 d): one live chart with a coin picker - BTC, ETH, SOL, XRP, DOGE, BNB, HYPE, NEAR (remembered per
   device). Coinbase candles, Kraken fallback for coins Coinbase doesn't list. Chart patterns read the extra coins every ~15s in the
   background and only show once each coin has its own track record. Owner preview: /app?view=charts
+
+UPDATE 2026-10-23 (e) - flip + stay-out audit (flip_audit.py), runs 4 min after start and daily; results in the log as [audit]
+- 30 days / 2,840 BTC rounds: the market's own price predicts flips as well as anything BRAIN reads. The flip-history
+  reversal fired 0 times on unseen rounds; no underdog rule beat a shuffled-outcome luck check. -> reversal calls are OFF
+  until a daily audit finds a flip signal that beats luck (then they switch back on by themselves).
+- Stay-out (against the trend): on unseen rounds sitting out lost the least (4:00: call -5.7c / trend -4.2c per $1;
+  8:00: call -14.3c / trend +0.4c). It stays, but the daily audit switches a stage to "take the call" or "call the trend
+  side" if either beats sitting out by 2c+ per $1 on 40+ unseen rounds.
+- Flip radar never shows less than the market's own odds on the other side (it can only add when live reads see more).

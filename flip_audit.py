@@ -10,6 +10,7 @@ Money is always "per $1 staked" buying the side at the market's own price at tha
 "[audit] ..." lines and to DATA_DIR/data_cache/backtest/audit.txt. Information only - it never trades.
 """
 import itertools
+import json
 import os
 import time
 
@@ -201,6 +202,10 @@ def flips(rounds, out, live_tables=None):
                 x["fake"] = rng.random() < x["dog"]
             ctrl.append(len(search(rows, "fake")))
         out.append(f"  luck check: shuffled outcomes find {sum(ctrl) / len(ctrl):.0f} money rules on average vs {len(found)} on the real data")
+        # reversal (underdog) calls stay on only while real data clearly beats luck - re-checked daily
+        _on = len(found) >= 3 and len(found) >= 2 * (sum(ctrl) / len(ctrl))
+        DECISIONS["reversal_on"]["early" if mark == 240 else "sealed"] = bool(_on)
+        out.append(f"  reversal calls at {name}: " + ("ON - the flip signal beat luck" if _on else "OFF - no underdog signal beat luck on unseen rounds"))
         out.append(f"  underdog rules that made money on BOTH the older 70% and the newest 30% ({len(found)} found, best 8):")
         for roi, rule, ta, hb in found[:8]:
             out.append(f"    dog {rule['dog'][0]:.2f}-{rule['dog'][1]:.2f}, |dist|<={rule['ad']}, crosses>={rule['cx']}, "
@@ -220,6 +225,9 @@ def _cell(f):
     wrong = (f["dist"] > 0) != fav_yes and ad > 0.00003
     c = min(2, int(f.get("crosses") or 0))
     return f"{b}{d}{c}{int(wrong)}", fav_yes, fp
+
+
+DECISIONS = {"stayout": {"early": "sit", "sealed": "sit"}, "reversal_on": {"early": False, "sealed": False}}
 
 
 def fixes(rounds, out):
@@ -283,6 +291,16 @@ def fixes(rounds, out):
                 sit["call"].append(((call == "YES") == res_yes, bt.price_of(call == "YES", f["kp"])))
                 sit["trend"].append(((tr > 0) == res_yes, bt.price_of(tr > 0, f["kp"])))
         out.append(f"  {name} against-trend, unseen rounds: " + _fmt("take the call", sit["call"]) + " | " + _fmt("take the trend side", sit["trend"]))
+        # learn from it: sit out stays the default; switch only when a side beat sitting out (0c) by 2c+ per $1 on 40+
+        # unseen rounds. Re-checked every day, so a stay-out that starts costing money gets replaced by the better call.
+        best, mode = 0.02, "sit"
+        for m_, rows_ in (("call", sit["call"]), ("trend", sit["trend"])):
+            n_, _w, roi_, _t = _money(rows_)
+            if n_ >= 40 and roi_ is not None and roi_ > best:
+                best, mode = roi_, m_
+        DECISIONS["stayout"][name.lower()] = mode
+        out.append(f"  {name} against-trend decision: " + {"sit": "keep sitting out (it lost the least)", "call": "take the call",
+                                                           "trend": "call the trend side"}[mode])
         # (c) coin-flip skips: trend side
         cf = []
         for r in ho_r:
@@ -311,6 +329,14 @@ def run(live_rounds=None):
         except Exception as e:
             out.append(f"{fn.__name__} failed: {e!r}")
     txt = "\n".join(out)
+    if rounds:
+        try:
+            import json as _json
+            os.makedirs(bt.CACHE, exist_ok=True)
+            with open(os.path.join(bt.CACHE, "audit_decisions.json"), "w") as f_:
+                _json.dump(dict(DECISIONS, generated=time.time()), f_)
+        except Exception:
+            pass
     try:
         os.makedirs(bt.CACHE, exist_ok=True)
         with open(os.path.join(bt.CACHE, "audit.txt"), "w") as f_:
@@ -320,3 +346,18 @@ def run(live_rounds=None):
     for ln in out:
         print("[audit] " + ln)
     return txt
+
+
+_dec_cache = [0.0, None]
+
+
+def decisions():
+    """What the bot follows (written by the last audit): stay-out mode per stage and whether reversal calls are on."""
+    if time.time() - _dec_cache[0] > 300:
+        _dec_cache[0] = time.time()
+        try:
+            with open(os.path.join(bt.CACHE, "audit_decisions.json")) as f_:
+                _dec_cache[1] = json.load(f_)
+        except Exception:
+            _dec_cache[1] = None
+    return _dec_cache[1] or DECISIONS
