@@ -8970,9 +8970,8 @@ function lwBands(o) {
     const top = Math.max(0, Math.min(y1, y2)), bot = Math.min(H, Math.max(y1, y2));
     if (bot <= 0 || top >= H) return '';
     const h = Math.max(4, bot - top);
-    return '<div class="lw-band ' + (z.r ? 'res' : 'sup') + '" style="top:' + top.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px"><span>'
-      + lwMoney(o.a, z.lo) + ' &ndash; ' + lwMoney(o.a, z.hi)
-      + (z.n >= 2 ? ' &middot; ' + (z.r ? 'rejected ' : 'held ') + z.n + 'x' : '') + '</span></div>';
+    return '<div class="lw-band ' + (z.r ? 'res' : 'sup') + '" style="top:' + top.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px">' + (z.n >= 2 ? '<span>' : '<span hidden>')
+      + (z.n >= 2 ? (z.r ? 'Rejected ' : 'Held ') + z.n + 'x' : '') + '</span></div>';
   }).join('');
   if (lay._h !== html) { lay.innerHTML = html; lay._h = html; }
 }
