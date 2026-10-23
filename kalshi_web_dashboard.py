@@ -7724,7 +7724,7 @@ function updateMoneyMoments() {
       const k1 = roundKey + '::cashout';
       if (holding >= CASHOUT_AT && !moneySaid.has(k1)) {
         moneySaid.add(k1);
-        if (canTalk && voiceAlertsEnabled) _voicePush(coin + ' call at ' + Math.round(holding * 100) + ' percent, ' + _leftWords(left) + '. Cash-out level.', false, 15000, true);
+        if (canTalk && voiceAlertsEnabled) _voicePush(coin + ' call at ' + Math.round(holding * 100) + ' percent' + (left <= 180 ? ', ' + _leftWords(left) : '') + '. Cash-out level.', false, 15000, true);
       }
     }
     // 2) late coin flip (+ flipping)
@@ -8177,8 +8177,9 @@ function _minuteLine(name) {
   if (!r || isNaN(r.pct) || r.left <= 20) return null;
   if (r.left >= 840) return _newRoundLine(name);
   const mins = Math.round(r.left / 60), when = mins >= 1 ? mins + (mins === 1 ? ' minute' : ' minutes') + ' left' : r.left + ' seconds left';
-  let line = _coinWord(name) + ', ' + when + '. ';
-  line += (r.above ? 'Up.' : 'Down.');          // 2026-10-23 (d, user): just up or down - no "with / against the call"
+  // 2026-10-23 (user): time left is only said in the last 3 minutes
+  let line = _coinWord(name) + ', ' + (r.left <= 180 ? when + '. ' : '');
+  line += r.left <= 180 ? (r.above ? 'Up.' : 'Down.') : (r.above ? 'up.' : 'down.');          // 2026-10-23 (d, user): just up or down - no "with / against the call"
   // 2026-10-23 (d, user: "14% is not enough to care"): the flip risk is only said when it is serious - 40% or more
   return line;      // 2026-10-23 (user): the minute check-in never reads the flip risk - only flipRiseAlerts, when it matters
 }
