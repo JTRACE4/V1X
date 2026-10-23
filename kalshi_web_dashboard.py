@@ -8241,7 +8241,7 @@ function flipRiseAlerts() {
     // once per 2 minutes, unless the radar has jumped another 15+ points since the last time it was said
     if (!proven || r.left <= 10 || (now - (riseSaid[name] || 0) < RISE_GAP_MS && r.pct < (riseSaid[name + '%'] || 0) + 15)) return;
     riseSaid[name] = now; riseSaid[name + '%'] = r.pct; coinSpoke[name] = now; orderSaid[name] = now;
-    speak(() => { const q = _radarInfo(name); return (q && q.made && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip.' : null; },
+    speak(() => { const q = _radarInfo(name); return (q && q.made && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip ' + (q.call === 'YES' ? 'down' : 'up') + '.' : null;   // 2026-10-23 (user): say which way },
           true, 10000);
   });
 }
@@ -9681,7 +9681,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="speakRaw('Bitcoin, 6 minutes left. Up.')">Test minute check-in</button>
       <button onclick="speakRaw('Bitcoin, new round. Up on 1 minute, 5 minute and 1 hour. Down on 1 day.')">Test new round</button>
       <button onclick="speakRaw('XRP, big selling, 1.2 million dollars.')">Test big order alert</button>
-      <button onclick="speakRaw('Bitcoin, flip risk rising, 46 percent. Possible flip.')">Test flip rising</button>
+      <button onclick="speakRaw('Bitcoin, flip risk rising, 46 percent. Possible flip down.')">Test flip rising</button>
       <button onclick="speakRaw('Bitcoin is flipping down.')">Test flipping</button>
       <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
       <button onclick="speakRaw('XRP is a toss-up, 2 minutes left. It just crossed the line.')">Test late toss-up</button>
