@@ -12863,10 +12863,10 @@ def render_html():
           {stage_summary_row(name, d)}
           {build_order_tape(name, d)}
           {build_rounds_panel(name, d, part="bhb")}
+          {build_rounds_panel(name, d, part="line")}
           {build_scoreboard(name, d)}
           </div><div class="col-chart">
           {pattern_window_html}
-          {build_rounds_panel(name, d, part="line")}
           </div></div>
           <!--OWNER--><details class="more-detail" data-pat="MORE|{name}"><summary><b>MORE DETAIL</b> <span class="hint">price vs the line breakdown, order flow, math check, bot calls, market stats</span></summary>
           {tug_html}
