@@ -10045,13 +10045,16 @@ body.chart-only #wr-panel, body.chart-only #vol-warn { display:none !important; 
 """
 
 
-def chart_only_html():
+def chart_only_html(full=False):
     """One live chart with a coin picker - every coin the market runs 15-minute rounds on, plus NEAR. The coin you pick is
     remembered on this device; the chart itself is mounted by the page script (lwAttach) so it survives the 1s refresh."""
     tabs = "".join(f'<button type="button" data-co="{c}" onclick="coPick(&#39;{c}&#39;)">{c}</button>' for c in _pub.CHART_PRODUCTS)
-    return ('<div class="co-wrap"><div class="co-note">Chart Only pass &middot; live charts, indicators and chart patterns. '
-            'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN passes</a></div>'
-            f'<div class="lw-win co-win"><div class="co-tabs">{tabs}</div>'
+    note = ('<div class="co-note">Live charts for every coin &middot; your BRAIN pass includes these. <a href="/app">Back to the live dashboard</a></div>'
+            if full else
+            '<div class="co-note">Chart Only pass &middot; live charts, indicators and chart patterns. '
+            'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN passes</a></div>')
+    return ('<div class="co-wrap">' + note
+            + f'<div class="lw-win co-win"><div class="co-tabs">{tabs}</div>'
             '<div class="lw-slot co-slot" data-asset="BTC"><span class="hint">Loading chart&hellip;</span></div></div></div>')
 
 
@@ -16003,7 +16006,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # 2026-10-22: the live dashboard needs an active pass (the owner always has access)
         # 2026-10-23: a Chart Only pass opens just the live charts (the page shell, its data and the chart patterns)
         _chart_only = _bill.chart_only(user) and user.get("role") != "owner"
-        _co_view = _chart_only or ("view=charts" in (parsed.query or "") and user.get("role") == "owner")   # owner preview
+        # the Charts page: the whole view for a Chart Only pass; a tab for every full BRAIN pass (and the owner)
+        _co_view = _chart_only or ("view=charts" in (parsed.query or "") and _bill.has_access(user))
         if not _bill.has_access(user) and parsed.path not in ("/guide",) and not (_chart_only and parsed.path in CHART_ONLY_GET):
             if "text/html" in (self.headers.get("Accept") or ""):
                 return self._redirect("/pricing")
@@ -16151,7 +16155,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif parsed.path == "/data":
             if _co_view:
-                _html, _wr = chart_only_html(), {}
+                _html, _wr = chart_only_html(full=not _chart_only), {}
             else:
                 _pg_full, _pg_public, _wr = _cached_page()
                 _html = _pg_full if (user and user.get("role") == "owner") else _pg_public
@@ -16576,13 +16580,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             _pend = sum(1 for u_ in _auth.DB["users"].values() if u_.get("status") == "pending") if user.get("role") == "owner" else 0
             _own = "true" if user.get("role") == "owner" else "false"
-            _co = (_bill.chart_only(user) and user.get("role") != "owner") or (user.get("role") == "owner" and "view=charts" in (parsed.query or ""))
+            _co = _co_view
             body = (PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json())
                     .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';window.SARGE_REAL = ' + ('true' if _sarge_real() else 'false')
                              + ';window.CHART_ONLY = ' + ('true' if _co else 'false') + ';', 1)
                     .replace('<body>', '<body class="chart-only">' if _co else '<body>', 1)
                     .replace('</head>', ('<style>' + CHART_ONLY_CSS + '</style></head>') if _co else '</head>', 1)
-                    .replace('</header>', '</header>' + _site.app_tabs(user, "live", _pend), 1)).encode()
+                    .replace('</header>', '</header>' + _site.app_tabs(user, "charts" if _co else "live", _pend), 1)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))

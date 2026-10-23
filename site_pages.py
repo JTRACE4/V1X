@@ -358,7 +358,16 @@ TABS_CSS = r"""
 
 
 def app_tabs(user, active="live", pending=0):
-    items = [("live", "/app", "Live"), ("guide", "/guide", "How to use")]
+    # 2026-10-23 (user): every BRAIN pass includes the multi-coin Charts page; a Chart Only pass gets ONLY the Charts tab
+    try:
+        import billing as _b
+        full, chart_only = _b.has_access(user), _b.chart_only(user)
+    except Exception:
+        full, chart_only = True, False
+    if chart_only and (user or {}).get("role") != "owner":
+        items = [("charts", "/app", "Charts")]
+    else:
+        items = [("live", "/app", "Live"), ("charts", "/app?view=charts", "Charts"), ("guide", "/guide", "How to use")]
     if user and user.get("role") != "owner":
         items.append(("pricing", "/pricing", "My pass"))
     if user and user.get("role") == "owner":
@@ -468,7 +477,7 @@ PRICING_CSS = r"""
 
 PLAN_FEATURES = ["Live dashboard: early + sealed calls with BRAIN confidence", "Spoken alerts, flip watch, cash-out + coin-flip notes",
                  "Whale impact scores + Trader Radar", "Graded record, $100 backtest, price-target history",
-                 "The BRAIN Playbook (PDF guide to every screen)"]
+                 "Live charts for every coin (same as Chart Only)", "The BRAIN Playbook (PDF guide to every screen)"]
 
 
 CHART_FEATURES = ["Live BTC + XRP charts (1m to 1D)", "EMA 12 / 25 / 50, RSI and MACD read in plain words",
