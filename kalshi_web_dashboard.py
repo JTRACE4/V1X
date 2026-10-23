@@ -9295,6 +9295,7 @@ function lwCreate(a) {
   const o = {a, box, chart, corner: box.querySelector('.lw-corner'), pats: box.querySelector('.lw-pats'), bars: [], line: null, lineV: null,
     tf: (() => { try { return localStorage.getItem('lwTf_' + a) || '1m'; } catch (e) { return '1m'; } })(), busy: false,
     ha: (() => { try { return localStorage.getItem('lwHA') !== '0'; } catch (e) { return true; } })()};
+  chart.timeScale().subscribeVisibleLogicalRangeChange(r => { if (r && o.box.isConnected && o.box.offsetWidth > 50) o.vr = {from: r.from, to: r.to}; });
   o.candle = chart.addCandlestickSeries({upColor: '#3dd69c', downColor: '#f05454', borderVisible: false, wickUpColor: 'rgba(61,214,156,0.85)', wickDownColor: 'rgba(240,84,84,0.85)'});
   const ln = c => chart.addLineSeries({color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false});
   o.e1 = ln('#f8f6f2'); o.e2 = ln('#e9d3a4'); o.e3 = ln('#ffd23f');      // 2026-10-22 (user): EMA 12 near-white / 25 cream / 50 yellow
@@ -9422,6 +9423,7 @@ function coPick(slot, c) {
   const other = 1 - slot, oc = coCoin(other);
   if (coSplitN() === 2 && oc === c) _coSet('coCoin' + (other ? other : ''), coCoin(slot));   // picked the other chart's coin: swap them
   _coSet('coCoin' + (slot ? slot : ''), c);
+  Object.values(LW).forEach(o => { o.placed = false; });       // a coin change starts both charts at the default view
   lwAttach();
 }
 function coSplit(n) { _coSet('coSplit', String(n)); lwAttach(); }
@@ -9442,7 +9444,13 @@ function lwAttach() {
     }
     const a = slot.dataset.asset;
     const o = LW[a] || (LW[a] = lwCreate(a));
-    if (o.box.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(o.box); requestAnimationFrame(() => lwFit(o)); }
+    // 2026-10-23 (user: "it auto zooms back out"): the page rebuilds every second and re-attaches the chart - keep the
+    // zoom the person picked; only the very first placement (or a coin just swapped in) gets the default view
+    if (o.box.parentNode !== slot) {
+      const vr = o.placed ? o.vr : null;
+      slot.innerHTML = ''; slot.appendChild(o.box);
+      requestAnimationFrame(() => { if (vr) { try { o.chart.timeScale().setVisibleLogicalRange(vr); } catch (e) {} } else lwFit(o); o.placed = true; });
+    }
   });
 }
 setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o.box.isConnected) lwTick(o); }); }, 2000);

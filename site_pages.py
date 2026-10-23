@@ -386,7 +386,7 @@ def app_tabs(user, active="live", pending=0):
         main = [("live", "/analysis", _ICO_GEAR + "Analysis"), ("charts", "/charts", _ICO_CHART + "Charts")]
     right = []
     if user and user.get("role") != "owner":
-        right.append(("pricing", "/pricing", "My membership"))
+        right.append(("pricing", "/pricing", "Membership"))
     if user and user.get("role") == "owner":
         right.append(("admin", "/admin", "Admin" + (f'<span class="nb">{pending}</span>' if pending else "")))
     lk = lambda items: "".join(f'<a href="{h}" class="{"on" if k == active else ""}">{lab}</a>' for k, h, lab in items)
