@@ -8045,12 +8045,31 @@ function _coinWord(n) { return n === 'BTC' ? 'Bitcoin' : n; }
 function _minuteLine(name) {
   const r = _radarInfo(name);
   if (!r || isNaN(r.pct) || r.left <= 20) return null;
+  if (r.left >= 840) return _newRoundLine(name);
   const mins = Math.round(r.left / 60), when = mins >= 1 ? mins + (mins === 1 ? ' minute' : ' minutes') + ' left' : r.left + ' seconds left';
   let line = _coinWord(name) + ', ' + when + '. ';
   if (r.call) line += (r.above ? 'Up' : 'Down') + (((r.call === 'YES') === r.above) ? ', with the call.' : ', against the call.');
   else line += 'Price ' + (r.above ? 'above' : 'below') + ' the line, no call yet.';
   return line + ' Flip risk ' + r.pct + ' percent.';
 }
+// 2026-10-23 (c, user): when a round starts say "new round" (not "15 minutes left") plus the market trend read on 1m / 5m / 15m /
+// 1h / 1D - straight from the MARKET TREND buttons on screen. Neutral (50/50) timeframes are left out; all neutral = just "new round".
+const roundSaid = {};
+const _TF_WORDS = [['1m', '1 minute'], ['5m', '5 minute'], ['15m', '15 minute'], ['1h', '1 hour'], ['1d', '1 day']];
+function _trendLine(name) {
+  const bull = [], bear = [];
+  _TF_WORDS.forEach(([tf, w]) => {
+    const b = document.querySelector('[data-mkt="' + name + '|' + tf + '"]');
+    if (!b) return;
+    if (b.classList.contains('bull')) bull.push(w); else if (b.classList.contains('bear')) bear.push(w);
+  });
+  const join = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
+  const parts = [];
+  const order = bull.length >= bear.length ? [['Bullish', bull], ['Bearish', bear]] : [['Bearish', bear], ['Bullish', bull]];
+  order.forEach(([word, list]) => { if (list.length) parts.push(word + ' on ' + join(list)); });
+  return parts.length ? ' ' + parts.join('. ') + '.' : '';
+}
+function _newRoundLine(name) { return _coinWord(name) + ', new round.' + _trendLine(name); }
 function minuteCheckins() {
   if (!soundEnabled || !voiceAlertsEnabled) return;
   const now = Date.now();
@@ -8058,6 +8077,15 @@ function minuteCheckins() {
     if (assetSoundEnabled[name] === false) return;
     const r = _radarInfo(name);
     if (!r || isNaN(r.pct) || r.left <= 20) return;
+    if (roundSaid[name] !== r.round) {
+      const fresh = roundSaid[name] !== undefined && r.left >= 840;     // a round that just opened (not the page loading mid-round)
+      roundSaid[name] = r.round;
+      if (fresh) {
+        minuteSaid[name] = now + i * 5000; coinSpoke[name] = now;
+        setTimeout(() => speak(() => _newRoundLine(name), false, 25000), i * 5000);    // the two coins don't talk over each other
+        return;
+      }
+    }
     if (minuteSaid[name] === undefined) { minuteSaid[name] = now - MINUTE_MS + 15000 + i * 30000; return; }
     if (now - minuteSaid[name] < MINUTE_MS) return;
     if (now - (coinSpoke[name] || 0) < 20000) { minuteSaid[name] = now - MINUTE_MS + 20000; return; }
@@ -9370,6 +9398,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure.'),650)">Test sealed call</button>
       <button onclick="speakRaw('Bitcoin, ninety seconds, up, with the call.')">Test 90-second check-in</button>
       <button onclick="speakRaw('Bitcoin, 6 minutes left. Up, with the call. Flip risk 18 percent.')">Test minute check-in</button>
+      <button onclick="speakRaw('Bitcoin, new round. Bullish on 1 minute, 5 minute and 1 hour. Bearish on 1 day.')">Test new round</button>
       <button onclick="speakRaw('XRP, big selling, 1.2 million dollars. Flip risk 24 percent.')">Test big order alert</button>
       <button onclick="speakRaw('Bitcoin, flip risk rising, 46 percent. Possible flip.')">Test flip rising</button>
       <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
