@@ -8241,7 +8241,7 @@ function flipRiseAlerts() {
     // once per 2 minutes, unless the radar has jumped another 15+ points since the last time it was said
     if (!proven || r.left <= 10 || (now - (riseSaid[name] || 0) < RISE_GAP_MS && r.pct < (riseSaid[name + '%'] || 0) + 15)) return;
     riseSaid[name] = now; riseSaid[name + '%'] = r.pct; coinSpoke[name] = now; orderSaid[name] = now;
-    speak(() => { const q = _radarInfo(name); return (q && q.made && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip ' + (q.call === 'YES' ? 'down' : 'up') + '.' : null;   // 2026-10-23 (user): say which way },
+    speak(() => { const q = _radarInfo(name); return (q && q.made && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip ' + (q.call === 'YES' ? 'down' : 'up') + '.' : null; },   /* 2026-10-23 (user): say which way */
           true, 10000);
   });
 }
