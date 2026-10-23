@@ -11239,6 +11239,12 @@ def build_scoreboard(name, d):
                     _mbt += (f'<div class="sc-stats">If you had followed it ($100 a call at the market price at 1:00): '
                              f'<b class="{"up" if _mp >= 0 else "down"}">{"+" if _mp >= 0 else "-"}${abs(_mp):,.0f}</b> over {len(_pn)} rounds</div>')
             _cfg2 = mini2_config()
+            _pt = ((_cfg2.get("patterns_test") or {}).get("BTC") or {})
+            if _pt.get("rounds") and _pt["reads"][0] is not None and _pt["reads_plus_patterns"][0] is not None:
+                _mbt += (f'<div class="sc-stats hint">Since BRAIN started logging chart patterns ({_pt["rounds"]} BTC rounds): '
+                         f'reads alone <b>{_pt["reads"][0]:.0%}</b> &middot; reads + chart patterns <b>{_pt["reads_plus_patterns"][0]:.0%}</b>'
+                         + (f' &middot; patterns alone {_pt["patterns_only"][0]:.0%} of the {_pt["patterns_only"][1]} rounds they spoke up'
+                            if _pt["patterns_only"][0] is not None else "") + '</div>')
             if _cfg2.get("hold") is not None:
                 _mbt += (f'<div class="sc-stats hint">30-day test (BTC, rounds it never saw): <b>{_cfg2["hold"]:.0%}</b> right using '
                          f'{", ".join(MINI2_LABEL[k] for k in _cfg2["keys"])} &middot; just following price vs the line: '
@@ -13254,6 +13260,7 @@ def _mini_backfill_loop():
             if time.time() - _mini2_ts[0] > 6 * 3600:
                 _mini2_ts[0] = time.time()
                 mini2_backtest()
+                mini2_pattern_test()
         except Exception as _e:
             print(f"[mini2] backtest: {_e!r}")
         try:
@@ -13429,6 +13436,96 @@ def mini2_backtest():
     for x in res["top"]:
         print(f"[mini2]   {'+'.join(x['keys'])}: train {x['train']:.1%} unseen {x['hold']:.1%}")
     return res
+
+
+def mini2_pattern_test():
+    """2026-10-22 (user: "base it off the chart-pattern data BRAIN has actually recorded"): replay every round since the
+    pattern log began. At 1:00 each round gets the pattern vote from the proven bullish / bearish patterns BRAIN logged as
+    COMPLETED on the 1m / 5m charts in the 15 minutes before that moment (same rule as live). Compares, on exactly those
+    rounds: price+indicator reads alone, the same + the pattern vote, the pattern vote alone, and price vs the line."""
+    import csv as _csv
+    try:
+        from mtf_structure import EVENTS_FILE as _EV
+    except Exception:
+        return None
+    evs = {}
+    try:
+        with open(_EV, encoding="utf-8") as f:
+            for r in _csv.DictReader(f):
+                if r.get("event") != "complete" or r.get("tf") not in ("1m", "5m") or r.get("bias") not in ("bullish", "bearish"):
+                    continue
+                try:
+                    ts = dt.datetime.fromisoformat(r["ts_utc"]).timestamp()
+                except Exception:
+                    continue
+                evs.setdefault(r["asset"], []).append((ts, r["tf"], r["name"], r["bias"]))
+    except OSError:
+        return None
+    rate_cache = {}
+
+    def rate(asset, tf, nm):
+        k = (asset, tf, nm)
+        if k not in rate_cache:
+            try:
+                st = _mtf.stats.summary(asset, tf, nm) if _mtf is not None else {}
+            except Exception:
+                st = {}
+            ok = (st.get("decisive") or 0) >= CHART_PAT_MIN_N and (st.get("rate") or 0) >= 0.5
+            rate_cache[k] = (st.get("rate") or 0.5) if ok else None
+        return rate_cache[k]
+
+    def pat_vote(asset, t):
+        sc = 0.0
+        for ts, tf, nm, b in evs.get(asset, []):
+            if t - 900 <= ts <= t:
+                r_ = rate(asset, tf, nm)
+                if r_ is not None:
+                    w = max(0.0, r_ - 0.5)
+                    sc += w if b == "bullish" else -w
+        return 1 if sc > 0.02 else (-1 if sc < -0.02 else 0)
+
+    out = {}
+    cfg = mini2_config()
+    keys = [k for k in cfg.get("keys") or MINI2_KEYS if k in MINI2_KEYS] or list(MINI2_KEYS)
+    m1 = _bt.minute_candles()
+    first = min((e[0] for e in evs.get("BTC", [])), default=None)
+    if first:
+        rows = []
+        for m in _bt.settled_markets():
+            if not m.get("strike") or m.get("result") not in ("yes", "no"):
+                continue
+            o = int(m.get("open") or (m["close"] - 900)) // 60 * 60
+            if o + 60 < first + 900:
+                continue
+            cl = [m1[t][3] for t in range(o - 3600, o + 60, 60) if t in m1]
+            v = mini2_votes(cl, m["strike"]) if len(cl) >= 50 else None
+            if not v:
+                continue
+            v["patterns"] = pat_vote("BTC", o + 60)
+            rows.append((v, m["result"] == "yes"))
+        if rows:
+            def acc(fn):
+                g = [(c == "YES") == up for v, up in rows for c in [fn(v)] if c]
+                return (sum(g) / len(g) if g else None, len(g))
+            base = acc(lambda v: mini2_combine(v, keys)[0])
+            withp = acc(lambda v: mini2_combine(v, keys + (["patterns"] if v["patterns"] else []))[0])
+            ponly = acc(lambda v: ("YES" if v["patterns"] > 0 else "NO") if v["patterns"] else None)
+            line = acc(lambda v: mini2_combine(v, ["line"])[0])
+            n_p = sum(1 for v, _ in rows if v["patterns"])
+            out["BTC"] = {"rounds": len(rows), "since": first, "with_patterns_n": n_p, "reads": base, "reads_plus_patterns": withp,
+                          "patterns_only": ponly, "line_only": line}
+            print(f"[mini2 patterns] BTC: {len(rows)} rounds since the pattern log began "
+                  f"({dt.datetime.fromtimestamp(first, ZoneInfo('America/New_York')):%b %d %-I:%M %p}); a proven pattern was in play in {n_p}")
+            f_ = lambda x: "-" if x[0] is None else f"{x[0]:.1%} of {x[1]}"
+            print(f"[mini2 patterns] BTC reads only: {f_(base)} | reads + patterns: {f_(withp)} | patterns alone: {f_(ponly)} | price vs line: {f_(line)}")
+    try:
+        c = mini2_config()
+        c["patterns_test"] = out
+        with open(MINI2_FILE, "w") as fh:
+            json.dump(c, fh)
+    except Exception:
+        pass
+    return out
 
 
 def mini2_live(sym, live_price, line):
