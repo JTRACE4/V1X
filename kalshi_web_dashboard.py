@@ -6181,6 +6181,20 @@ body { background:#15110f !important; }
 .fw-hold { background:rgba(47,74,79,0.75); color:#efe6df; border:1px solid rgba(111,154,142,0.7); } .fw-hold .ico { color:#c9f7e6; }
 .fw-rev { background:rgba(154,90,68,0.8); color:#f6ece5; border:1px solid rgba(201,138,106,0.8); }
 body.has-flip-watch { padding-top:0; }
+/* 2026-10-23 (user): words in a pink gradient while holding with the call; only when it goes AGAINST the call do they turn
+   red + green (heading up) or red + orange (heading down) */
+.fw-item b, .fw-item .fw-dir, .fw-item .fw-rel, .fw-item .fw-st, .fw-item .fw-badge .fw-bt {
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.fw-with b, .fw-with .fw-dir, .fw-with .fw-rel, .fw-with .fw-st, .fw-with .fw-hold .fw-bt,
+.fw-neutral b, .fw-neutral .fw-dir, .fw-neutral .fw-st {
+  background-image:linear-gradient(90deg, #ffd6e4 0%, #f2a5c0 50%, #e57fa6 100%); }
+.fw-with .fw-hold .ico { color:#f2a5c0; }
+.fw-ag-up b, .fw-ag-up .fw-dir, .fw-ag-up .fw-rel, .fw-ag-up .fw-st, .fw-ag-up .fw-badge .fw-bt {
+  background-image:linear-gradient(90deg, #ff6b6b 0%, #ff8f7a 35%, #6fe3a6 70%, #3dd69c 100%); }
+.fw-ag-dn b, .fw-ag-dn .fw-dir, .fw-ag-dn .fw-rel, .fw-ag-dn .fw-st, .fw-ag-dn .fw-badge .fw-bt {
+  background-image:linear-gradient(90deg, #ff5a5a 0%, #ff7a45 55%, #ffad42 100%); }
+.fw-with .fw-dir i, .fw-neutral .fw-dir i { background:#f2a5c0; }
+.fw-ag-up .fw-dir i { background:#ff6b6b; } .fw-ag-dn .fw-dir i { background:#ff5a5a; }
 @media (max-width:760px) { .fw-item { font-size:11.5px; gap:6px; } .fw-badge { font-size:10.5px; } }
 @media (max-width:760px) { #sound-reminder { bottom:calc(72px + env(safe-area-inset-bottom, 0px)) !important; max-width:calc(100vw - 32px); } }
 @media (max-width:760px) {
@@ -7570,13 +7584,13 @@ function updateFlipWatch() {
   if (!bar) { bar = document.createElement('div'); bar.id = 'flip-watch'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
   document.body.classList.add('has-flip-watch');
   bar.innerHTML = names.map(n => {
-    const v = live[n], cls = v.withCall === null ? 'fw-neutral' : (v.withCall ? 'fw-with' : 'fw-against');
+    const v = live[n], cls = v.withCall === null ? 'fw-neutral' : (v.withCall ? 'fw-with' : 'fw-against ' + (v.goingUp ? 'fw-ag-up' : 'fw-ag-dn'));
     const callWord = v.callName === 'sealed' ? 'sealed call' : (v.callName === 'early' ? 'early call' : 'call');
     const rel = v.withCall === null ? '' : (v.withCall ? 'with call' : 'against call');
     const st = v.strength !== null ? Math.round(v.strength * 100) + '%' : '';
     let badge = '';
-    if (v.withCall === true) badge = '<span class="fw-badge fw-hold" title="the market is holding with the call"><i class=ico data-i=hold></i> HOLDING</span>';
-    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev" title="the market has turned 60%+ against the call"><i class=ico data-i=warn></i> TURNED</span>';
+    if (v.withCall === true) badge = '<span class="fw-badge fw-hold" title="the market is holding with the call"><i class=ico data-i=hold></i> <span class="fw-bt">HOLDING</span></span>';
+    else if (v.withCall === false && v.strength !== null && v.strength >= 0.60) badge = '<span class="fw-badge fw-rev" title="the market has turned 60%+ against the call"><i class=ico data-i=warn></i> <span class="fw-bt">TURNED</span></span>';
     return '<div class="fw-item ' + cls + '" title="' + n + ' flip watch: heading ' + (v.goingUp ? 'up' : 'down') + (rel ? ', ' + rel + ' (' + callWord + ')' : '')
       + (st ? ', ' + _strengthWord(v.strength) + ' ' + st + ' on the market' : '') + '"><b>' + n + '</b><span class="fw-dir">' + (v.goingUp ? '<i class=va-u></i> UP' : '<i class=va-d></i> DOWN') + '</span>'
       + (rel ? '<span class="fw-rel">' + rel + '</span>' : '') + (st ? '<span class="fw-st">' + st + '</span>' : '') + badge + '</div>';
