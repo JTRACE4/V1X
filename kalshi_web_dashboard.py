@@ -6613,6 +6613,13 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px !imp
 .lw-corner .lw-chip .mk-sub .lw-arr { width:11px !important; height:11px !important; }
 .lw-corner .lw-macd { font-size:13.5px !important; }
 .lw-corner .lw-chip b.mgap { font-size:19px !important; }
+/* 2026-10-22 (user): docked chart window a few sizes bigger and level with the top of the card */
+@media (min-width:1300px) {
+  body[data-view="BTC"] .card .lw-win, body[data-view="XRP"] .card .lw-win { top:var(--card-top, 105px) !important; max-height:calc(100vh - 24px) !important;
+    padding:16px 18px !important; }
+  body[data-view="BTC"] .card .lw-chart, body[data-view="XRP"] .card .lw-chart { height:clamp(520px, calc(100vh - var(--card-off, 105px) - 190px), 980px) !important; }
+  body[data-view="BTC"] .card .lw-win .pat-win-head b, body[data-view="XRP"] .card .lw-win .pat-win-head b { font-size:17px !important; }
+}
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8390,6 +8397,16 @@ function setAssetView(v) {
     b.className = (b.getAttribute('data-view') === v) ? 'size-mode-btn size-mode-active' : 'size-mode-btn');
 }
 // 2026-10-22 (user): BTC-only / XRP-only view - bot info on one side, the chart reader on the other; this swaps the sides
+// keep the docked chart window's top level with the top of the visible card
+setInterval(() => {
+  try {
+    const c = document.querySelector('body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"]');
+    if (!c) return;
+    const top = c.getBoundingClientRect().top, off = Math.round(top + window.scrollY);
+    document.documentElement.style.setProperty('--card-top', Math.max(12, Math.round(top)) + 'px');   // window follows the card's top
+    document.documentElement.style.setProperty('--card-off', off + 'px');                           // size stays fixed
+  } catch (e) {}
+}, 400);
 function swapChartSide() {
   const left = !document.body.classList.contains('chart-left');
   document.body.classList.toggle('chart-left', left);
