@@ -11264,7 +11264,7 @@ def _tide_html(name, rows):
     tot = b + s_
     big = _TIDE_BIG.get(name, 1_000_000)
     if not tot:
-        return "", "tide-quiet", ('<div class="tide tide-quiet"><div class="tide-head">QUIET <span>no whale money in the last 2 min</span></div>'
+        return "", "tide-quiet", ('<div class="tide tide-quiet"><div class="tide-head">SHORT-TERM PRESSURE METER <span>quiet &middot; no whale money in the last 2 min</span></div>'
                                   '<div class="tide-bar"><i class="tb-b" style="width:50%"></i><i class="tb-s" style="width:50%"></i></div></div>')
     bp = b / tot
     if tot >= big and bp >= 0.7:
@@ -11276,10 +11276,10 @@ def _tide_html(name, rows):
     elif tot >= big * 0.4 and bp <= 0.38:
         cls, head = "tide-lean-sell", "SELLERS STEPPING IN"
     else:
-        cls, head = "tide-even", "TUG OF WAR"
+        cls, head = "tide-even", "SHORT-TERM PRESSURE METER"      # 2026-10-23 (user): never "tug of war"
     hot = cls in ("tide-buy", "tide-sell")
     return (cls if hot else ""), cls, (
-        f'<div class="tide {cls}"><div class="tide-head">{head} <span>{_usd_short(tot)} in 2 min</span></div>'
+        f'<div class="tide {cls}"><div class="tide-head">{head} <span>{"even &middot; " if cls == "tide-even" else ""}{_usd_short(tot)} in 2 min</span></div>'
         f'<div class="tide-bar"><i class="tb-b" style="width:{bp * 100:.1f}%"></i><i class="tb-s" style="width:{(1 - bp) * 100:.1f}%"></i></div>'
         f'<div class="tide-nums"><span class="tn-b"><i class=va-u></i> {_usd_short(b)} bought <em>{nb} hit{"s" if nb != 1 else ""}</em></span>'
         f'<span class="tn-s"><em>{ns} hit{"s" if ns != 1 else ""}</em> {_usd_short(s_)} sold <i class=va-d></i></span></div></div>')
