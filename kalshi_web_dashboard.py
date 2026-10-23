@@ -6090,6 +6090,7 @@ h1 { display:none; }
 .lx-num { font-family:var(--br-serif); font-size:30px; line-height:1.05; }
 .lx-zone { font-size:12px; font-weight:800; letter-spacing:1px; margin-top:2px; }
 .lx-sub { font-size:11px; color:#bcaaa1; margin-top:3px; }
+.lw-credit { font-size:10.5px; color:#8f8079; margin-top:4px; } .lw-credit a { color:#a8968e; text-decoration:underline; }
 .lx-quiet { margin-top:5px; padding-top:5px; border-top:1px solid rgba(255,255,255,0.12); font-size:11px; color:#d6cac4; display:grid; gap:2px; }
 .lx-quiet > b { font-size:11.5px; letter-spacing:.5px; color:#efe6df; }
 .lx-clean { border-color:#3dd69c !important; } .lx-clean .lx-num, .lx-clean .lx-zone { color:#3dd69c; }
@@ -9395,6 +9396,8 @@ function lwCreate(a) {
     + '</div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
     + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; <span class="lwk-macd"></span></div>'
+    // 2026-10-23 (user): no TradingView logo on the chart - the license's required credit + link is this small line instead
+    + '<div class="lw-credit">Charting by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts&trade;</a> &middot; &copy; TradingView, Inc.</div>'
     // 2026-10-22 (user): tap to learn &ndash; EMA, the live RSI + MACD read, and why it matters in a 15-minute round
     + '<details class="lw-learn"><summary>What do these mean? <span>EMA &middot; RSI &middot; MACD &middot; 15-minute rounds</span></summary><div class="lw-learn-body">'
     + '<p><b>EMA lines</b> &ndash; the average price over the last 12, 25 and 50 candles, with the newest candles counting the most. '
@@ -9410,7 +9413,7 @@ function lwCreate(a) {
     + '<p class="hint">Information only &ndash; not financial advice.</p></div></details>'
     + '<div class="lw-pats"></div>';
   const el = box.querySelector('.lw-chart');
-  const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: "Carlito, Calibri, 'Segoe UI', sans-serif", fontSize: 12},
+  const chart = LightweightCharts.createChart(el, {autoSize: true, layout: {background: {type: 'solid', color: 'rgba(20,15,18,0)'}, textColor: '#bcaaa1', fontFamily: "Carlito, Calibri, 'Segoe UI', sans-serif", fontSize: 12, attributionLogo: false},
     grid: {vertLines: {color: 'rgba(242,196,107,.05)'}, horzLines: {color: 'rgba(242,196,107,.05)'}},
     rightPriceScale: {borderColor: 'rgba(242,196,107,.18)'},
     timeScale: {borderColor: 'rgba(242,196,107,.18)', timeVisible: true, secondsVisible: false,

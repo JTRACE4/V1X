@@ -151,7 +151,7 @@ setInterval(clock,1000);clock();
 let chart,series,avgSeries,lineRef,last=null,secsLeft=null;
 function makeChart(){
   const el=$('#chart');el.innerHTML='';
-  chart=LightweightCharts.createChart(el,{autoSize:true,layout:{background:{type:'solid',color:'rgba(20,15,18,0)'},textColor:'#bcaaa1',fontFamily:'Montserrat'},
+  chart=LightweightCharts.createChart(el,{autoSize:true,layout:{background:{type:'solid',color:'rgba(20,15,18,0)'},textColor:'#bcaaa1',fontFamily:'Montserrat',attributionLogo:false},
     grid:{vertLines:{color:'rgba(240,214,200,.06)'},horzLines:{color:'rgba(240,214,200,.06)'}},
     rightPriceScale:{borderColor:'rgba(240,214,200,.13)'},timeScale:{borderColor:'rgba(240,214,200,.13)',timeVisible:true,secondsVisible:mode==='round',
       tickMarkFormatter:(t)=>mode==='1d'?fmtDay.format(new Date(t*1000)):fmtET.format(new Date(t*1000))},
@@ -259,6 +259,7 @@ def landing(user=None):
         '<div class="tabs"><button class="tab" data-m="1m">1m</button><button class="tab" data-m="15m">15m</button>'
         '<button class="tab" data-m="1h">1H</button><button class="tab" data-m="1d">1D</button><button class="tab" data-m="round">Line</button></div></div>'
         '<div id="chart"></div>'
+        '<div class="lw-credit" style="font-size:10.5px;color:#8f8079;margin-top:4px">Charting by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts&trade;</a> &middot; &copy; TradingView, Inc.</div>'
         '<div class="strip"><span id="line">Round line --</span><span id="cd">round closes in --</span>'
         '<span id="avg">60s avg --</span><span id="hl">24h --</span></div></section>'
         '<aside class="side"><section class="card"><h3>Smart money habits</h3><div id="tips"></div></section>'
