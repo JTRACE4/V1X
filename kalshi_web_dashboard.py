@@ -11868,9 +11868,16 @@ def _ps_rows(hist, key):
             continue
         p = h.get(f"{key}_p")
         conf = (p if side == "YES" else 1 - p) if isinstance(p, (int, float)) else None
-        other = "sealed" if key == "early" else "early"
+        # agreement only with a call that is ALREADY made when this one is bought (no peeking ahead):
+        # early (4:00) <- mini (1:00, v2 only); sealed (8:00) <- early (4:00)
+        if key == "early":
+            oc = h.get("mini_call") if h.get("mini_v") == 2 else None
+        elif key == "sealed":
+            oc = h.get("early_call")
+        else:
+            oc = None
         out.append({"t": t.timestamp(), "c": bool(c), "kp": kp, "conf": conf, "h": h,
-                    "agree": h.get(f"{other}_call") == side if h.get(f"{other}_call") else None})
+                    "agree": (oc == side) if oc else None})
     return sorted(out, key=lambda r: r["t"])
 
 
@@ -11880,13 +11887,17 @@ def _ps_sum(rows):
         return {"n": 0}
     w = sum(r["c"] for r in rows)
     pnl = sum((100 / r["kp"] - 100) if r["c"] else -100 for r in rows)
+    fee = sum(7 * (1 - r["kp"]) for r in rows)          # Kalshi taker fee on $100: 0.07 x contracts x p x (1-p) = $7 x (1-p)
     return {"n": n, "win": round(w / n, 3), "pnl": round(pnl), "per": round(pnl / n, 1),
+            "pnl_after_fee": round(pnl - fee), "per_after_fee": round((pnl - fee) / n, 1),
             "avg_kp": round(sum(r["kp"] for r in rows) / n, 3), "be": round(sum(r["kp"] for r in rows) / n, 3)}
 
 
 def profit_study():
     et = ZoneInfo("America/New_York")
     res = {"ts": time.time(), "coins": {}}
+    print("[profit study] agree = early with the 1:00 mini call / sealed with the 4:00 early call (no peeking); "
+          "pnl_after_fee = minus the Kalshi taker fee")
     for name, hist in list(_history.items()):
         cres = {}
         for key in ("early", "sealed", "mini"):
@@ -11924,7 +11935,7 @@ def profit_study():
                             if len(tr) < max(25, len(train) // 6):
                                 continue
                             st = _ps_sum(tr)
-                            cands.append((st["pnl"], lo, hi, cf, ag, st, _ps_sum([r for r in test if keep(r)])))
+                            cands.append((st["pnl_after_fee"], lo, hi, cf, ag, st, _ps_sum([r for r in test if keep(r)])))
             cands.sort(key=lambda x: -x[0])
             base_test = _ps_sum(test)
             cres[key]["rule_test"] = {"base_test": base_test, "top": [
