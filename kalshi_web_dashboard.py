@@ -4156,6 +4156,7 @@ def _reconcile_pending_grades():
 # restart it simply carries on. One market lookup every few seconds, newest rounds first, so new rounds are confirmed fast.
 VERIFY_EVERY_S = 3.0
 _verify_last = [0.0]
+_verify_stat = {"log": 0.0, "fixed": 0}
 _verify_skip = {}             # ticker -> time to look again (not finalized yet / no clean result)
 
 
@@ -4192,6 +4193,12 @@ def _verify_history_step():
                 break
         if todo:
             break
+    if now - _verify_stat["log"] > 300:            # progress line every 5 minutes so it's visible in the logs
+        _verify_stat["log"] = now
+        left = sum(1 for hh in _history.values() for x in hh if x.get("ticker") and not x.get("verified"))
+        done = sum(1 for hh in _history.values() for x in hh if x.get("verified"))
+        print(f"[VERIFY] progress: {done} rounds confirmed against the market, {left} still to check, "
+              f"{_verify_stat['fixed']} grade(s) corrected since this restart")
     if not todo:
         return
     name, h = todo
@@ -4205,6 +4212,7 @@ def _verify_history_step():
         return
     before = {k: h.get(k) for k in ("actual_side", "early_correct", "sealed_correct", "decided_correct")}
     if _regrade(h, real):
+        _verify_stat["fixed"] += 1
         print(f"[VERIFY] FIXED {name} {h['ticker']}: market settled {'UP' if real == 'YES' else 'DOWN'} "
               f"(was {before}) -> early {h.get('early_correct')} sealed {h.get('sealed_correct')} late {h.get('decided_correct')}")
         for r in _rounds.get(name, []):
