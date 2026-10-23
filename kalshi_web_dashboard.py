@@ -13414,7 +13414,7 @@ def mini2_backtest():
     def ev(keys, part):
         g = [(mini2_combine(v, keys)[0] == "YES") == up for v, up in part]
         return sum(g) / len(g)
-    combos = [list(c) for r in range(1, len(MINI2_KEYS) + 1) for c in itertools.combinations(MINI2_KEYS, r)]
+    combos = [list(c) for r in (3, 5) for c in itertools.combinations(MINI2_KEYS, r)]     # odd, 3+ reads: no ties
     scored = [(ev(c, rows[:split]), c) for c in combos]
     scored.sort(key=lambda x: -x[0])
     best = scored[0][1]
@@ -13542,6 +13542,8 @@ def mini2_live(sym, live_price, line):
         return None
     cfg = mini2_config()
     keys = [k for k in cfg.get("keys") or MINI2_KEYS if k in MINI2_KEYS] or list(MINI2_KEYS)
+    if len(keys) < 3 or len(keys) % 2 == 0:
+        keys = ["move3", "line", "rsi", "macd", "ema"]
     # 2026-10-22 (user): also read BRAIN's chart patterns - only the proven ones (80%+ formed, right on this coin + timeframe)
     # from the last 15 minutes on the 1m / 5m charts, weighted by how often each has worked
     try:
@@ -13725,8 +13727,8 @@ def target_history_html(name, d):
                 f'<b class="mc-dir">{"<i class=va-u></i>" if _hc["call"] == "YES" else "<i class=va-d></i>"} {_w}</b><span class="mc-pct">{_hc["pct"] * 100:.0f}%</span>'
                 f'<span class="mc-sub">Price is {abs(_hc["dist"]) * 100:.3f}% {"above" if _hc["dist"] >= 0 else "below"} the line {_hc["minute"]} min into the round. '
                 f'Of {_hc["n"]:,} rounds in the last 30 days that were in this same spot, {_hc["pct"] * 100:.0f}% ended {_w}.</span></div>')
-        mini = ''                                                                      # at-the-open box retired (v2 mini call is shown instead)
-        mini = _hcl + mini.replace('<span class="mc-lbl">MINI CALL</span>', '<span class="mc-lbl">AT THE OPEN</span>').replace('class="mini-call ', 'class="mini-call mc-small ', 1)
+    # 2026-10-22: the old at-the-open box is retired on BOTH coins - only the 1:00 mini call (+ the BTC history check) show
+    mini = _hcl if _hc else ''
     _TGT_MINI[name] = mini
     rows = '<div class="th-chips">'
     for r in near:
