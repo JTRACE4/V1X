@@ -109,3 +109,11 @@ UPDATE 2026-10-23 - voice + flip radar
 - Flip radar part 4 "chart" (-15..+25): the chart's support/resistance zones (holds between price and the line defend the call;
   a fresh rejection at the opposing zone or a broken defending zone adds risk), 1-minute RSI (stretched or turning against the
   call) and MACD histogram against the call. Line crosses still count in part 2.
+
+UPDATE 2026-10-23 (b) - voice clarity pass
+- Spoken flip risk is read from the radar at the moment it is spoken and uses the same rounded number the tile shows.
+- Minute check-in: time left, up/down with or against the call, flip risk. No reasons, no MACD, no "sellers in control".
+- "Flip risk rising, N percent. Possible flip." only when proven: radar 40%+ (or +15 in 20s to 30%+) AND live price moving
+  0.03%+ toward the line in 30s with 55%+ of the tape behind it. A "Why:" line shows on the radar in that case.
+- Big buying/selling bursts are spoken only when live price is moving the same way; whale totals no longer add verdicts.
+- "Under pressure" line removed; side switch said as "now down, against the call"; calls say "84 percent sure".

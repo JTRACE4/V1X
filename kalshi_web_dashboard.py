@@ -7181,6 +7181,7 @@ function _voiceNext() {
   let item = voiceQ.shift();
   while (item && !_voiceBudgetOk(item)) item = voiceQ.shift();      // over the word budget - skip routine chatter
   if (!item) return;
+  if (item.fn) { const t2 = item.fn(); if (!t2) { setTimeout(_voiceNext, 0); return; } item.text = _marketWords(t2); }
   voiceSaid.push([Date.now(), item.words]);
   voiceBusy = true;
   let finished = false;
@@ -7211,9 +7212,13 @@ function _voiceBudgetOk(item) {
   const used = voiceSaid.reduce((a, x) => a + x[1], 0);
   return item.prio || used + item.words <= VOICE_WORDS_PER_MIN;
 }
+// 2026-10-23 (b, user: "make sure the flip radar matches the percent actually being said"): a line can be a function, built at
+// the moment it is spoken from what the radar shows right then (not from a reading that is several seconds old).
 function _voicePush(text, urgent, ttlMs, mustSay) {
-  const t = _marketWords(text);
-  const item = { text: t, until: Date.now() + (ttlMs || 20000), prio: !!(urgent || mustSay), words: t.split(/\s+/).filter(Boolean).length };
+  const fn = typeof text === 'function' ? text : null;
+  const t = fn ? (fn() || '') : _marketWords(text);
+  if (!t) return;
+  const item = { text: t, fn: fn, until: Date.now() + (ttlMs || 20000), prio: !!(urgent || mustSay), words: t.split(/\s+/).filter(Boolean).length };
   if (urgent) voiceQ.unshift(item); else voiceQ.push(item);
   _voiceNext();
 }
@@ -7462,7 +7467,7 @@ function checkBuildingAlerts() {
     const coin = name === 'BTC' ? 'Bitcoin' : name;
     // 2026-10-22 (user): never say "flip" unless the market has actually switched sides - this alert is a call update,
     // and the softer warning stays on screen only
-    if (why === 'crit') speakUrgent(coin + ' call update: under pressure.', 0);
+    // 2026-10-23 (b): no spoken line here any more - the proven "flip risk rising" alert (flipRiseAlerts) covers it
   });
 }
 
@@ -7513,7 +7518,7 @@ function updateFlipWatch() {
       } else if (state !== w.lastState && w.lastState !== null && now - w.lastSpoke >= WATCH_EVERY_MS) {
         w.lastSpoke = now; w.lastState = state;
         // the market really switched sides -> THIS is the only spoken "flip"
-        if (withCall === false) speakUrgent(coin + ' is flipping ' + how + '.', 0);
+        if (withCall === false) speakUrgent(coin + ' now ' + how + '.', 0);      // the market switched sides - plain fact, no drama
         else speak(coin + ' going ' + how + '.', false, 15000);
       } else if (w.lastState === null) {
         w.lastState = state;                       // the flip alert itself already said this
@@ -8014,25 +8019,36 @@ function showIncomingBanner(name, side, usd, head, detail) {
   el._t = setTimeout(() => el.remove(), 10000);
 }
 const alertedIncoming = new Set();
-// ---- 2026-10-23 (user): "the voice should talk more - every minute is good, or an alert for high buy / sell orders that
-// affect the flip radar". (1) a check-in every minute per coin (coins staggered 30s apart), (2) a spoken alert when a big
-// aggressive buy / sell burst lands or the flip radar jumps 15+ points in 20 seconds - saying which way and whether it is
-// with or against the call.
-const MINUTE_MS = 60000, RADAR_JUMP = 15, ORDER_GAP_MS = 25000;
-const minuteSaid = {}, radarHist = {}, orderSaid = {}, coinSpoke = {};
+// ---- 2026-10-23 (b) voice rules (user: "unclear ... don't over talk, don't give misleading info, especially against the call"):
+//  - every minute per coin: time left, up / down with or against the call, and the flip risk EXACTLY as the radar shows it
+//    (read at the moment it is spoken). No reasons, no MACD, no "sellers in control" - the reasons stay on screen.
+//  - "flip risk rising, possible flip" ONLY when it is proven: the radar shows 40%+ (or climbed 15+ points in 20s to 30%+)
+//    AND live price is moving fast toward the line with the tape behind it (data-shift). Once per 45s per coin.
+//  - big buy / sell bursts: only when the burst runs the same way as live price right now, said calmly, with the radar's number.
+const MINUTE_MS = 60000, RISE_GAP_MS = 45000, ORDER_GAP_MS = 30000;
+const minuteSaid = {}, radarHist = {}, riseSaid = {}, orderSaid = {}, coinSpoke = {};
 function _radarInfo(name) {
   let el = null;
   document.querySelectorAll('.flip-chance-value[data-flip-src="radar"]').forEach(e => { if ((e.getAttribute('data-flip-chance-key') || '').split('::')[0] === name) el = e; });
   if (!el) return null;
   const callName = el.getAttribute('data-call-name') || 'none', call = el.getAttribute('data-call');
   const real = (callName === 'sealed' || callName === 'early' || callName === 'bot') && (call === 'YES' || call === 'NO');
-  return { pct: parseFloat(el.getAttribute('data-flip-chance-pct')), left: parseInt(el.getAttribute('data-left') || '0', 10),
-           above: el.getAttribute('data-above') === '1', call: real ? call : null, callName,
-           say: el.getAttribute('data-say') || '', crosses: parseInt(el.getAttribute('data-crosses') || '0', 10),
-           round: (el.getAttribute('data-flip-chance-key') || '').split('::').slice(0, 2).join('::') };
+  const shown = parseInt(el.getAttribute('data-shown') || '', 10);
+  return { pct: isNaN(shown) ? Math.round(parseFloat(el.getAttribute('data-flip-chance-pct'))) : shown,
+           tier: (el.getAttribute('data-tier') || '').toLowerCase(), shift: el.getAttribute('data-shift') === '1',
+           left: parseInt(el.getAttribute('data-left') || '0', 10), above: el.getAttribute('data-above') === '1',
+           call: real ? call : null, round: (el.getAttribute('data-flip-chance-key') || '').split('::').slice(0, 2).join('::') };
 }
 function _coinWord(n) { return n === 'BTC' ? 'Bitcoin' : n; }
-function _riskWord(p) { return p >= 70 ? 'critical' : (p >= 45 ? 'high' : (p >= 20 ? 'watch' : 'low')); }
+function _minuteLine(name) {
+  const r = _radarInfo(name);
+  if (!r || isNaN(r.pct) || r.left <= 20) return null;
+  const mins = Math.round(r.left / 60), when = mins >= 1 ? mins + (mins === 1 ? ' minute' : ' minutes') + ' left' : r.left + ' seconds left';
+  let line = _coinWord(name) + ', ' + when + '. ';
+  if (r.call) line += (r.above ? 'Up' : 'Down') + (((r.call === 'YES') === r.above) ? ', with the call.' : ', against the call.');
+  else line += 'Price ' + (r.above ? 'above' : 'below') + ' the line, no call yet.';
+  return line + ' Flip risk ' + r.pct + ' percent.';
+}
 function minuteCheckins() {
   if (!soundEnabled || !voiceAlertsEnabled) return;
   const now = Date.now();
@@ -8040,27 +8056,14 @@ function minuteCheckins() {
     if (assetSoundEnabled[name] === false) return;
     const r = _radarInfo(name);
     if (!r || isNaN(r.pct) || r.left <= 20) return;
-    if (minuteSaid[name] === undefined) { minuteSaid[name] = now - MINUTE_MS + 15000 + i * 30000; return; }   // first one ~15s / 45s in
+    if (minuteSaid[name] === undefined) { minuteSaid[name] = now - MINUTE_MS + 15000 + i * 30000; return; }
     if (now - minuteSaid[name] < MINUTE_MS) return;
-    if (now - (coinSpoke[name] || 0) < 20000) { minuteSaid[name] = now - MINUTE_MS + 20000; return; }      // just talked about it
-    minuteSaid[name] = now;
-    const mins = Math.round(r.left / 60), when = mins >= 1 ? mins + (mins === 1 ? ' minute' : ' minutes') + ' left' : r.left + ' seconds left';
-    const goingUp = r.above;
-    let line = _coinWord(name) + ', ' + when + '. ';
-    if (r.call) {
-      const withCall = (r.call === 'YES') === goingUp;
-      line += (goingUp ? 'Up' : 'Down') + (withCall ? ', with the call.' : ', against the call.');
-    } else {
-      line += 'Price ' + (goingUp ? 'above' : 'below') + ' the line, no call yet.';
-    }
-    line += ' Flip risk ' + Math.round(r.pct) + ' percent, ' + _riskWord(r.pct) + '.';
-    if (r.pct >= 30 && r.say) line += ' ' + r.say.charAt(0).toUpperCase() + r.say.slice(1) + '.';
-    else if (r.crosses >= 2) line += ' ' + r.crosses + ' line crosses.';
-    coinSpoke[name] = now;
-    speak(line, false, 20000);
+    if (now - (coinSpoke[name] || 0) < 20000) { minuteSaid[name] = now - MINUTE_MS + 20000; return; }
+    minuteSaid[name] = now; coinSpoke[name] = now;
+    speak(() => _minuteLine(name), false, 20000);
   });
 }
-function radarJumpAlerts() {
+function flipRiseAlerts() {
   if (!soundEnabled || !voiceAlertsEnabled) return;
   const now = Date.now();
   ['BTC', 'XRP'].forEach(name => {
@@ -8071,26 +8074,28 @@ function radarJumpAlerts() {
     h.pts.push([now, r.pct]);
     while (h.pts.length && now - h.pts[0][0] > 20000) h.pts.shift();
     const low = Math.min(...h.pts.map(x => x[1]));
-    if (r.left <= 10 || r.pct - low < RADAR_JUMP || r.pct < 30 || now - (orderSaid[name] || 0) < ORDER_GAP_MS) return;
-    orderSaid[name] = now; coinSpoke[name] = now; h.pts = [[now, r.pct]];
-    const dir = r.call ? (r.call === 'YES' ? 'the up call' : 'the down call') : 'price';
-    speak(_coinWord(name) + ' flip risk jumped to ' + Math.round(r.pct) + ' percent against ' + dir + (r.say ? ': ' + r.say : '') + '.', r.pct >= 45, 12000);
+    const proven = r.shift && (r.pct >= 40 || (r.pct >= 30 && r.pct - low >= 15));
+    if (!proven || r.left <= 10 || now - (riseSaid[name] || 0) < RISE_GAP_MS) return;
+    riseSaid[name] = now; coinSpoke[name] = now; orderSaid[name] = now;
+    speak(() => { const q = _radarInfo(name); return (q && q.pct >= 30) ? _coinWord(name) + ', flip risk rising, ' + q.pct + ' percent. Possible flip.' : null; },
+          true, 10000);
   });
 }
 function _orderVoice(name, side, usd) {
   if (!soundEnabled || !voiceAlertsEnabled || assetSoundEnabled[name] === false) return;
   const now = Date.now();
   if (now - (orderSaid[name] || 0) < ORDER_GAP_MS) return;
-  const r = _radarInfo(name);
-  const up = side === 'buy';
-  let tail = '';
-  if (r && r.call) tail = ((r.call === 'YES') === up ? ', with the call' : ', against the call');
-  if (r && !isNaN(r.pct)) tail += '. Flip risk ' + Math.round(r.pct) + ' percent';
+  const el = document.querySelector('.flip-chance-value[data-flip-src="radar"][data-flip-chance-key^="' + name + '::"]');
+  // only when live price (last 30s) is actually moving the same way as the burst - a big sell into a rising price is not news
+  const dir = el ? el.getAttribute('data-micro') : '';
+  if (dir !== (side === 'buy' ? 'up' : 'down')) return;
   orderSaid[name] = now; coinSpoke[name] = now;
-  const against = r && r.call && ((r.call === 'YES') !== up);
-  speak(_coinWord(name) + ', big ' + (up ? 'buy' : 'sell') + ' orders, ' + spokenUsd(usd) + ', pushing ' + (up ? 'up' : 'down') + tail + '.', !!against, 12000);
+  speak(() => {
+    const q = _radarInfo(name);
+    return _coinWord(name) + ', big ' + (side === 'buy' ? 'buying' : 'selling') + ', ' + spokenUsd(usd) + '.' + (q && !isNaN(q.pct) ? ' Flip risk ' + q.pct + ' percent.' : '');
+  }, false, 10000);
 }
-setInterval(() => { if (!document.hidden) { try { minuteCheckins(); } catch (e) {} try { radarJumpAlerts(); } catch (e) {} } }, 1000);
+setInterval(() => { if (!document.hidden) { try { minuteCheckins(); } catch (e) {} try { flipRiseAlerts(); } catch (e) {} } }, 1000);
 
 function checkIncomingAlerts() {
   document.querySelectorAll('.incoming-alert').forEach(el => {
@@ -8133,10 +8138,11 @@ function whaleSummaryTick() {
     const cc = cm ? cm.getAttribute('data-call') : null, ccn = cm ? cm.getAttribute('data-call-name') : '';
     const hasCall = (ccn === 'early' || ccn === 'sealed') && (cc === 'YES' || cc === 'NO') && lop >= 0.2;
     const coin = name === 'BTC' ? 'Bitcoin' : name;
-    const line = coin + ' whales: ' + _usdWords(g.buy) + ' bought, ' + _usdWords(g.sell) + ' sold'
-      + (lop >= 0.2 ? ', mostly ' + (dir === 'buy' ? 'buying' : 'selling') : '')
-      + (hasCall ? (((dir === 'buy') === (cc === 'YES')) ? ', with the call.' : ', against the call.') : '.');
-    if (soundEnabled && voiceAlertsEnabled && assetSoundEnabled[name] !== false) _voicePush(line, false, 20000, g.sig || changed);
+    // 2026-10-23 (b, user): whale prints are a sample, not the whole tape - no "mostly selling" / "against the call" verdicts
+    // from them. Just the two totals, and only when nothing else was said about this coin in the last 20 seconds.
+    const line = coin + ' whales: ' + _usdWords(g.buy) + ' bought, ' + _usdWords(g.sell) + ' sold.';
+    if (now - (coinSpoke[name] || 0) < 20000) return;
+    if (soundEnabled && voiceAlertsEnabled && assetSoundEnabled[name] !== false) { coinSpoke[name] = now; _voicePush(line, false, 20000, false); }
     g.lastSay = now; g.lastDir = dir; g.buy = g.sell = 0; g.sig = false;
   });
 }
@@ -8221,7 +8227,7 @@ function checkStageAlerts() {
       const d2 = dir === 'UP' ? 'up' : 'down';
       // plain + short (2026-10-22): "Bitcoin sealed call: up, 84 percent. Strong one." / "... Underdog pick."
       const conf = '';
-      const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent.' : '.') + conf
+      const line = coinName + ' ' + callName + ': ' + d2 + (sure ? ', ' + sure + ' percent sure.' : '.') + conf      // "sure" so it is never mistaken for the flip risk
         + (rev ? ' Underdog pick.' : '');
       speakUrgent(line, 650);
     }
@@ -9356,17 +9362,18 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
           <option value="device">This device's voice</option>
         </select></label>
       <br>
-      <button onclick="speakRaw('Bitcoin call update: under pressure.')">Test call update</button>
+      
       <button onclick="speakRaw('XRP is flipping down.')">Test flip alert</button>
-      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent.'),650)">Test early call</button>
-      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent.'),650)">Test sealed call</button>
+      <button onclick="playCallChime('early'); setTimeout(()=>speakRaw('Bitcoin early call: up, 68 percent sure.'),650)">Test early call</button>
+      <button onclick="playCallChime('sealed'); setTimeout(()=>speakRaw('XRP sealed call: down, 84 percent sure.'),650)">Test sealed call</button>
       <button onclick="speakRaw('Bitcoin, ninety seconds, up, with the call.')">Test 90-second check-in</button>
-      <button onclick="speakRaw('Bitcoin, 6 minutes left. Up, with the call. Flip risk 34 percent, watch. Rejected at resistance, MACD bearish.')">Test minute check-in</button>
-      <button onclick="speakRaw('XRP, big sell orders, 1.2 million dollars, pushing down, against the call. Flip risk 52 percent.')">Test big order alert</button>
+      <button onclick="speakRaw('Bitcoin, 6 minutes left. Up, with the call. Flip risk 18 percent.')">Test minute check-in</button>
+      <button onclick="speakRaw('XRP, big selling, 1.2 million dollars. Flip risk 24 percent.')">Test big order alert</button>
+      <button onclick="speakRaw('Bitcoin, flip risk rising, 46 percent. Possible flip.')">Test flip rising</button>
       <button onclick="speakRaw('Bitcoin call at 92 percent, 6 minutes left. Cash-out level.')">Test cash-out level</button>
       <button onclick="speakRaw('XRP is a toss-up, 2 minutes left. It just crossed the line.')">Test late toss-up</button>
-      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Bitcoin whales: 2.4 million bought, 600 thousand sold, mostly buying, with the call.'),1300)">Test whale BUY (cha-ching)</button>
-      <button onclick="playDenied(); setTimeout(()=>speakRaw('XRP whales: 200 thousand bought, 850 thousand sold, mostly selling, against the call.'),1300)">Test whale SELL (double beep)</button>
+      <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Bitcoin whales: 2.4 million bought, 600 thousand sold.'),1300)">Test whale BUY (cha-ching)</button>
+      <button onclick="playDenied(); setTimeout(()=>speakRaw('XRP whales: 200 thousand bought, 850 thousand sold.'),1300)">Test whale SELL (double beep)</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
         the early (4:00) and sealed (8:00) calls, and whale trades - a cha-ching when the whale pushes price further the way it is
         already going, a "denied" buzz when it trades against the move.</div>
@@ -11609,6 +11616,7 @@ def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, cros
         net_qty = (x30["sell_qty"] - x30["buy_qty"]) if call_sign > 0 else (x30["buy_qty"] - x30["sell_qty"])
     sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
     toward = False
+    fast_move = False
     ago = None
     if sym:
         ticks = get_tick_history(sym)
@@ -11618,6 +11626,8 @@ def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, cros
             ago = older[-1] if older else ticks[0][1]
             # moving at the line = an UP call losing ground (price falling) / a DOWN call losing ground (price rising)
             toward = ((spot - ago) * call_sign) < -(line * 0.00005)
+            # 2026-10-23 (b): "price / tape shifting quickly" = 0.03%+ toward the line in 30s (about $30 on BTC)
+            fast_move = ((spot - ago) * call_sign) < -(line * 0.0003)
     thr = FLIP_OPP_DELTA_USD.get(name, 1e12)
     if net_against > 0 and toward:
         mom += _lerp(net_against, thr * 0.5, thr * 2, 0, 10)
@@ -11716,6 +11726,7 @@ def flip_risk_core(name, call_sign, spot, line, seconds_left, elapsed=None, cros
     return {"score": score, "tier": tier, "cls": cls, "parts": parts, "pace": pace, "opp_share": opp_share,
             "toward": toward, "wrong_side": wrong_side, "dist_pct": dist,
             "say": [t for _w, t in sorted(say, key=lambda z: -z[0])][:2],
+            "shift": bool(fast_move and opp_share is not None and opp_share >= 0.55),
             "drivers": [t for _w, t in sorted(drivers, key=lambda z: -abs(z[0]))]}
 
 
@@ -11889,7 +11900,7 @@ def build_flip_radar(name, d):
               f'data-flip-chance-pct="{pct:.2f}" data-k-opp="{(((1 - kp) if call == "YES" else kp) if kp is not None else -1):.3f}" '
               f'data-call="{call}" data-call-name="{_cname}" '
               f'data-kup="{kp if kp is not None else -1:.3f}" data-left="{int(d.get("seconds_left") or 0)}" '
-              f'data-above="{1 if spot >= line else 0}" data-say="{_html_attr(", ".join(fr.get("say") or []))}" '
+              f'data-above="{1 if spot >= line else 0}" data-shown="{pct:.0f}" data-tier="{level}" data-micro="{d.get("micro_dir") or ""}" data-shift="{1 if fr.get("shift") else 0}" '
               f'data-crosses="{int(ls.get("crosses") or 0)}" style="display:none;"></span>')
     _early_in = bool(((d.get("stage_calls") or {}).get("early") or {}).get("call"))     # 2026-10-22 (user)
     return (f'<div class="rs-tile flip-radar"><div class="rs-title">FLIP RADAR</div>'
@@ -11899,6 +11910,7 @@ def build_flip_radar(name, d):
             + '<!--OWNER-->' + (f'<div class="fr-txt"><i class=ico data-i=warn></i> {" &middot; ".join(drv)}</div>' if drv and pct > 20 else
                f'<div class="fr-txt hint">{" &middot; ".join(drv) if drv else "no pressure against it right now"}</div>')
             + f'<div class="fr-txt hint">{_html_attr(tip).replace("&amp;middot;", "&middot;")}</div><!--/OWNER-->'
+            + (f'<div class="fr-txt fr-why"><b>Why:</b> {" &middot; ".join(drv[:3])}</div>' if drv and (pct >= 40 or fr.get("shift")) else "")
             + f'{_flip_why(name, d, call, pct)}{spike}{kal}{_flips_4h(name)}{_reversal_watch_html(name, d) if _early_in else ""}{marker}</div>')
 
 
