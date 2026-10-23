@@ -9411,7 +9411,7 @@ setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o
     left:24px !important; right:auto !important; width:var(--half) !important; }
 }
 /* 2026-10-23 (user): Charts tab - much wider on desktop (a strip of the BRAIN background still shows at the sides), sized for phones */
-.co-wrap { max-width:none !important; width:min(1680px, calc(100vw - 6vw)); box-sizing:border-box; padding:6px 0 40px !important; }
+.co-wrap { max-width:none !important; width:calc(100vw - var(--sbw, 0px) - 5vw); box-sizing:border-box; padding:6px 0 40px !important; }
 .co-win { box-sizing:border-box; padding:14px 16px !important; border-radius:18px; background:rgba(33,27,30,0.94);
   border:1px solid rgba(220,187,145,0.28); box-shadow:0 24px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,240,225,0.06); margin:0 !important; }
 .co-win .lw-chart { height:clamp(480px, calc(100vh - 290px), 920px) !important; }
@@ -16644,8 +16644,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = (PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json())
                     .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';window.SARGE_REAL = ' + ('true' if _sarge_real() else 'false')
                              + ';window.CHART_ONLY = ' + ('true' if _co else 'false') + ';', 1)
-                    .replace('<body>', '<body class="chart-only">' if _co else '<body>', 1)
-                    .replace('</head>', ('<style>' + CHART_ONLY_CSS + '</style></head>') if _co else '</head>', 1)
+                    .replace('</head><body>', ('<style>' + CHART_ONLY_CSS + '</style></head><body class="chart-only">') if _co else '</head><body>', 1)
                     .replace('</header>', '</header>' + _site.app_tabs(user, "charts" if _co else "live", _pend), 1)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
