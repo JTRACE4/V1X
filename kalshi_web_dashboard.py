@@ -6664,6 +6664,17 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1180px !imp
     height:clamp(420px, calc(100vh - var(--card-off, 105px) - 150px), 980px) !important; }
 }
 @media (max-width:1299px) { #lock-view { display:none !important; } }
+/* 2026-10-22 (user): sealed call leads the scoreboard; BRAIN's favorite at the bottom; RSI + MACD closer together */
+.sc-grid .sc-sealed { grid-column:1 / -1; }
+.scoreboard .most-acc { margin-top:14px; }
+.ma-tabs { flex-wrap:wrap; }
+.ma-sub { margin:2px 0 4px; }
+body[data-matf="tod"] .ma-pane[data-tf="tod"] { display:block; }
+body[data-matf="tod"] .ma-tab[data-tf="tod"] { background:linear-gradient(90deg, #e9a5bb, #dcbb91); color:#2a1b21; border-color:transparent; }
+.ma-tag { white-space:nowrap; }
+.mini-call .mc-wr { font-size:12.5px; color:#eee2d7; } .mini-call .mc-wr b { font-family:var(--br-serif); font-size:16px; color:#fbf4ec; }
+.lw-corner .lw-chips { gap:2px !important; }
+.lw-corner .lw-chip { width:auto !important; min-width:66px !important; padding:0 4px !important; }
 .coin-badge { width:30px; height:30px; vertical-align:-5px; margin-right:8px; filter:drop-shadow(0 0 6px rgba(242,196,107,0.35)); }
 .asset-XRP .coin-badge { filter:drop-shadow(0 0 6px rgba(220,230,245,0.35)); }
 .rsi-lx > .rs-tile { border:0 !important; background:none !important; box-shadow:none !important; padding:0 !important; margin:0 !important;
@@ -8960,8 +8971,8 @@ function lwBands(o) {
     if (bot <= 0 || top >= H) return '';
     const h = Math.max(4, bot - top);
     return '<div class="lw-band ' + (z.r ? 'res' : 'sup') + '" style="top:' + top.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px"><span>'
-      + (z.r ? 'Resistance' : 'Support') + ' ' + lwMoney(o.a, z.lo) + ' &ndash; ' + lwMoney(o.a, z.hi)
-      + (z.n >= 2 ? ' &middot; ' + z.n + ' touches' : '') + '</span></div>';
+      + lwMoney(o.a, z.lo) + ' &ndash; ' + lwMoney(o.a, z.hi)
+      + (z.n >= 2 ? ' &middot; ' + (z.r ? 'rejected ' : 'held ') + z.n + 'x' : '') + '</span></div>';
   }).join('');
   if (lay._h !== html) { lay.innerHTML = html; lay._h = html; }
 }
@@ -8984,9 +8995,9 @@ function lwCreate(a) {
   const box = document.createElement('div'); box.className = 'lw-box';
   box.innerHTML = '<div class="lw-tabs">' + LW_TFS.map(t => '<button data-tf="' + t + '">' + t + '</button>').join('')
     + '<button class="lw-ha" title="Heikin Ashi candles - smoother trend view">Heikin Ashi</button>'
-    + '<span class="hint lw-zoom">pinch or scroll to zoom &middot; drag to move</span></div>'
+    + '</div>'
     + '<div class="lw-chart"><div class="lw-corner"></div></div>'
-    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; dashed = round line &middot; <span style="color:#f05454">red</span> / <span style="color:#3dd69c">green</span> shaded bands = resistance / support zones ($ range) &middot; dotted line = likely path, next 5 candles &middot; <span class="lwk-macd"></span></div>'
+    + '<div class="lw-key hint"><span style="color:#f8f6f2">EMA 12</span> &middot; <span style="color:#e9d3a4">EMA 25</span> &middot; <span style="color:#ffd23f">EMA 50</span> &middot; <span class="lwk-macd"></span></div>'
     // 2026-10-22 (user): tap to learn &ndash; EMA, the live RSI + MACD read, and why it matters in a 15-minute round
     + '<details class="lw-learn"><summary>What do these mean? <span>EMA &middot; RSI &middot; MACD &middot; 15-minute rounds</span></summary><div class="lw-learn-body">'
     + '<p><b>EMA lines</b> &ndash; the average price over the last 12, 25 and 50 candles, with the newest candles counting the most. '
@@ -11647,40 +11658,176 @@ def _money_html(pnl, avg, n):
             + (f' &middot; avg buy-in <b>{avg * 100:.0f}&cent;</b> <span class="hint">(market {avg * 100:.0f}% on that side)</span>' if avg else ""))
 
 
-def build_most_accurate(name):
-    """2026-10-22 (user): tabs for the last 6 / 12 / 24 hours - which call has been MOST ACCURATE in that window
-    (mini 1:00, early 4:00, sealed 8:00). Shows the numbers; it does not tell anyone what to follow."""
+# ---- 2026-10-22 (user): "what would have happened if you cashed out at 90" - for every graded call, the highest / lowest
+# price the market traded at after the call was made (public trade tape, fetched once per finished round and cached).
+CASHOUT_AT = 0.90
+CASHOUT_FILE = os.path.join(_DATA_ROOT, "data_cache", "cashout_marks.json")
+_CALL_SEC = {"mini": 60, "early": 240, "sealed": 480}
+try:
+    with open(CASHOUT_FILE) as _f:
+        _cash_marks = json.load(_f)
+except Exception:
+    _cash_marks = {}
+
+
+def _fetch_round_marks(ticker):
+    """{"60": [max_yes, min_yes], "240": [...], "480": [...]} for one finished round, from its trade tape."""
+    close = _window_close_utc(ticker)
+    if not close:
+        return None
+    c_ts = close.timestamp()
+    o_ts = c_ts - 900
+    pts, cursor = [], None
+    for _ in range(25):
+        params = {"ticker": ticker, "limit": 1000, "min_ts": int(o_ts), "max_ts": int(c_ts) + 5}
+        if cursor:
+            params["cursor"] = cursor
+        r = _rq.get("https://external-api.kalshi.com/trade-api/v2/markets/trades", params=params, timeout=12).json()
+        tr = r.get("trades", [])
+        for t in tr:
+            ts = dt.datetime.fromisoformat(t["created_time"].replace("Z", "+00:00")).timestamp()
+            pts.append((ts - o_ts, float(t["yes_price_dollars"])))
+        cursor = r.get("cursor")
+        if not tr or not cursor:
+            break
+    if not pts:
+        return {}
+    out = {}
+    for cp in (60, 240, 480):
+        sub = [y for sec, y in pts if sec >= cp]
+        out[str(cp)] = [max(sub), min(sub)] if sub else None
+    return out
+
+
+def _cash_pnl(h, key, at=CASHOUT_AT):
+    """$100 call: (hold-to-the-end P&L, cash-out-at-90 P&L, hit?) - None when the call or its trade tape is missing."""
+    kp, c, side = h.get(f"{key}_kp"), h.get(f"{key}_correct"), h.get(f"{key}_call")
+    if c is None or not kp or not (0 < kp < 1) or side not in ("YES", "NO"):
+        return None
+    hold = (100 / kp - 100) if c else -100.0
+    m = _cash_marks.get(h.get("ticker"))
+    if m is None:
+        return (hold, None, None)
+    mk = m.get(str(_CALL_SEC[key])) if m else None
+    hit = bool(mk) and kp < at and ((side == "YES" and mk[0] >= at) or (side == "NO" and mk[1] <= 1 - at))
+    return (hold, (100 * at / kp - 100) if hit else hold, hit)
+
+
+def _cashout_loop():
+    time.sleep(90)
+    while True:
+        try:
+            todo = []
+            for name, hist in list(_history.items()):
+                for h in hist:
+                    t = h.get("ticker")
+                    if t and t not in _cash_marks and any(h.get(f"{k}_correct") is not None for k in _CALL_SEC):
+                        ct = _window_close_utc(t)
+                        if ct and time.time() - ct.timestamp() > 120:
+                            todo.append(t)
+            for t in todo:
+                try:
+                    _cash_marks[t] = _fetch_round_marks(t)
+                except Exception as _e:
+                    print(f"[cashout90] {t}: {_e!r}")
+                time.sleep(0.35)
+            if todo:
+                try:
+                    os.makedirs(os.path.dirname(CASHOUT_FILE), exist_ok=True)
+                    with open(CASHOUT_FILE + ".tmp", "w") as _f:
+                        json.dump(_cash_marks, _f)
+                    os.replace(CASHOUT_FILE + ".tmp", CASHOUT_FILE)
+                except Exception as _e:
+                    print(f"[cashout90] save: {_e!r}")
+                _cashout_report()
+        except Exception as _e:
+            print(f"[cashout90] loop: {_e!r}")
+        time.sleep(300)
+
+
+def _cashout_report():
+    for name, hist in list(_history.items()):
+        for key in ("mini", "early", "sealed"):
+            rows = [h for h in hist if not h.get(f"{key}_reversal") and (key != "mini" or h.get("mini_v") == 2)]
+            res = [r for r in (_cash_pnl(h, key) for h in rows) if r and r[1] is not None]
+            if not res:
+                continue
+            hold, cash, hits = sum(r[0] for r in res), sum(r[1] for r in res), sum(1 for r in res if r[2])
+            print(f"[cashout90] {name} {key}: n={len(res)} hold ${hold:+,.0f} | cash out at 90c ${cash:+,.0f} "
+                  f"| reached 90c {hits}x | diff ${cash - hold:+,.0f}")
+
+
+threading.Thread(target=_cashout_loop, daemon=True).start()
+
+
+def _tod_label(now_et):
+    a = now_et.replace(minute=0)
+    b = a + dt.timedelta(hours=1)
+    f = lambda x: x.strftime("%-I %p").lower().replace(" ", "")
+    return f"{f(a - dt.timedelta(hours=1))}&ndash;{f(b + dt.timedelta(hours=1))}"
+
+
+def build_brain_favorite(name):
+    """2026-10-22 (user): "BRAIN's favorite" = the MOST PROFITABLE call for this coin, over the last 6 / 12 / 24 hours or at
+    this time of day (same hours, last 30 days), counting both holding to the end and cashing out at 90c. Numbers only."""
     hist = _history.get(name, [])
     now = time.time()
+    et = ZoneInfo("America/New_York")
+    now_et = dt.datetime.now(et)
     defs = (("mini", "Mini call &middot; 1:00"), ("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00"))
+
+    def in_tod(t):
+        if now - t.timestamp() > 30 * 86400:
+            return False
+        dh = (t.astimezone(et).hour - now_et.hour) % 24
+        return dh in (0, 1, 23)
+
     panes = []
-    for hrs in (6, 12, 24):
+    tfs = (("6", "6 hrs", lambda t: now - t.timestamp() <= 6 * 3600), ("12", "12 hrs", lambda t: now - t.timestamp() <= 12 * 3600),
+           ("24", "24 hrs", lambda t: now - t.timestamp() <= 24 * 3600), ("tod", "This time of day", in_tod))
+    for tf, _lab, keep in tfs:
         rows = []
         for key, lab in defs:
-            g, hs = [], []
+            g, res = [], []
             for h in hist:
                 if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
                     continue
                 if key == "mini" and h.get("mini_v") != 2:
                     continue
                 t = _window_close_utc(h.get("ticker"))
-                if t and now - t.timestamp() <= hrs * 3600:
+                if t and keep(t):
                     g.append(bool(h[f"{key}_correct"]))
-                    hs.append(h)
-            rows.append((key, lab, sum(g), len(g), _money_html(*_call_money(hs, key))))
-        ok = [r for r in rows if r[3] >= 5]
-        best = max(ok, key=lambda r: (r[2] / r[3], r[3]))[0] if ok else None
+                    r = _cash_pnl(h, key)
+                    if r:
+                        res.append(r)
+            hold = sum(r[0] for r in res)
+            known = [r for r in res if r[1] is not None]
+            cash = sum(r[1] for r in known) + sum(r[0] for r in res if r[1] is None)
+            hits = sum(1 for r in known if r[2])
+            rows.append({"key": key, "lab": lab, "w": sum(g), "n": len(g), "hold": hold, "cash": cash, "hits": hits, "nm": len(res)})
+        ok = [r for r in rows if r["n"] >= 5]
+        best, how = None, ""
+        if ok:
+            b = max(ok, key=lambda r: max(r["hold"], r["cash"]))
+            if max(b["hold"], b["cash"]) > 0:
+                best, how = b["key"], ("cash out at 90&cent;" if b["cash"] > b["hold"] else "hold to the end")
+        m = lambda v: f'<span class="{"up" if v >= 0 else "down"}"><b>{"+" if v >= 0 else "-"}${abs(v):,.0f}</b></span>'
         cells = "".join(
-            f'<div class="ma-row{" ma-best" if k == best else ""}"><span class="ma-lab">{lab}</span>'
-            + (f'<b class="ma-pct">{w / n:.0%}</b><span class="ma-wl">{w}W &middot; {n - w}L</span>' if n else '<span class="ma-wl hint">no rounds yet</span>')
-            + ('<span class="ma-tag">MOST ACCURATE</span>' if k == best else "")
-            + (f'<div class="ma-money">{money}</div>' if money else "") + '</div>'
-            for k, lab, w, n, money in rows)
-        panes.append(f'<div class="ma-pane" data-tf="{hrs}">{cells}'
-                     + ('' if best else '<div class="hint" style="margin-top:4px;">Needs at least 5 graded rounds in this window.</div>') + '</div>')
-    tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{h}" onclick="document.body.dataset.matf=\'{h}\'">{h} hrs</button>' for h in (6, 12, 24))
-    return (f'<div class="most-acc"><div class="ma-head"><span class="ma-title">MOST ACCURATE</span><span class="ma-tabs">{tabs}</span></div>'
+            f'<div class="ma-row{" ma-best" if r["key"] == best else ""}"><span class="ma-lab">{r["lab"]}</span>'
+            + (f'<b class="ma-pct">{r["w"] / r["n"]:.0%}</b><span class="ma-wl">{r["w"]}W &middot; {r["n"] - r["w"]}L</span>' if r["n"] else '<span class="ma-wl hint">no rounds yet</span>')
+            + (f'<span class="ma-tag">BRAIN&rsquo;S FAVORITE &middot; {how}</span>' if r["key"] == best else "")
+            + (f'<div class="ma-money">$100/call &middot; held to the end {m(r["hold"])} &middot; cashed out at 90&cent; {m(r["cash"])}'
+               f' <span class="hint">(hit 90&cent; in {r["hits"]} of {r["nm"]})</span></div>' if r["nm"] else "")
+            + '</div>' for r in rows)
+        sub = (f'<div class="hint ma-sub">{name} rounds between {_tod_label(now_et)} ET, last 30 days</div>' if tf == "tod" else "")
+        panes.append(f'<div class="ma-pane" data-tf="{tf}">{sub}{cells}'
+                     + ('' if best else '<div class="hint" style="margin-top:4px;">Needs at least 5 graded rounds with a profit in this window.</div>') + '</div>')
+    tabs = "".join(f'<button type="button" class="ma-tab" data-tf="{tf}" onclick="document.body.dataset.matf=\'{tf}\'">{lab}</button>' for tf, lab, _k in tfs)
+    return (f'<div class="most-acc"><div class="ma-head"><span class="ma-title">BRAIN&rsquo;S FAVORITE</span><span class="ma-tabs">{tabs}</span></div>'
             f'{"".join(panes)}</div>')
+
+
+build_most_accurate = build_brain_favorite
 
 
 def build_scoreboard(name, d):
@@ -11729,9 +11876,9 @@ def build_scoreboard(name, d):
             pnl = f'<span class="{"up" if d["bet_pnl"]["total"] >= 0 else "down"}">{d["bet_pnl"]["total"]:+,.0f}</span> on $100/call'
         td = f'{sum(today)}-{len(today) - sum(today)}' if today else "0-0"
         cols.append(
-            f'<div class="sc-col"><div class="sc-title">{label}</div>'
+            f'<div class="sc-col sc-{key}"><div class="sc-title">{label}</div>'
             f'<div class="sc-main"><span class="sc-pct">{w / n:.0%}</span><span class="sc-wl"><b class="skw">{w}W</b> &middot; <b class="skl">{n - w}L</b>'
-            f'<br><span class="hint">{n} graded round{"s" if n != 1 else ""} since {first_k}</span></span></div>'
+            f'<br><span class="hint">{n:,} round{"s" if n != 1 else ""}</span></span></div>'
             f'<div class="sc-cur">{streak}</div>'
             f'<div class="sc-stats">Best run: <b class="skw">{bw}W</b> &middot; worst run: <b class="skl">{bl}L</b> &middot; today: <b>{td}</b>'
             + (f' &middot; {pnl}' if pnl else "") + f'</div><div class="sc-chips">{chips}</div>{_mbt}</div>')
@@ -11769,13 +11916,12 @@ def build_scoreboard(name, d):
         pull = streak_windows_html(hist, name)
     except Exception:
         pull = ""
-    return (f'<div class="scoreboard"><div class="rs-title">SCOREBOARD &middot; since launch ({since}) &middot; '
-            f'<b>{len(hist):,}</b> round{"s" if len(hist) != 1 else ""} tracked{f' <span class="hint">(the bot made no call in {no_call:,} of them)</span>' if (no_call and SHOW_BOT_RECORD) else ''}</div>'
-            + build_most_accurate(name) +
-            f'<div class="sc-grid">{"".join(cols)}</div>'
+    return (f'<div class="scoreboard"><div class="rs-title">SCOREBOARD &middot; '
+            f'<b>{len(hist):,}</b> round{"s" if len(hist) != 1 else ""}{f' <span class="hint">(the bot made no call in {no_call:,} of them)</span>' if (no_call and SHOW_BOT_RECORD) else ''}</div>'
+            + f'<div class="sc-grid">{"".join(cols)}</div>'
             f'<div class="sc-legend hint"><span class="u">green</span> ended UP &middot; <span class="d">red</span> ended DOWN &middot; white letter = right call</div>'
             + (f'<details class="sc-more" data-pat="SCORE|{name}"><summary class="hint">By hour</summary>{pull}</details>' if pull else "")
-            + '</div>')
+            + build_brain_favorite(name) + '</div>')
 
 
 @_never_break
@@ -11819,13 +11965,19 @@ def build_rounds_panel(name, d, part="all"):
     except Exception as _e:
         print(f"[been here before] {_e!r}")
     _m2 = ((d.get("stage_calls") or {}).get("mini") or {})
+    # 2026-10-22 (user): say what it is - a quick scan, not BRAIN's main call - and show its own win rate
+    _mr = [bool(h["mini_correct"]) for h in _history.get(name, []) if h.get("mini_v") == 2 and h.get("mini_correct") is not None]
+    _mwr = (f'<span class="mc-wr"><b>{sum(_mr) / len(_mr):.0%}</b> win rate &middot; {sum(_mr)}W {len(_mr) - sum(_mr)}L</span>' if _mr
+            else '<span class="mc-wr">win rate: no graded rounds yet</span>')
+    _mnote = ('<span class="mc-sub">A quick scan from history &ndash; not BRAIN&rsquo;s main call. '
+              'The early (4:00) and sealed (8:00) calls are the main calls.</span>')
     if _m2.get("v") == 2 and _m2.get("call"):
         _up2 = _m2["call"] == "YES"
         m2_html = (f'<div class="mini-call mc-{"up" if _up2 else "down"}"><span class="mc-lbl">MINI CALL &middot; 1:00</span>'
                    f'<b class="mc-dir">{"<i class=va-u></i> UP" if _up2 else "<i class=va-d></i> DOWN"}</b>'
-                   f'<span class="mc-pct">{"STRONG" if (_m2.get("of") and _m2.get("agree", 0) / _m2["of"] >= 0.75) else "LEAN"}</span></div>')
+                   f'<span class="mc-pct">{"STRONG" if (_m2.get("of") and _m2.get("agree", 0) / _m2["of"] >= 0.75) else "LEAN"}</span>{_mwr}{_mnote}</div>')
     elif (d.get("elapsed_seconds") or 0) < 60:
-        m2_html = '<div class="mini-call mc-flat"><span class="mc-lbl">MINI CALL &middot; 1:00</span><span class="mc-sub">Call lands at 1:00.</span></div>'
+        m2_html = f'<div class="mini-call mc-flat"><span class="mc-lbl">MINI CALL &middot; 1:00</span><span class="mc-sub">Call lands at 1:00.</span>{_mwr}{_mnote}</div>'
     else:
         m2_html = ""
     bhb = f'<div class="rounds-panel bhb-panel"><div class="top-w-title">BEEN HERE BEFORE</div>' + m2_html + _TGT_BODY.get(name, "") + '</div>'
