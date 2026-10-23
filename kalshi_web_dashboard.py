@@ -9383,13 +9383,38 @@ async function lwPatterns(o) {
 }
 // 2026-10-23 (user): Chart Only page - one chart, every coin. The picked coin is remembered on this device.
 const CO_COINS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB', 'HYPE', 'NEAR'];
-function coCoin() { let c = 'BTC'; try { c = localStorage.getItem('coCoin') || 'BTC'; } catch (e) {} return CO_COINS.includes(c) ? c : 'BTC'; }
-function coPick(c) { try { localStorage.setItem('coCoin', c); } catch (e) {} lwAttach(); }
+const CO_DEF = ['BTC', 'ETH'];
+function _coGet(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+function _coSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function coSplitN() { return _coGet('coSplit', '1') === '2' ? 2 : 1; }
+function coCoin(slot) {
+  slot = slot || 0;
+  let c = _coGet('coCoin' + (slot ? slot : ''), CO_DEF[slot]);
+  if (!CO_COINS.includes(c)) c = CO_DEF[slot];
+  if (slot === 1 && c === coCoin(0)) c = CO_COINS.find(x => x !== coCoin(0));      // the two charts never show the same coin
+  return c;
+}
+function coPick(slot, c) {
+  if (typeof c === 'undefined') { c = slot; slot = 0; }
+  const other = 1 - slot, oc = coCoin(other);
+  if (coSplitN() === 2 && oc === c) _coSet('coCoin' + (other ? other : ''), coCoin(slot));   // picked the other chart's coin: swap them
+  _coSet('coCoin' + (slot ? slot : ''), c);
+  lwAttach();
+}
+function coSplit(n) { _coSet('coSplit', String(n)); lwAttach(); }
 function lwAttach() {
   if (typeof LightweightCharts === 'undefined') return;
-  document.querySelectorAll('.co-tabs button[data-co]').forEach(b => b.classList.toggle('on', b.dataset.co === coCoin()));
+  const two = coSplitN() === 2;
+  document.body.classList.toggle('co-two', two);
+  document.querySelectorAll('.co-split button').forEach(b => b.classList.toggle('on', b.dataset.split === (two ? '2' : '1')));
+  document.querySelectorAll('.co-tabs[data-slot]').forEach(t => { const sl = +t.dataset.slot;
+    t.querySelectorAll('button[data-co]').forEach(b => b.classList.toggle('on', b.dataset.co === coCoin(sl))); });
   document.querySelectorAll('.lw-slot[data-asset]').forEach(slot => {
-    if (slot.classList.contains('co-slot')) slot.dataset.asset = coCoin();
+    if (slot.classList.contains('co-slot')) {
+      const sl = +(slot.dataset.slot || 0);
+      if (sl === 1 && !two) { if (slot.firstChild && slot.firstChild.classList && slot.firstChild.classList.contains('lw-box')) slot.innerHTML = ''; return; }
+      slot.dataset.asset = coCoin(sl);
+    }
     const a = slot.dataset.asset;
     const o = LW[a] || (LW[a] = lwCreate(a));
     if (o.box.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(o.box); }
@@ -9422,14 +9447,29 @@ setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o
 @media (max-width:560px) { .g-tag { display:none !important; } }
 @media (max-width:760px) { #snd-toggle { background:rgba(33,27,30,0.97) !important; box-shadow:0 6px 18px rgba(0,0,0,0.45) !important; } }
 /* 2026-10-23 (user): Charts tab - much wider on desktop (a strip of the BRAIN background still shows at the sides), sized for phones */
-.co-wrap { max-width:none !important; width:calc(100vw - var(--sbw, 0px) - 5vw); box-sizing:border-box; padding:6px 0 40px !important; }
+.co-wrap { max-width:none !important; width:min(1500px, calc(100vw - var(--sbw, 0px) - 10vw)); box-sizing:border-box; padding:6px 0 40px !important; }
+body.co-two .co-wrap { width:calc(100vw - var(--sbw, 0px) - 5vw); }
+.co-top { display:flex; align-items:center; gap:10px; }
+.co-top .co-note { flex:1; min-width:0; }
+.co-split { display:inline-flex; padding:3px; gap:2px; border-radius:999px; background:rgba(30,46,50,.42); border:1px solid rgba(255,255,255,.14); flex:none; }
+.co-split button { display:inline-flex; align-items:center; gap:5px; padding:6px 12px; border:0; border-radius:999px; background:transparent;
+  color:#d6cac4; font:inherit; font-weight:800; cursor:pointer; }
+.co-split button svg { width:16px; height:16px; }
+.co-split button.on { background:#e9a5bb; color:#1a1218; }
+.co-grid { display:grid; grid-template-columns:minmax(0, 1fr); gap:20px; }
+.co-win1 { display:none; }
+body.co-two .co-grid { grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); }
+body.co-two .co-win1 { display:block; }
+body.co-two .co-win .lw-chart { height:clamp(420px, calc(100vh - 340px), 760px) !important; }
 .co-win { box-sizing:border-box; padding:14px 16px !important; border-radius:18px; background:rgba(33,27,30,0.94);
   border:1px solid rgba(220,187,145,0.28); box-shadow:0 24px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,240,225,0.06); margin:0 !important; }
-.co-win .lw-chart { height:clamp(480px, calc(100vh - 290px), 920px) !important; }
+.co-win .lw-chart { height:clamp(440px, calc(100vh - 330px), 800px) !important; }
 @media (max-width:760px) {
-  .co-wrap { width:100%; padding:4px 0 30px !important; }
+  .co-wrap, body.co-two .co-wrap { width:100%; padding:4px 0 30px !important; }
+  body.co-two .co-grid { grid-template-columns:minmax(0, 1fr); gap:14px; }
+  .co-top { flex-wrap:wrap; }
   .co-win { padding:10px 8px !important; border-radius:14px; }
-  .co-win .lw-chart { height:clamp(340px, 58vh, 520px) !important; }
+  .co-win .lw-chart, body.co-two .co-win .lw-chart { height:clamp(320px, 52vh, 500px) !important; }
   .co-tabs { gap:4px; flex-wrap:nowrap !important; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
   .co-tabs::-webkit-scrollbar { display:none; }
   .co-tabs button { padding:6px 11px; font-size:12.5px; flex:none; }
@@ -10121,16 +10161,22 @@ body.chart-only #sound-reminder, body.chart-only #flip-watch { display:none !imp
 
 
 def chart_only_html(full=False):
-    """One live chart with a coin picker - every coin the market runs 15-minute rounds on, plus NEAR. The coin you pick is
-    remembered on this device; the chart itself is mounted by the page script (lwAttach) so it survives the 1s refresh."""
-    tabs = "".join(f'<button type="button" data-co="{c}" onclick="coPick(&#39;{c}&#39;)">{c}</button>' for c in _pub.CHART_PRODUCTS)
-    note = ('<div class="co-note">Live charts for every coin &middot; your BRAIN pass includes these. <a href="/app">Back to the live dashboard</a></div>'
+    """Live charts with a coin picker - every coin the market runs 15-minute rounds on, plus NEAR. 2026-10-23 (user): a 1 / 2
+    switch shows two charts side by side (stacked on phones), each with its own coin. Picks are remembered on this device; the
+    charts themselves are mounted by the page script (lwAttach) so they survive the 1s refresh."""
+    def win(slot):
+        tabs = "".join(f'<button type="button" data-co="{c}" onclick="coPick({slot},&#39;{c}&#39;)">{c}</button>' for c in _pub.CHART_PRODUCTS)
+        return (f'<div class="lw-win co-win co-win{slot}"><div class="co-tabs" data-slot="{slot}">{tabs}</div>'
+                f'<div class="lw-slot co-slot" data-slot="{slot}" data-asset="{"BTC" if slot == 0 else "ETH"}"><span class="hint">Loading chart&hellip;</span></div></div>')
+    note = ('Live charts for every coin &middot; your BRAIN pass includes these. <a href="/app">Back to the live dashboard</a>'
             if full else
-            '<div class="co-note">Chart Only pass &middot; live charts, indicators and chart patterns. '
-            'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN passes</a></div>')
-    return ('<div class="co-wrap">' + note
-            + f'<div class="lw-win co-win"><div class="co-tabs">{tabs}</div>'
-            '<div class="lw-slot co-slot" data-asset="BTC"><span class="hint">Loading chart&hellip;</span></div></div></div>')
+            'Chart Only pass &middot; live charts, indicators and chart patterns. '
+            'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN passes</a>')
+    split = ('<div class="co-split" role="group" aria-label="How many charts">'
+             '<button type="button" data-split="1" onclick="coSplit(1)" title="One chart"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>1</button>'
+             '<button type="button" data-split="2" onclick="coSplit(2)" title="Two charts side by side"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="4" width="8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>2</button></div>')
+    return (f'<div class="co-wrap"><div class="co-top"><div class="co-note">{note}</div>{split}</div>'
+            f'<div class="co-grid">{win(0)}{win(1)}</div></div>')
 
 
 def build_pattern_window(asset_name):
