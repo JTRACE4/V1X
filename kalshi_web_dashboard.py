@@ -9432,6 +9432,8 @@ function lwAttach() {
   document.querySelectorAll('.co-split button').forEach(b => b.classList.toggle('on', b.dataset.split === (two ? '2' : '1')));
   document.querySelectorAll('.co-tabs[data-slot]').forEach(t => { const sl = +t.dataset.slot;
     t.querySelectorAll('button[data-co]').forEach(b => b.classList.toggle('on', b.dataset.co === coCoin(sl))); });
+  document.querySelectorAll('.co-pick select[data-slot]').forEach(sel => { const c = coCoin(+sel.dataset.slot);
+    if (sel.value !== c && document.activeElement !== sel) sel.value = c; });
   document.querySelectorAll('.lw-slot[data-asset]').forEach(slot => {
     if (slot.classList.contains('co-slot')) {
       const sl = +(slot.dataset.slot || 0);
@@ -9472,8 +9474,8 @@ setInterval(() => { if (!document.hidden) Object.values(LW).forEach(o => { if (o
 /* 2026-10-23 (user): Charts tab - much wider on desktop (a strip of the BRAIN background still shows at the sides), sized for phones */
 .co-wrap { max-width:none !important; width:min(1500px, calc(100vw - var(--sbw, 0px) - 10vw)); box-sizing:border-box; padding:6px 0 40px !important; }
 body.co-two .co-wrap { width:calc(100vw - var(--sbw, 0px) - 5vw); }
-.co-top { display:flex; align-items:center; gap:10px; }
-.co-top .co-note { flex:1; min-width:0; }
+.co-top { display:flex; align-items:center; justify-content:flex-end; gap:10px; }
+.co-pick { display:none; }
 .co-split { display:inline-flex; padding:3px; gap:2px; border-radius:999px; background:rgba(30,46,50,.42); border:1px solid rgba(255,255,255,.14); flex:none; }
 .co-split button { display:inline-flex; align-items:center; gap:5px; padding:6px 12px; border:0; border-radius:999px; background:transparent;
   color:#d6cac4; font:inherit; font-weight:800; cursor:pointer; }
@@ -9493,9 +9495,13 @@ body.co-two .co-win .lw-chart { height:clamp(420px, calc(100vh - 340px), 760px) 
   .co-top { flex-wrap:wrap; }
   .co-win { padding:10px 8px !important; border-radius:14px; }
   .co-win .lw-chart, body.co-two .co-win .lw-chart { height:clamp(320px, 52vh, 500px) !important; }
-  .co-tabs { gap:4px; flex-wrap:nowrap !important; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
-  .co-tabs::-webkit-scrollbar { display:none; }
-  .co-tabs button { padding:6px 11px; font-size:12.5px; flex:none; }
+  /* 2026-10-23 (user): the coin pills wouldn't scroll on phones - a dropdown per chart instead */
+  .co-tabs { display:none !important; }
+  .co-pick { display:flex; align-items:center; gap:8px; margin:0 0 10px; color:#d6cac4; font-weight:800; font-size:13px; }
+  .co-pick select { -webkit-appearance:none; appearance:none; flex:1; max-width:180px; padding:9px 34px 9px 14px; border-radius:999px;
+    border:1px solid #e9a5bb; color:#2a2226; background:#e9a5bb url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%232a2226' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 13px center / 12px 8px;
+    font:inherit; font-size:16px; font-weight:800; letter-spacing:.5px; }
+  .co-split button { padding:8px 14px; }
 }
 </style>
 </head><body>
@@ -10189,16 +10195,16 @@ def chart_only_html(full=False):
     charts themselves are mounted by the page script (lwAttach) so they survive the 1s refresh."""
     def win(slot):
         tabs = "".join(f'<button type="button" data-co="{c}" onclick="coPick({slot},&#39;{c}&#39;)">{c}</button>' for c in _pub.CHART_PRODUCTS)
-        return (f'<div class="lw-win co-win co-win{slot}"><div class="co-tabs" data-slot="{slot}">{tabs}</div>'
+        opts = "".join(f'<option value="{c}">{c}</option>' for c in _pub.CHART_PRODUCTS)
+        pick = (f'<label class="co-pick"><span>Coin</span><select data-slot="{slot}" aria-label="Pick a coin" '
+                f'onchange="coPick({slot}, this.value)">{opts}</select></label>')
+        return (f'<div class="lw-win co-win co-win{slot}"><div class="co-tabs" data-slot="{slot}">{tabs}</div>{pick}'
                 f'<div class="lw-slot co-slot" data-slot="{slot}" data-asset="{"BTC" if slot == 0 else "ETH"}"><span class="hint">Loading chart&hellip;</span></div></div>')
-    note = ('Live charts for every coin &middot; your BRAIN membership includes these. <a href="/analysis">Back to BRAIN Analysis</a>'
-            if full else
-            'Chart Only membership &middot; live charts, indicators and chart patterns. '
-            'Want the calls, flip radar and alerts? <a href="/pricing">See the full BRAIN memberships</a>')
+    # 2026-10-23 (user): no membership / back-to-dashboard note on the Charts page, on any screen
     split = ('<div class="co-split" role="group" aria-label="How many charts">'
              '<button type="button" data-split="1" onclick="coSplit(1)" title="One chart"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>1</button>'
              '<button type="button" data-split="2" onclick="coSplit(2)" title="Two charts side by side"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="4" width="8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>2</button></div>')
-    return (f'<div class="co-wrap"><div class="co-top"><div class="co-note">{note}</div>{split}</div>'
+    return (f'<div class="co-wrap"><div class="co-top">{split}</div>'
             f'<div class="co-grid">{win(0)}{win(1)}</div></div>')
 
 
