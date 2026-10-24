@@ -267,7 +267,7 @@ def landing(user=None):
         '<section class="card"><h3><span id="nm">BTC</span> news</h3><div class="news" id="news"><span class="mute">loading...</span></div></section>'
         '</aside></div></main>'
         '<footer>For informational and educational use only &middot; not financial advice &middot; '
-        '<a href="/terms">Terms &amp; conditions</a></footer>')
+        '<a href="/info">Info Center</a> &middot; <a href="/terms">Terms &amp; conditions</a></footer>')
     return page("BRAIN", body, LANDING_CSS, scripts=LANDING_JS)
 
 
@@ -385,6 +385,7 @@ def app_tabs(user, active="live", pending=0):
         main = [("charts", "/charts", _ICO_CHART + "Charts")]
     else:
         main = [("live", "/analysis", _ICO_GEAR + "Analysis"), ("charts", "/charts", _ICO_CHART + "Charts")]
+    main.append(("info", "/info", "Info Center"))
     right = []
     if user and user.get("role") != "owner":
         right.append(("pricing", "/pricing", "Membership"))
@@ -700,3 +701,156 @@ def terms_page():
             'Terms &amp; conditions</h1><p class="mute">Last updated October 22, 2026.</p>' + items
             + '<p style="margin-top:18px"><a class="btn cream" href="/">Back home</a></p></div>')
     return page("Terms - BRAIN", body, GUIDE_CSS)
+
+
+# ================================================================== INFO CENTER (2026-10-24, user: "a useful links + video page called the
+# Info Center, BRAIN themed - real accredited sites and YouTube that teach reading 15-min charts and candles, passive and active investing,
+# options / puts / shorts / longs, free trading simulators, and BRAIN's favorite tools"). Public page, links only, nothing affiliated.
+# Video links open a YouTube search for the topic + channel, so they never go dead when a single video is taken down.
+def _yt(q):
+    import urllib.parse as _u
+    return "https://www.youtube.com/results?search_query=" + _u.quote_plus(q)
+
+
+INFO_SECTIONS = [
+    ("start", "Start here: how BRAIN's markets work", "The 15-minute UP / DOWN rounds BRAIN reads, straight from the source.", [
+        ("Kalshi: crypto markets explained", "https://help.kalshi.com/markets/popular-markets/crypto-markets", "Kalshi Help Center",
+         "How the 15-minute BTC and XRP up/down markets are set up and how they settle."),
+        ("Kalshi market rules", "https://help.kalshi.com/en/articles/13823838-market-rules", "Kalshi Help Center",
+         "The official rules: the line, close time and what counts as UP."),
+        ("CF Benchmarks", "https://www.cfbenchmarks.com/", "CF Benchmarks",
+         "The regulated price indexes Kalshi's crypto rounds settle on - the 'real' price BRAIN tracks."),
+        ("CFTC: learn and protect", "https://www.cftc.gov/LearnAndProtect", "U.S. CFTC",
+         "The federal regulator for event contracts and futures - plain-English guides and fraud alerts."),
+        ("Kalshi responsible trading hub", "https://help.kalshi.com/en/articles/13823838-responsible-trading-hub", "Kalshi Help Center",
+         "Deposit limits, cool-offs and self-exclusion tools."),
+    ]),
+    ("candles", "Reading candles and 15-minute charts", "What every candle on BRAIN's charts is telling you, and how to read UP vs DOWN.", [
+        ("What is a Japanese candlestick?", "https://www.babypips.com/learn/forex/what-is-a-japanese-candlestick", "BabyPips School of Pipsology",
+         "Open, high, low, close and the wick in one picture - the best free first lesson."),
+        ("Summary of candlestick patterns", "https://www.babypips.com/learn/forex/summary-of-candlesticks", "BabyPips",
+         "Hammers, dojis, engulfing candles and what they suggest about buyers vs sellers."),
+        ("Candlestick charting", "https://www.investopedia.com/trading/candlestick-charting-what-is-it/", "Investopedia",
+         "Reference guide to candle anatomy and the classic reversal and continuation patterns."),
+        ("TradingView: free live charts", "https://www.tradingview.com/", "TradingView",
+         "The charting site behind BRAIN's charts. Switch to 1m / 5m / 15m and add RSI to practice."),
+        ("TradingView ideas and education", "https://www.tradingview.com/education/", "TradingView",
+         "Free community lessons on support, resistance, trend lines and indicators."),
+    ]),
+    ("signals", "The signals on BRAIN, explained", "Each reading on the Analysis page, and a place to learn it properly.", [
+        ("RSI (Relative Strength Index)", "https://www.investopedia.com/terms/r/rsi.asp", "Investopedia",
+         "BRAIN's RSI box: above 70 is stretched up, below 30 stretched down."),
+        ("Support and resistance", "https://www.investopedia.com/trading/support-and-resistance-basics/", "Investopedia",
+         "Why price bounces off the same levels - the idea behind line crosses and walls."),
+        ("Order book and market depth", "https://www.investopedia.com/terms/o/order-book.asp", "Investopedia",
+         "Bids, asks and the 'walls' BRAIN flags near the price."),
+        ("Liquidity and fair value gaps", _yt("fair value gap liquidity sweep explained beginner"), "YouTube",
+         "Videos on the sweep and gap structure BRAIN reads on 1m-1d charts."),
+        ("Bid-ask spread and fees", "https://www.investopedia.com/terms/b/bid-askspread.asp", "Investopedia",
+         "Why winning more often isn't the same as making money once the spread and fees are counted."),
+    ]),
+    ("passive", "Passive investing (long-term, set-and-forget)", "Slow, boring and historically the most reliable way to build wealth.", [
+        ("Investor.gov: investing basics", "https://www.investor.gov/introduction-investing", "U.S. SEC",
+         "The SEC's free starter course: stocks, bonds, funds, risk and compounding."),
+        ("Bogleheads wiki", "https://www.bogleheads.org/wiki/Main_Page", "Bogleheads",
+         "Low-cost index funds, the three-fund portfolio and how to start."),
+        ("FINRA: investing for everyone", "https://www.finra.org/investors", "FINRA",
+         "Fund fees, broker checks and tools from the industry regulator."),
+        ("Khan Academy: finance and capital markets", "https://www.khanacademy.org/economics-finance-domain/core-finance", "Khan Academy",
+         "Free video course on interest, stocks, bonds and how markets price risk."),
+        ("Ben Felix: Common Sense Investing", _yt("Ben Felix Common Sense Investing index funds"), "YouTube",
+         "Evidence-based videos on index investing from a portfolio manager."),
+    ]),
+    ("active", "Active trading: longs, shorts, options, puts and calls", "How traders bet on direction - and what each one can cost you.", [
+        ("Options Industry Council", "https://www.optionseducation.org/", "OIC (from OCC, the options clearinghouse)",
+         "The industry's free, unbiased options school: calls, puts, strategies, risk."),
+        ("Options strategies quick guide", "https://www.optionseducation.org/landingpages-options-strategy-quick-guide", "OIC",
+         "One page of common strategies with their max gain and max loss."),
+        ("Investor bulletin: short sales", "https://www.investor.gov/additional-resources/news-alerts/alerts-bulletins/investor-bulletin-introduction-short-sales", "U.S. SEC",
+         "How shorting works, borrowing costs and why losses can be unlimited."),
+        ("Short selling, defined", "https://www.investor.gov/introduction-investing/investing-basics/glossary/short-selling", "U.S. SEC",
+         "The plain-English glossary entry."),
+        ("Long vs short positions", "https://www.investopedia.com/ask/answers/100314/whats-difference-between-long-and-short-position-market.asp", "Investopedia",
+         "Being long (betting up) vs short (betting down) in one read."),
+        ("tastylive: options and futures", _yt("tastylive options basics calls puts"), "YouTube (tastylive)",
+         "Free daily shows that teach options from the ground up."),
+    ]),
+    ("sims", "Free trading simulators (practice with fake money)", "Test an idea for weeks before risking a dollar - the way BRAIN backtests.", [
+        ("Webull paper trading", "https://www.webull.com/paper-trading", "Webull",
+         "Free fake-money account with stocks, ETFs and options on the real app."),
+        ("Investopedia stock simulator", "https://www.investopedia.com/simulator/", "Investopedia",
+         "Free browser simulator with $100k of play money and games you can join."),
+        ("thinkorswim paperMoney", "https://www.schwab.com/trading/thinkorswim", "Charles Schwab",
+         "Pro-level charts and options tools with a paper-trading mode."),
+        ("TradingView paper trading", "https://www.tradingview.com/", "TradingView",
+         "Practice orders right on the chart from the trading panel."),
+    ]),
+    ("videos", "Video school", "Hand-picked topics and channels. Each link opens fresh YouTube results so it never goes stale.", [
+        ("How to read candlestick charts", _yt("how to read candlestick charts for beginners"), "YouTube", "Start here if candles are new."),
+        ("Trading 15-minute and 1-minute charts", _yt("how to read 1 minute 15 minute chart trend scalping beginner"), "YouTube",
+         "Short-timeframe trend, momentum and when NOT to trade."),
+        ("Rayner Teo: price action", _yt("Rayner Teo price action candlestick"), "YouTube", "Clear lessons on trend, support and resistance."),
+        ("The Plain Bagel: investing explained", _yt("The Plain Bagel investing explained"), "YouTube", "Honest, jargon-free finance from a CFA."),
+        ("Khan Academy: options, calls and puts", _yt("Khan Academy call option put option"), "YouTube", "The math of options, step by step."),
+        ("Prediction markets explained", _yt("how prediction markets work Kalshi explained"), "YouTube", "How event contracts like BRAIN's rounds are priced."),
+    ]),
+    ("favorites", "BRAIN's favorites", "The tools we'd keep open next to BRAIN. Not sponsored, not affiliated.", [
+        ("TradingView", "https://www.tradingview.com/", "Charts", "Best free charting anywhere."),
+        ("Kalshi", "https://kalshi.com/", "CFTC-regulated exchange", "Where the 15-minute rounds BRAIN reads are listed."),
+        ("Webull", "https://www.webull.com/", "Brokerage + paper trading", "Free paper trading and clean charts on mobile."),
+        ("CoinGecko", "https://www.coingecko.com/", "Crypto data", "Prices, volume and market caps across exchanges."),
+        ("Investopedia dictionary", "https://www.investopedia.com/financial-term-dictionary-4769738", "Reference", "Look up any term on BRAIN."),
+    ]),
+    ("help", "Play it safe", "Real money deserves real limits.", [
+        ("FINRA BrokerCheck", "https://brokercheck.finra.org/", "FINRA", "Check any broker or advisor before you trust them."),
+        ("SEC fraud alerts", "https://www.investor.gov/protect-your-investments/fraud", "U.S. SEC", "Spot pump-and-dumps, fake gurus and crypto scams."),
+        ("National Council on Problem Gambling", "https://www.ncpgambling.org/", "NCPG", "Free, confidential help 24/7 - call or text 1-800-GAMBLER."),
+    ]),
+]
+
+INFO_CSS = r"""
+.ic{max-width:1060px;margin:0 auto;padding:14px 16px 60px;font-family:Carlito,Calibri,'Segoe UI',sans-serif}
+.ic-hero{display:flex;align-items:center;gap:14px;margin:6px 0 4px}
+.ic-hero h1{font-family:Fraunces,Georgia,serif;font-weight:700;color:#fbf4ec;margin:0;font-size:30px}
+.ic-hero p{margin:2px 0 0;color:#e2d4c9}
+.ic-jump{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px}
+.ic-jump a{font:700 11px Montserrat,Arial,sans-serif;letter-spacing:1px;text-decoration:none;color:#dcbb91;border:1px solid rgba(220,187,145,.35);
+  border-radius:20px;padding:5px 11px;background:rgba(56,45,50,.6)}
+.ic-jump a:hover{background:rgba(233,165,187,.15);color:#fbf4ec}
+.ic-sec{margin-top:26px;scroll-margin-top:12px}
+.ic-sec h2{font:700 13px Montserrat,Arial,sans-serif;color:#dcbb91;letter-spacing:1.6px;margin:0 0 2px;text-transform:uppercase}
+.ic-sec .sub{color:#b9a89c;font-size:13.5px;margin:0 0 10px}
+.ic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.ic-card{display:block;text-decoration:none;background:rgba(56,45,50,.85);border:1px solid rgba(240,214,200,.14);border-radius:14px;
+  padding:12px 14px;transition:border-color .15s,transform .15s}
+.ic-card:hover{border-color:#e9a5bb;transform:translateY(-1px)}
+.ic-card b{display:block;color:#fbf4ec;font-size:15px;line-height:1.25}
+.ic-card .src{display:inline-block;font:700 10px Montserrat,Arial,sans-serif;letter-spacing:.8px;color:#3dd69c;margin:4px 0 5px;text-transform:uppercase}
+.ic-card .src.yt{color:#ff7b7b}
+.ic-card span.d{display:block;color:#e2d4c9;font-size:13.5px;line-height:1.4}
+.ic-fav .ic-card{border-color:rgba(229,184,92,.45)}
+.ic-note{margin-top:30px;padding:12px 14px;border-radius:14px;border:1px dashed rgba(240,214,200,.25);color:#b9a89c;font-size:13px}
+@media(max-width:560px){.ic-hero h1{font-size:24px}.ic-grid{grid-template-columns:1fr}}
+"""
+
+
+def info_center_page(user=None):
+    jump = "".join(f'<a href="#{k}">{E(t.split(":")[0].split("(")[0].strip())}</a>' for k, t, _s, _i in INFO_SECTIONS)
+    secs = []
+    for key, title, sub, items in INFO_SECTIONS:
+        cards = "".join(
+            f'<a class="ic-card" href="{E(u)}" target="_blank" rel="noopener noreferrer"><b>{E(n)}</b>'
+            f'<span class="src{" yt" if "youtube.com" in u else ""}">{"&#9654; " if "youtube.com" in u else ""}{E(src)}</span>'
+            f'<span class="d">{E(d)}</span></a>' for n, u, src, d in items)
+        secs.append(f'<section class="ic-sec{" ic-fav" if key == "favorites" else ""}" id="{key}"><h2>{E(title)}</h2>'
+                    f'<p class="sub">{E(sub)}</p><div class="ic-grid">{cards}</div></section>')
+    tabs = app_tabs(user, "info") if user else (
+        '<div class="top" style="padding:10px 16px"><a class="brand" href="/">' + brain_logo(34, "t") + '<b>BRAIN</b></a></div>')
+    body = (tabs + '<div class="ic"><div class="ic-hero">' + brain_logo(52, "i")
+            + '<div><h1>Info Center</h1><p>Free, trusted places to learn charts, candles, investing and trading - picked by BRAIN.</p></div></div>'
+            f'<div class="ic-jump">{jump}</div>' + "".join(secs)
+            + '<div class="ic-note">Every link goes to an outside site BRAIN doesn&rsquo;t own or control, and none of them pay us. '
+              'This page is for learning only - not financial advice. Trading and event contracts can lose money fast; '
+              'practice on a simulator first and never trade money you can&rsquo;t afford to lose. '
+              '<a href="/terms" style="color:#e9a5bb">Terms</a></div></div>')
+    return page("Info Center - BRAIN", body, GUIDE_CSS + INFO_CSS)

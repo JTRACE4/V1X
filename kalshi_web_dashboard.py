@@ -16399,7 +16399,7 @@ def og_desc():
 # ================================================================ accounts + public site (2026-10-20)
 # "/" is the public welcome page (free live chart, news, money habits). The dashboard lives at "/app" and needs an approved
 # account; a device that logged in once stays recognized. Trading controls are owner-only.
-PUBLIC_GET = {"/pricing", "/og.png", "/", "/login", "/signup", "/forgot", "/reset", "/setup", "/logout", "/terms", "/auth/approve", "/auth/deny",
+PUBLIC_GET = {"/pricing", "/info", "/og.png", "/", "/login", "/signup", "/forgot", "/reset", "/setup", "/logout", "/terms", "/auth/approve", "/auth/deny",
               "/health", "/favicon.ico"}
 OWNER_ONLY = {"/admin", "/arm_live", "/set_live_size", "/set_flip_target", "/set_flip_max_price", "/set_main_max_price",
               "/set_buy_delay", "/set_main_sell_price", "/set_flip_sell_mode", "/set_flip_hold_if_certain",
@@ -16620,6 +16620,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, f_.read(), ctype, [("Cache-Control", "public, max-age=604800")])
         if path == "/terms":
             return self._send(200, _site.terms_page())
+        if path == "/info":
+            return self._send(200, _site.info_center_page(user))
         if path == "/pricing":
             plans = [(k, lab, (f"${c // 100:,}" if c % 100 == 0 else f"${c / 100:,.2f}"), f"${c / 100 / d:,.2f}/day", _bill.checkout_url(k, user))
                      for k, (d, c, lab) in _bill.PASSES.items()]
