@@ -87,8 +87,16 @@ def _stripe(method, path, data=None):
     req = _r.Request("https://api.stripe.com/v1/" + path, data=body, method=method,
                      headers={"Authorization": "Bearer " + os.environ["STRIPE_SECRET_KEY"],
                               "Content-Type": "application/x-www-form-urlencoded"})
-    with _r.urlopen(req, timeout=20) as resp:
-        return json.loads(resp.read().decode())
+    try:
+        with _r.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:                       # show Stripe's own reason in the log, not just "400 Bad Request"
+        body = ""
+        try:
+            body = e.read().decode()[:400]
+        except Exception:
+            pass
+        raise RuntimeError(f"Stripe {method} {path.split('?')[0]}: {e} {body}") from None
 
 
 def ensure_stripe():
@@ -142,11 +150,11 @@ def ensure_stripe():
     try:
         if not st.get("portal_cfg"):
             cfg = _stripe("POST", "billing_portal/configurations", {
-                "business_profile[headline]": "BRAIN membership - turn auto-renew off or on, update your card, see receipts",
+                "business_profile[headline]": "BRAIN membership: auto-renew, card, receipts",
                 "business_profile[privacy_policy_url]": base + "/terms", "business_profile[terms_of_service_url]": base + "/terms",
                 "features[subscription_cancel][enabled]": "true", "features[subscription_cancel][mode]": "at_period_end",
                 "features[payment_method_update][enabled]": "true", "features[invoice_history][enabled]": "true",
-                "features[customer_update][enabled]": "false", "default_return_url": base + "/pricing"})
+                "default_return_url": base + "/pricing"})
             st["portal_cfg"] = cfg["id"]
             made.append("billing page")
             with _auth._lock:
