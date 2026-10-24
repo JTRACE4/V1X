@@ -324,7 +324,7 @@ def run(coin="BTC"):
             t["_ex"] = ex
             per[mark] = {"kp": f["kp"], "call": call, "fav": fav, "t": t, "dist": f["dist"]}
         if per:
-            rows.append({"up": up, "ticker": m["ticker"], "open": m["open"], "per": per})
+            rows.append({"up": up, "ticker": m["ticker"], "open": m["open"], "per": per, "kpath": kp})
     if len(rows) < 200:
         print(f"[trend study] only {len(rows)} rounds replayed")
         return None
@@ -440,6 +440,8 @@ def run(coin="BTC"):
             _log_edge(coin, res["edge_report"])
             res["tier_report"] = tier_report(rows, outcome, m2)
             _log_tiers(coin, res["tier_report"])
+            res["dip_report"] = dip_report(rows, outcome, m2)
+            _log_dip(coin, res["dip_report"])
         except Exception as _sre:
             print(f"[8:00 report] {coin}: {_sre!r}")
     except Exception as _e2:
@@ -1083,6 +1085,85 @@ def _log_tiers(coin, rep):
         print(f"[tiers] {coin} {name:<32} all 30d by tier (price<=89c): " + " | ".join(
             f"{k} {_f(s)}" for k, s in v["by_tier_all"].items()) + f" | over 89c (never bought) {_f(v['above_cap_all'])}")
         print(f"[tiers] {coin} {name:<32} before (every call, any price): unseen {_f(v['unseen_before'])} | all {_f(v['all_before'])}")
+
+
+# ================================================================== ENTRY TIMING (2026-10-24, user: "fix that"). The calls are right ~86-91% of the time but the
+# market already charges for it, so the fix is to PAY LESS: after the 8:00 call, rest a buy order d cents under the price at the call
+# and only get filled if the market dips that far within the next W minutes (a miss = no trade). Fill price = the limit, never better.
+# d + W + the 89c cap are picked on the older 70% of rounds and checked on the newest 30%; losers that dip first are counted honestly.
+def dip_report(rows, outcome, m2):
+    import backtest_engine as _bt
+    R = [r for r in rows if 480 in r["per"]]
+    sp = int(len(R) * 0.7)
+    mm = m2.get("480") or {}
+    if mm.get("feats") != M2_FEATS or not R:
+        return {}
+    maj = lambda e, m, s: "YES" if [e, m, s].count("YES") >= 2 else ("NO" if [e, m, s].count("NO") >= 2 else None)
+    methods = {
+        "8:00 new method": lambda r: _v2_side(r, 480, m2, force=True),
+        "majority + new 8:00 must agree": lambda r: (lambda v, s: v if (v and s == v) else None)(
+            maj(_side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2)), _v2_side(r, 480, m2, force=True)),
+        "all 3 agree": lambda r: (lambda e, m_, s: s if (e and m_ and s and e == m_ == s) else None)(
+            _side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2)),
+    }
+    out = {}
+    for name, fn in methods.items():
+        T = []
+        for i, r in enumerate(R):
+            side = fn(r)
+            if not side:
+                continue
+            x = r["per"][480]
+            c0 = x["kp"] if side == "YES" else 1 - x["kp"]
+            T0 = r["open"] + 480
+            low = {}                                   # minutes after the call -> cheapest the side's ask got that minute
+            for e, v, b_, a_ in (r.get("kpath") or []):
+                if T0 < e <= T0 + 6 * 60:
+                    ask = (a_ if side == "YES" else (1 - b_ if b_ is not None else None))
+                    if ask is not None and ask > 0:
+                        low[int((e - T0 + 59) // 60)] = ask
+            T.append({"i": i, "w": (side == "YES") == r["up"], "c0": c0, "low": low})
+        tr = [t for t in T if t["i"] < sp]
+        un = [t for t in T if t["i"] >= sp]
+
+        def fills(ts, d, W, cap):
+            g = []
+            for t in ts:
+                lim = min(cap, t["c0"] - d)
+                if lim <= 0.05:
+                    continue
+                if any(m <= W and a <= lim for m, a in t["low"].items()):
+                    g.append((t["w"], _bt.pnl(t["w"], lim)))
+            return g
+        base = lambda ts: _summ([(t["w"], _bt.pnl(t["w"], t["c0"])) for t in ts])
+        best = None
+        for d in (0.0, 0.02, 0.04, 0.06, 0.08, 0.10, 0.15):
+            for W in (1, 2, 3, 4, 6):
+                for cap in (0.89, 0.85, 0.80, 0.75):
+                    g = fills(tr, d, W, cap)
+                    if len(g) < 40 or len(g) < 0.2 * len(tr):
+                        continue
+                    s_ = _summ(g)
+                    key = (s_["pnl"], s_["win"])
+                    if best is None or key > best[0]:
+                        best = (key, d, W, cap)
+        res = {"calls": len(T), "now_unseen": base(un), "now_all": base(T)}
+        if best:
+            _k, d, W, cap = best
+            res.update({"dip": d, "minutes": W, "cap": cap, "train": _summ(fills(tr, d, W, cap)),
+                        "unseen": _summ(fills(un, d, W, cap)), "all": _summ(fills(T, d, W, cap)),
+                        "fill_rate_unseen": round(len(fills(un, d, W, cap)) / len(un), 3) if un else 0})
+        out[name] = res
+    return out
+
+
+def _log_dip(coin, rep):
+    for name, v in rep.items():
+        if "dip" not in v:
+            print(f"[dip] {coin} {name}: no dip rule filled 20% of calls with 40+ trades")
+            continue
+        print(f"[dip] {coin} {name:<32} buy now: unseen {_f(v['now_unseen'])} | rule: limit {v['dip']*100:.0f}c under the call price, "
+              f"{v['minutes']} min, cap {v['cap']:.0%}, filled {v['fill_rate_unseen']:.0%} -> unseen {_f(v['unseen'])} | all 30d {_f(v['all'])}")
 
 
 def _log_sealed(coin, rep):
