@@ -4974,6 +4974,11 @@ def poll_loop():
                         if not _rev and _mtf is not None and kalshi_price is not None and live_price and target:
                             _tt2 = _tst.trend_from_windows(_mtf.windows.get(asset["symbol"]), trend_read)
                             _tst.live_extras(_tt2, _mtf.windows.get(asset["symbol"]), _crosses)
+                            try:
+                                _bw = get_book_walls(asset["symbol"], live_price) or {}
+                            except Exception:
+                                _bw = {}
+                            _tst.live_feeds(_tt2, _tn, rsi_multi.get("rsi1"), _bw, asset["name"])
                             _v2 = _tst.m2_live(_mark, kalshi_price, (live_price - target) / target, _tt2,
                                                (stage_calls.get("early") or {}).get("call") if _sk == "sealed" else None,
                                                coin=asset["name"])
@@ -10423,6 +10428,22 @@ def _tug_log(name, d):
                 ky = d["confidence"] if d["leaning"] == "YES" else 1 - d["confidence"]
             w.writerow([dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"), name, d.get("ticker"), int(tn["left"]), tn["spot"], tn["line"],
                         f"{tn['diff']:.6g}", f(tn["fair"]), f(tn["ex_up"]), f(tn["k_up"]), f(tn["liq_up"]), f(tn["fused"]), f(tn["flow_up"]), f(ky)])
+    except Exception:
+        pass
+    # 2026-10-24 (user: use the Dominator-style reads on the back end): log the order-book walls on the same 30s beat so
+    # the call model can learn from them once there are enough rounds
+    try:
+        sym = next(a["symbol"] for a in DASHBOARD_ASSETS if a["name"] == name)
+        bw = get_book_walls(sym, tn["spot"]) or {}
+        b, a_ = bw.get("bid_wall"), bw.get("ask_wall")
+        wl = os.path.join(_DATA_ROOT, "bot_state", "walls_log.csv")
+        new = not os.path.exists(wl)
+        with open(wl, "a", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            if new:
+                w.writerow(["ts_utc", "asset", "ticker", "seconds_left", "spot", "bid_wall_usd", "bid_wall_dist_pct", "ask_wall_usd", "ask_wall_dist_pct"])
+            w.writerow([dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"), name, d.get("ticker"), int(tn["left"]), tn["spot"],
+                        f"{b[1]:.0f}" if b else "", f"{b[2]:.4f}" if b else "", f"{a_[1]:.0f}" if a_ else "", f"{a_[2]:.4f}" if a_ else ""])
     except Exception:
         pass
 

@@ -263,6 +263,8 @@ def run(coin="BTC"):
         print(f"[trend study] {coin}: not enough data yet ({len(markets)} rounds)")
         return None
     rs = {sec: _resample(cb, sec) for sec in (300, 900, 3600, 86400)}
+    feeds, walls = _load_live_logs()
+    print(f"[trend study] {coin}: live feed log covers {sum(1 for m in markets if m['ticker'] in feeds)} rounds, walls {sum(1 for m in markets if m['ticker'] in walls)}")
     rows = []                                    # one per round: {mark: {...}}
     for m in sorted(markets, key=lambda x: x["open"]):
         kp = kcache.get(m["ticker"]) or []
@@ -302,6 +304,23 @@ def run(coin="BTC"):
             ex["chop"] = (sum(abs(cl4[i] / cl4[i + 1] - 1) for i in range(len(cl4) - 1)) * 1000) if len(cl4) >= 3 else 0.0
             p4 = cb.get(last_min - 240 * 60)
             ex["r4h"] = ((f["spot"] / p4[3] - 1) * 100) if p4 else 0.0
+            r1 = f.get("r1_tv")
+            if r1 is not None:
+                ex["rsi"] = (r1 - 50) / 50
+            lv = _nearest(feeds.get(m["ticker"]), 900 - mark)
+            if lv:
+                if lv[1] is not None:
+                    ex["xflow"] = lv[1] - 0.5
+                if lv[2] is not None:
+                    ex["kmoney"] = lv[2] - 0.5
+                if lv[3] is not None:
+                    ex["liq"] = lv[3] - 0.5
+                ex["has_live"] = lv[1] is not None or lv[2] is not None
+            elif f.get("f2") is not None:                 # BTC replay: exchange taker flow from the candles
+                ex["xflow"] = f["f2"] - 0.5
+            wv = _nearest(walls.get(m["ticker"]), 900 - mark)
+            if wv:
+                ex["walls"] = wv[1]
             t["_ex"] = ex
             per[mark] = {"kp": f["kp"], "call": call, "fav": fav, "t": t, "dist": f["dist"]}
         if per:
@@ -538,7 +557,8 @@ import math as _m
 
 M2_FEATS = ["lk", "dist", "1m", "5m", "15m", "1h", "fvg_1m", "fvg_5m", "fvg_15m", "fvg_1h", "fvg_1d",
             "swp_1m", "swp_5m", "swp_15m", "swp_1h", "swp_1d",
-            "crosses", "oneway_dist", "chop", "chop_dist", "r4h"]
+            "crosses", "oneway_dist", "chop", "chop_dist", "r4h",
+            "xflow", "kmoney", "liq", "rsi", "walls", "has_live"]
 _m2 = {}
 
 
@@ -558,7 +578,13 @@ def m2_x(kp, dist, t):
                d if cr == 0 else 0.0,                    # one-way market: distance counts extra when it never crossed
                -sgn * chop / 5.0,                        # choppy last 4 minutes = less trust in the side price is on
                d * chop / 5.0,
-               max(-2.0, min(2.0, float(ex.get("r4h") or 0.0)))])
+               max(-2.0, min(2.0, float(ex.get("r4h") or 0.0))),
+               float(ex.get("xflow") or 0.0),               # exchange buyers vs sellers this round, -0.5..+0.5
+               float(ex.get("kmoney") or 0.0),              # the market's own money UP vs DOWN this round
+               float(ex.get("liq") or 0.0),                 # liquidations: shorts squeezed (+) vs longs flushed (-)
+               float(ex.get("rsi") or 0.0),                 # RSI 14 (1 min), -1..+1
+               float(ex.get("walls") or 0.0),               # bid wall vs ask wall near price, -1..+1
+               1.0 if ex.get("has_live") else 0.0])
 
 
 def _fit(X, y, l2=0.02, iters=400, lr=0.3):
@@ -653,6 +679,77 @@ def m2_model(coin="BTC"):
         except Exception:
             _m2[coin] = {}
     return _m2[coin] or {}
+
+
+LIVE_LOG = os.path.join(bt._ROOT, "bot_state", "tug_log.csv")
+WALL_LOG = os.path.join(bt._ROOT, "bot_state", "walls_log.csv")
+KMONEY_FIXED = 1792766280          # 2026-10-23 14:38 UTC: the market tape was undercounting (BTC) and dropping pulls (both) before this fix
+
+
+def _wall_score(bid_usd, bid_d, ask_usd, ask_d, near=0.3):
+    b = bid_usd if (bid_usd and bid_d is not None and bid_d <= near) else 0.0
+    a = ask_usd if (ask_usd and ask_d is not None and ask_d <= near) else 0.0
+    return (b - a) / (b + a) if (b + a) > 0 else 0.0
+
+
+def _load_live_logs():
+    """{ticker: [(seconds_left, xflow, kmoney, liq), ...]} and {ticker: [(seconds_left, wall_score), ...]} from the 30s logs."""
+    import csv as _csv
+    feeds, walls = {}, {}
+    fl = lambda x: float(x) if x not in ("", None) else None
+    try:
+        with open(LIVE_LOG, newline="", encoding="utf-8") as fh:
+            for r in _csv.DictReader(fh):
+                try:
+                    ts = bt._ts(r["ts_utc"] + "Z")
+                    km = fl(r.get("kalshi_money_up"))
+                    if ts < KMONEY_FIXED:
+                        km = None
+                    feeds.setdefault(r["ticker"], []).append((int(r["seconds_left"]), fl(r.get("exchange_up")), km, fl(r.get("liquidation_up"))))
+                except Exception:
+                    continue
+    except FileNotFoundError:
+        pass
+    try:
+        with open(WALL_LOG, newline="", encoding="utf-8") as fh:
+            for r in _csv.DictReader(fh):
+                try:
+                    walls.setdefault(r["ticker"], []).append((int(r["seconds_left"]), _wall_score(
+                        fl(r["bid_wall_usd"]), fl(r["bid_wall_dist_pct"]), fl(r["ask_wall_usd"]), fl(r["ask_wall_dist_pct"]))))
+                except Exception:
+                    continue
+    except FileNotFoundError:
+        pass
+    return feeds, walls
+
+
+def _nearest(rows, left, tol=40):
+    best = None
+    for r in rows or ():
+        if abs(r[0] - left) <= tol and (best is None or abs(r[0] - left) < abs(best[0] - left)):
+            best = r
+    return best
+
+
+def live_feeds(t, tn, rsi, bw, coin):
+    """Live: exchange flow, market money, liquidations, RSI and walls into the model inputs (same scale as the replay)."""
+    ex = t.setdefault("_ex", {})
+    tn = tn or {}
+    if tn.get("ex_up") is not None:
+        ex["xflow"] = tn["ex_up"] - 0.5
+    if tn.get("k_up") is not None:
+        ex["kmoney"] = tn["k_up"] - 0.5
+    if tn.get("liq_up") is not None:
+        ex["liq"] = tn["liq_up"] - 0.5
+    if rsi is not None:
+        ex["rsi"] = (rsi - 50) / 50
+    try:
+        b, a = (bw or {}).get("bid_wall"), (bw or {}).get("ask_wall")
+        ex["walls"] = _wall_score(b[1] if b else None, b[2] if b else None, a[1] if a else None, a[2] if a else None)
+    except Exception:
+        ex["walls"] = 0.0
+    ex["has_live"] = any(k in ex for k in ("xflow", "kmoney"))
+    return t
 
 
 def live_extras(t, win, crosses):
