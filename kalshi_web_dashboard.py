@@ -7429,6 +7429,9 @@ function _voiceNext() {
   const fallback = () => { if (finished) return; try { a.onended = null; a.onerror = null; a.pause(); } catch (e) {} neuralBroken = true; _deviceSay(item.text, done); setTimeout(() => { neuralBroken = false; }, 120000); };
   a.onended = done; a.onerror = fallback;
   a.src = '/tts?v=' + neuralVoice + '&t=' + encodeURIComponent(item.text);
+  // 2026-10-24 (user: "have him talk a little faster, like a drill sergeant"): Sarge plays ~18% faster, same pitch
+  const _rate = neuralVoice === 'sarge' ? 1.18 : 1.0;
+  try { a.preservesPitch = true; a.defaultPlaybackRate = _rate; a.playbackRate = _rate; } catch (e) {}
   if (neuralVoice === 'sarge' || _vChain) _voicePunch(a);
   a.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
   const pr = a.play();
