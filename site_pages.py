@@ -808,49 +808,312 @@ INFO_SECTIONS = [
     ]),
 ]
 
+# ---- Info Center art (2026-10-24, user: "vector art that describes stuff, a nice art style that matches BRAIN, a background image,
+# video thumbnails, artsy and high quality"). Flat-vector, the same dusk palette as the hero (static/hero.*): night ink, rose and tan
+# brain halves, teal-up / pink-down candles, gold sparkle. Everything is inline SVG - no extra requests, sharp at any size.
+_C = {"ink": "#1a1416", "panel": "#2a2f33", "panel2": "#1f2427", "grid": "#3a4247", "up": "#43cdb7", "down": "#e8798f",
+      "rose": "#e9a5bb", "tan": "#dcbb91", "gold": "#e5b85c", "cream": "#fbf4ec", "sky": "#2c3446", "dusk": "#c99aa3"}
+
+
+def _cand(x, o, c, w=7, wick=4):
+    up = c < o                               # svg y grows down: close above open = up
+    top, bot = min(o, c), max(o, c)
+    col = _C["up"] if up else _C["down"]
+    return (f'<line x1="{x + w / 2}" y1="{top - wick}" x2="{x + w / 2}" y2="{bot + wick}" stroke="{col}" stroke-width="1.6"/>'
+            f'<rect x="{x}" y="{top}" width="{w}" height="{max(2, bot - top)}" rx="1.2" fill="{col}"/>')
+
+
+def _monitor(inner, w=160, h=100, tag=True):
+    """A little BRAIN desk monitor (same as the three screens in the hero)."""
+    return (f'<rect x="2" y="2" width="{w - 4}" height="{h - 4}" rx="9" fill="{_C["panel2"]}" stroke="#0e1113" stroke-width="3"/>'
+            + "".join(f'<line x1="10" y1="{y}" x2="{w - 10}" y2="{y}" stroke="{_C["grid"]}" stroke-width=".7" opacity=".7"/>'
+                      for y in range(22, h - 6, 16))
+            + (f'<rect x="12" y="9" width="26" height="3.5" rx="1.7" fill="{_C["rose"]}"/>'
+               f'<rect x="{w - 34}" y="9" width="22" height="3.5" rx="1.7" fill="{_C["up"]}"/>' if tag else "") + inner)
+
+
+def _sparkle(x, y, r=6, col=None):
+    col = col or _C["gold"]
+    return (f'<path d="M{x} {y - r}Q{x + r * .18} {y - r * .18} {x + r} {y}Q{x + r * .18} {y + r * .18} {x} {y + r}'
+            f'Q{x - r * .18} {y + r * .18} {x - r} {y}Q{x - r * .18} {y - r * .18} {x} {y - r}Z" fill="{col}"/>')
+
+
+def _brain(x, y, s=1.0):
+    """The two-tone BRAIN (rose + tan halves) - tiny mascot for the art."""
+    return (f'<g transform="translate({x} {y}) scale({s})">'
+            f'<path d="M0 -14C-4 -18 -12 -17 -13 -11C-19 -10 -20 -2 -16 1C-19 6 -15 12 -9 11C-7 15 -2 15 0 13Z" fill="{_C["rose"]}"/>'
+            f'<path d="M0 -14C4 -18 12 -17 13 -11C19 -10 20 -2 16 1C19 6 15 12 9 11C7 15 2 15 0 13Z" fill="{_C["tan"]}"/>'
+            f'<line x1="0" y1="-14" x2="0" y2="13" stroke="#6b4a52" stroke-width="1.2"/>'
+            f'<path d="M-10 -5q3 -2 6 0M-9 4q3 -2 6 0M4 -5q3 -2 6 0M3 4q3 -2 6 0" stroke="#fff" stroke-width="1.2" fill="none" opacity=".85"/></g>')
+
+
+def _svg(w, h, body, cls=""):
+    return f'<svg class="{cls}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">{body}</svg>'
+
+
+def _art_start():         # an event contract: YES / NO with the line
+    b = _monitor(
+        f'<line x1="14" y1="58" x2="146" y2="58" stroke="{_C["cream"]}" stroke-width="1.3" stroke-dasharray="4 3" opacity=".8"/>'
+        f'<path d="M14 72 L40 66 L58 70 L76 52 L96 56 L116 40 L146 34" stroke="{_C["gold"]}" stroke-width="2.4" fill="none" stroke-linecap="round"/>'
+        f'<circle cx="146" cy="34" r="4" fill="{_C["gold"]}"/>'
+        f'<rect x="16" y="22" width="34" height="14" rx="7" fill="{_C["up"]}"/><text x="33" y="32.5" font-size="9" font-weight="800" text-anchor="middle" fill="{_C["ink"]}" font-family="Arial">YES</text>'
+        f'<rect x="56" y="22" width="34" height="14" rx="7" fill="{_C["down"]}"/><text x="73" y="32.5" font-size="9" font-weight="800" text-anchor="middle" fill="{_C["ink"]}" font-family="Arial">NO</text>'
+        f'<text x="140" y="70" font-size="8" fill="{_C["cream"]}" font-family="Arial" text-anchor="end" opacity=".8">line</text>')
+    return _svg(160, 100, b + _sparkle(130, 24, 5))
+
+
+def _art_candles():
+    cs = [(14, 70, 60), (25, 60, 66), (36, 66, 50), (47, 50, 44), (58, 44, 54), (69, 54, 40), (80, 40, 30), (91, 30, 38),
+          (102, 38, 26), (113, 26, 32), (124, 32, 22), (135, 22, 28)]
+    b = _monitor("".join(_cand(x, o, c) for x, o, c in cs)
+                 + f'<path d="M17 66 Q50 58 70 48 T140 26" stroke="{_C["gold"]}" stroke-width="1.6" fill="none" opacity=".9"/>')
+    # magnified candle callout
+    b += (f'<g transform="translate(118 50)"><circle r="20" fill="{_C["ink"]}" stroke="{_C["cream"]}" stroke-width="1.5" opacity=".95"/>'
+          f'<line x1="0" y1="-14" x2="0" y2="14" stroke="{_C["up"]}" stroke-width="2"/><rect x="-5" y="-7" width="10" height="13" rx="2" fill="{_C["up"]}"/>'
+          f'<text x="9" y="-9" font-size="5.5" fill="{_C["cream"]}" font-family="Arial">high</text><text x="9" y="15" font-size="5.5" fill="{_C["cream"]}" font-family="Arial">low</text></g>')
+    return _svg(160, 100, b)
+
+
+def _art_signals():       # RSI gauge + walls
+    b = _monitor(
+        f'<path d="M30 76 A34 34 0 0 1 98 76" stroke="{_C["grid"]}" stroke-width="8" fill="none" stroke-linecap="round"/>'
+        f'<path d="M30 76 A34 34 0 0 1 52 45" stroke="{_C["up"]}" stroke-width="8" fill="none" stroke-linecap="round"/>'
+        f'<path d="M76 45 A34 34 0 0 1 98 76" stroke="{_C["down"]}" stroke-width="8" fill="none" stroke-linecap="round"/>'
+        f'<line x1="64" y1="76" x2="80" y2="50" stroke="{_C["gold"]}" stroke-width="3" stroke-linecap="round"/><circle cx="64" cy="76" r="4.5" fill="{_C["gold"]}"/>'
+        f'<text x="64" y="92" font-size="9" font-weight="800" fill="{_C["cream"]}" font-family="Arial" text-anchor="middle">RSI 62</text>'
+        + "".join(f'<rect x="{112 + i * 0}" y="{28 + i * 9}" width="{w}" height="6" rx="2" fill="{c}"/>'
+                  for i, (w, c) in enumerate([(14, _C["down"]), (30, _C["down"]), (10, _C["down"]), (8, _C["up"]), (34, _C["up"]), (16, _C["up"])])))
+    return _svg(160, 100, b)
+
+
+def _art_passive():       # a growing tree of coins on a slow curve
+    b = (f'<rect x="2" y="2" width="156" height="96" rx="12" fill="url(#gp)"/>'
+         f'<defs><linearGradient id="gp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{_C["sky"]}"/><stop offset="1" stop-color="#3a2c35"/></linearGradient></defs>'
+         f'<path d="M10 86 C60 84 90 70 150 18" stroke="{_C["up"]}" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".9"/>'
+         f'<path d="M10 86 C60 84 90 70 150 18 L150 96 L10 96Z" fill="{_C["up"]}" opacity=".12"/>'
+         f'<rect x="54" y="58" width="5" height="30" rx="2" fill="#6b4a3a"/>'
+         + "".join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{c}"/>' for x, y, r, c in
+                   [(56, 52, 15, "#2f6b5c"), (44, 58, 10, "#2f6b5c"), (68, 58, 10, "#2f6b5c"), (56, 44, 9, "#3c8a74")])
+         + "".join(f'<circle cx="{x}" cy="{y}" r="3.2" fill="{_C["gold"]}" stroke="#8a6a2a" stroke-width=".8"/>' for x, y in [(50, 50), (62, 47), (57, 58), (46, 60), (66, 57)])
+         + f'<text x="110" y="88" font-size="8" fill="{_C["cream"]}" font-family="Arial" opacity=".85">years &#8594;</text>' + _sparkle(140, 26, 5))
+    return _svg(160, 100, b)
+
+
+def _art_active():        # long vs short: bull arrow up, bear arrow down, option payoff hockey stick
+    b = _monitor(
+        f'<path d="M16 80 L40 56 L52 64 L76 30" stroke="{_C["up"]}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+        f'<path d="M70 28 L78 28 L77 36" stroke="{_C["up"]}" stroke-width="3" fill="none" stroke-linecap="round"/>'
+        f'<text x="20" y="34" font-size="9" font-weight="800" fill="{_C["up"]}" font-family="Arial">LONG</text>'
+        f'<path d="M86 30 L104 50 L114 44 L140 78" stroke="{_C["down"]}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+        f'<path d="M134 78 L141 79 L141 71" stroke="{_C["down"]}" stroke-width="3" fill="none" stroke-linecap="round"/>'
+        f'<text x="108" y="34" font-size="9" font-weight="800" fill="{_C["down"]}" font-family="Arial">SHORT</text>'
+        f'<path d="M60 88 L92 88 L118 66" stroke="{_C["gold"]}" stroke-width="1.8" fill="none" stroke-dasharray="3 2"/>'
+        f'<text x="96" y="94" font-size="6.5" fill="{_C["gold"]}" font-family="Arial">call payoff</text>')
+    return _svg(160, 100, b)
+
+
+def _art_sims():          # play money + a controller-style practice screen
+    b = _monitor(
+        "".join(_cand(x, o, c, 6, 3) for x, o, c in [(16, 60, 52), (26, 52, 56), (36, 56, 46), (46, 46, 50), (56, 50, 40)])
+        + f'<rect x="80" y="30" width="62" height="34" rx="6" fill="#2f5a4c" stroke="{_C["up"]}" stroke-width="1.2"/>'
+          f'<circle cx="111" cy="47" r="10" fill="none" stroke="{_C["cream"]}" stroke-width="1.2" opacity=".8"/>'
+          f'<text x="111" y="51" font-size="11" font-weight="800" fill="{_C["cream"]}" font-family="Arial" text-anchor="middle">$</text>'
+          f'<text x="111" y="78" font-size="8" font-weight="800" fill="{_C["tan"]}" font-family="Arial" text-anchor="middle">PAPER $100K</text>'
+          f'<rect x="18" y="72" width="22" height="10" rx="5" fill="{_C["up"]}"/><text x="29" y="79.5" font-size="6.5" font-weight="800" fill="{_C["ink"]}" font-family="Arial" text-anchor="middle">BUY</text>'
+          f'<rect x="44" y="72" width="22" height="10" rx="5" fill="{_C["down"]}"/><text x="55" y="79.5" font-size="6.5" font-weight="800" fill="{_C["ink"]}" font-family="Arial" text-anchor="middle">SELL</text>')
+    return _svg(160, 100, b)
+
+
+def _art_videos():
+    b = _monitor(f'<circle cx="80" cy="54" r="22" fill="{_C["rose"]}" opacity=".9"/><path d="M73 42 L93 54 L73 66Z" fill="{_C["ink"]}"/>'
+                 f'<rect x="14" y="84" width="132" height="4" rx="2" fill="{_C["grid"]}"/><rect x="14" y="84" width="52" height="4" rx="2" fill="{_C["gold"]}"/>'
+                 f'<circle cx="66" cy="86" r="4" fill="{_C["cream"]}"/>')
+    return _svg(160, 100, b)
+
+
+def _art_favorites():
+    b = (f'<rect x="2" y="2" width="156" height="96" rx="12" fill="{_C["panel2"]}" stroke="#0e1113" stroke-width="3"/>'
+         + _brain(80, 54, 1.9)
+         + "".join(_sparkle(x, y, r) for x, y, r in [(32, 30, 7), (128, 28, 6), (40, 76, 4), (124, 74, 5), (80, 18, 4)])
+         + f'<path d="M50 54 C30 40 30 70 50 54" stroke="{_C["up"]}" stroke-width="1" fill="none" opacity=".5"/>')
+    return _svg(160, 100, b)
+
+
+def _art_help():          # shield with check
+    b = (f'<rect x="2" y="2" width="156" height="96" rx="12" fill="{_C["panel2"]}" stroke="#0e1113" stroke-width="3"/>'
+         f'<path d="M80 16 L110 26 C110 58 98 76 80 86 C62 76 50 58 50 26Z" fill="#2f5a4c" stroke="{_C["up"]}" stroke-width="2.5"/>'
+         f'<path d="M66 50 L77 61 L96 40" stroke="{_C["cream"]}" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+         + _sparkle(120, 30, 5) + _sparkle(40, 70, 4, _C["rose"]))
+    return _svg(160, 100, b)
+
+
+INFO_ART = {"start": _art_start, "candles": _art_candles, "signals": _art_signals, "passive": _art_passive, "active": _art_active,
+            "sims": _art_sims, "videos": _art_videos, "favorites": _art_favorites, "help": _art_help}
+
+# small glyphs for each card's corner (24 x 24)
+_G = {
+    "start": f'<path d="M3 14h18" stroke="{_C["cream"]}" stroke-dasharray="2 2"/><path d="M3 18 9 11l4 3 8-9" stroke="{_C["gold"]}" stroke-width="2" fill="none"/>',
+    "candles": _cand(4, 16, 9, 5, 3) + _cand(10, 9, 13, 5, 3) + _cand(16, 13, 5, 5, 3),
+    "signals": f'<path d="M4 18a8 8 0 0 1 16 0" stroke="{_C["up"]}" stroke-width="3" fill="none"/><path d="M12 18 16 11" stroke="{_C["gold"]}" stroke-width="2"/>',
+    "passive": f'<path d="M3 20C10 19 15 14 21 4" stroke="{_C["up"]}" stroke-width="2.4" fill="none"/><circle cx="21" cy="4" r="2.5" fill="{_C["gold"]}"/>',
+    "active": f'<path d="M3 17 9 9l4 4 8-9" stroke="{_C["up"]}" stroke-width="2.2" fill="none"/><path d="M3 7l6 6 4-2 8 9" stroke="{_C["down"]}" stroke-width="2.2" fill="none" opacity=".8"/>',
+    "sims": f'<rect x="3" y="6" width="18" height="12" rx="3" fill="#2f5a4c" stroke="{_C["up"]}"/><text x="12" y="15.5" font-size="9" font-weight="800" fill="{_C["cream"]}" text-anchor="middle" font-family="Arial">$</text>',
+    "videos": f'<circle cx="12" cy="12" r="9" fill="{_C["rose"]}"/><path d="M10 8l6 4-6 4z" fill="{_C["ink"]}"/>',
+    "favorites": _sparkle(12, 12, 9),
+    "help": f'<path d="M12 3l7 3c0 7-3 12-7 15-4-3-7-8-7-15z" fill="#2f5a4c" stroke="{_C["up"]}" stroke-width="1.5"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="{_C["cream"]}" stroke-width="2" fill="none"/>',
+}
+
+# video covers: each topic gets its own 16:9 illustrated thumbnail (the links open live YouTube results, so a fixed real thumbnail
+# would misrepresent what opens - these covers describe the topic instead)
+def _cover(kind, title):
+    w, h = 320, 180
+    sky = (f'<defs><linearGradient id="v{kind}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{_C["sky"]}"/>'
+           f'<stop offset=".7" stop-color="#4a3540"/><stop offset="1" stop-color="{_C["dusk"]}"/></linearGradient></defs>'
+           f'<rect width="{w}" height="{h}" fill="url(#v{kind})"/>'
+           + "".join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="#fff" opacity="{o}"/>' for x, y, r, o in
+                     [(30, 20, 1, .7), (80, 34, .8, .5), (150, 14, 1.1, .8), (210, 30, .8, .5), (270, 18, 1, .7), (300, 44, .8, .4), (120, 46, .7, .4)])
+           + f'<path d="M0 150 C40 120 70 130 110 112 C150 96 180 118 220 104 C260 92 290 110 320 98 L320 180 L0 180Z" fill="#2c3d3a" opacity=".85"/>'
+           + f'<path d="M0 164 C60 150 120 160 180 150 C240 142 280 152 320 146 L320 180 L0 180Z" fill="#1e2b29"/>')
+    if kind == "candles":
+        art = "".join(_cand(x, o, c, 12, 8) for x, o, c in
+                      [(40, 110, 92), (60, 92, 100), (80, 100, 76), (100, 76, 84), (120, 84, 60), (140, 60, 70), (160, 70, 46), (180, 46, 56)])
+    elif kind == "short":
+        art = (f'<path d="M30 120 L70 100 L100 112 L140 80 L170 90 L200 60 L240 70 L280 40" stroke="{_C["gold"]}" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+               + "".join(f'<circle cx="{x}" cy="{y}" r="5" fill="{_C["cream"]}"/>' for x, y in [(140, 80), (200, 60), (280, 40)])
+               + f'<text x="290" y="34" font-size="13" font-weight="800" fill="{_C["cream"]}" font-family="Arial" text-anchor="end">1m &middot; 15m</text>')
+    elif kind == "levels":
+        art = (f'<line x1="20" y1="60" x2="300" y2="60" stroke="{_C["down"]}" stroke-width="2" stroke-dasharray="8 5"/>'
+               f'<line x1="20" y1="118" x2="300" y2="118" stroke="{_C["up"]}" stroke-width="2" stroke-dasharray="8 5"/>'
+               f'<path d="M24 110 L60 66 L96 114 L132 64 L168 116 L204 62 L240 112 L276 66" stroke="{_C["cream"]}" stroke-width="3" fill="none" stroke-linejoin="round"/>'
+               f'<text x="300" y="54" font-size="11" font-weight="800" fill="{_C["down"]}" font-family="Arial" text-anchor="end">RESISTANCE</text>'
+               f'<text x="300" y="134" font-size="11" font-weight="800" fill="{_C["up"]}" font-family="Arial" text-anchor="end">SUPPORT</text>')
+    elif kind == "bagel":
+        art = (f'<circle cx="160" cy="88" r="40" fill="{_C["tan"]}"/><circle cx="160" cy="88" r="13" fill="#4a3540"/>'
+               f'<path d="M128 74 q32 -18 64 0" stroke="#b38a5c" stroke-width="3" fill="none"/>'
+               + "".join(f'<circle cx="{x}" cy="{y}" r="1.6" fill="{_C["cream"]}"/>' for x, y in [(140, 70), (152, 64), (170, 66), (182, 74), (146, 104), (176, 106)])
+               + f'<rect x="220" y="60" width="60" height="50" rx="6" fill="{_C["panel2"]}"/><path d="M228 100 L246 86 L258 92 L274 70" stroke="{_C["up"]}" stroke-width="3" fill="none"/>')
+    elif kind == "options":
+        art = (f'<line x1="40" y1="120" x2="290" y2="120" stroke="{_C["cream"]}" stroke-width="1.5" opacity=".7"/>'
+               f'<path d="M40 136 L170 136 L280 46" stroke="{_C["up"]}" stroke-width="4.5" fill="none" stroke-linejoin="round"/>'
+               f'<path d="M40 46 L150 136 L280 136" stroke="{_C["down"]}" stroke-width="4.5" fill="none" stroke-linejoin="round" opacity=".85"/>'
+               f'<text x="276" y="40" font-size="13" font-weight="800" fill="{_C["up"]}" font-family="Arial" text-anchor="end">CALL</text>'
+               f'<text x="44" y="40" font-size="13" font-weight="800" fill="{_C["down"]}" font-family="Arial">PUT</text>')
+    else:   # prediction markets
+        art = (f'<rect x="70" y="58" width="80" height="70" rx="10" fill="{_C["up"]}"/><rect x="170" y="88" width="80" height="40" rx="10" fill="{_C["down"]}"/>'
+               f'<text x="110" y="100" font-size="20" font-weight="900" fill="{_C["ink"]}" font-family="Arial" text-anchor="middle">YES</text>'
+               f'<text x="210" y="114" font-size="20" font-weight="900" fill="{_C["ink"]}" font-family="Arial" text-anchor="middle">NO</text>'
+               f'<text x="110" y="52" font-size="13" font-weight="800" fill="{_C["cream"]}" font-family="Arial" text-anchor="middle">68&cent;</text>'
+               f'<text x="210" y="82" font-size="13" font-weight="800" fill="{_C["cream"]}" font-family="Arial" text-anchor="middle">32&cent;</text>')
+    play = (f'<g transform="translate(286 150)"><circle r="17" fill="{_C["ink"]}" opacity=".85"/><path d="M-6 -9 L11 0 L-6 9Z" fill="{_C["rose"]}"/></g>')
+    brainm = _brain(30, 150, 1.05)
+    return _svg(w, h, sky + art + brainm + play + _sparkle(36, 30, 6), "cover")
+
+
+_VIDEO_COVER = {"How to read candlestick charts": "candles", "Trading 15-minute and 1-minute charts": "short",
+                "Rayner Teo: price action": "levels", "The Plain Bagel: investing explained": "bagel",
+                "Khan Academy: options, calls and puts": "options", "Prediction markets explained": "prediction"}
+
 INFO_CSS = r"""
-.ic{max-width:1060px;margin:0 auto;padding:14px 16px 60px;font-family:Carlito,Calibri,'Segoe UI',sans-serif}
-.ic-hero{display:flex;align-items:center;gap:14px;margin:6px 0 4px}
-.ic-hero h1{font-family:Fraunces,Georgia,serif;font-weight:700;color:#fbf4ec;margin:0;font-size:30px}
-.ic-hero p{margin:2px 0 0;color:#e2d4c9}
-.ic-jump{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px}
-.ic-jump a{font:700 11px Montserrat,Arial,sans-serif;letter-spacing:1px;text-decoration:none;color:#dcbb91;border:1px solid rgba(220,187,145,.35);
-  border-radius:20px;padding:5px 11px;background:rgba(56,45,50,.6)}
-.ic-jump a:hover{background:rgba(233,165,187,.15);color:#fbf4ec}
-.ic-sec{margin-top:26px;scroll-margin-top:12px}
-.ic-sec h2{font:700 13px Montserrat,Arial,sans-serif;color:#dcbb91;letter-spacing:1.6px;margin:0 0 2px;text-transform:uppercase}
-.ic-sec .sub{color:#b9a89c;font-size:13.5px;margin:0 0 10px}
-.ic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
-.ic-card{display:block;text-decoration:none;background:rgba(56,45,50,.85);border:1px solid rgba(240,214,200,.14);border-radius:14px;
-  padding:12px 14px;transition:border-color .15s,transform .15s}
-.ic-card:hover{border-color:#e9a5bb;transform:translateY(-1px)}
-.ic-card b{display:block;color:#fbf4ec;font-size:15px;line-height:1.25}
-.ic-card .src{display:inline-block;font:700 10px Montserrat,Arial,sans-serif;letter-spacing:.8px;color:#3dd69c;margin:4px 0 5px;text-transform:uppercase}
-.ic-card .src.yt{color:#ff7b7b}
-.ic-card span.d{display:block;color:#e2d4c9;font-size:13.5px;line-height:1.4}
-.ic-fav .ic-card{border-color:rgba(229,184,92,.45)}
-.ic-note{margin-top:30px;padding:12px 14px;border-radius:14px;border:1px dashed rgba(240,214,200,.25);color:#b9a89c;font-size:13px}
-@media(max-width:560px){.ic-hero h1{font-size:24px}.ic-grid{grid-template-columns:1fr}}
+body{background:#17121a;
+  background-image:radial-gradient(1200px 600px at 85% -10%,rgba(233,165,187,.16),transparent 60%),
+  radial-gradient(900px 500px at -10% 30%,rgba(67,205,183,.10),transparent 60%),
+  radial-gradient(800px 600px at 50% 110%,rgba(229,184,92,.10),transparent 60%),
+  linear-gradient(180deg,#1b1a26 0%,#211b1e 45%,#1a1416 100%);background-attachment:fixed}
+.ic-stars{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.55;
+  background-image:radial-gradient(1.2px 1.2px at 12% 18%,#fff,transparent),radial-gradient(1px 1px at 28% 8%,#fff,transparent),
+  radial-gradient(1px 1px at 46% 22%,#fff,transparent),radial-gradient(1.4px 1.4px at 63% 12%,#fff,transparent),
+  radial-gradient(1px 1px at 78% 28%,#fff,transparent),radial-gradient(1.2px 1.2px at 91% 9%,#fff,transparent),
+  radial-gradient(1px 1px at 8% 44%,#fff,transparent),radial-gradient(1px 1px at 36% 52%,#fff,transparent),
+  radial-gradient(1.1px 1.1px at 70% 48%,#fff,transparent),radial-gradient(1px 1px at 88% 62%,#fff,transparent),
+  radial-gradient(1px 1px at 20% 78%,#fff,transparent),radial-gradient(1.2px 1.2px at 55% 84%,#fff,transparent)}
+.ic-fire{position:fixed;width:4px;height:4px;border-radius:50%;background:#e5b85c;box-shadow:0 0 10px 3px rgba(229,184,92,.55);
+  pointer-events:none;z-index:0;opacity:0;animation:icFloat 9s ease-in-out infinite}
+@keyframes icFloat{0%{opacity:0;transform:translateY(0)}20%{opacity:.9}80%{opacity:.6}100%{opacity:0;transform:translateY(-120px) translateX(20px)}}
+@media (prefers-reduced-motion:reduce){.ic-fire{display:none}}
+.ic{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:10px 16px 70px;font-family:var(--sans)}
+.ic-hero{position:relative;border-radius:26px;overflow:hidden;min-height:330px;display:flex;align-items:flex-end;
+  border:1px solid rgba(240,214,200,.16);box-shadow:0 30px 80px rgba(0,0,0,.45);margin-top:6px}
+.ic-hero picture,.ic-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 62%}
+.ic-hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(23,18,26,.05) 0%,rgba(23,18,26,.35) 45%,rgba(23,18,26,.93) 100%)}
+.ic-hero .txt{position:relative;z-index:1;padding:26px 26px 22px}
+.ic-hero .kick{font:800 11px Montserrat,Arial,sans-serif;letter-spacing:2.4px;color:var(--gold);text-transform:uppercase}
+.ic-hero h1{font-family:var(--serif);font-weight:700;color:var(--cream);margin:4px 0 6px;font-size:46px;line-height:1.02;
+  font-variation-settings:"SOFT" 100;text-shadow:0 4px 30px rgba(0,0,0,.6)}
+.ic-hero h1 em{font-style:normal;background:linear-gradient(90deg,#f7bfd2,#f0d3a8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ic-hero p{margin:0;color:#efe3d8;max-width:560px;font-size:16px}
+.ic-jump{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 4px;position:sticky;top:0;z-index:4;padding:10px 0;
+  background:linear-gradient(180deg,rgba(23,18,26,.92),rgba(23,18,26,.75));backdrop-filter:blur(8px)}
+.ic-jump a{display:inline-flex;align-items:center;gap:6px;font:700 11.5px Montserrat,Arial,sans-serif;letter-spacing:.6px;text-decoration:none;color:var(--tan);
+  border:1px solid rgba(220,187,145,.32);border-radius:999px;padding:6px 12px 6px 8px;background:rgba(48,38,43,.7)}
+.ic-jump a svg{width:16px;height:16px}
+.ic-jump a:hover{background:rgba(233,165,187,.16);color:var(--cream);border-color:var(--rose)}
+.ic-sec{margin-top:34px;scroll-margin-top:64px}
+.ic-head{display:grid;grid-template-columns:200px 1fr;gap:20px;align-items:center;margin-bottom:14px}
+.ic-head .art{width:200px;filter:drop-shadow(0 14px 26px rgba(0,0,0,.45))}
+.ic-head .art svg{width:100%;height:auto;display:block}
+.ic-head h2{font-family:var(--serif);font-weight:700;color:var(--cream);font-size:26px;margin:0 0 4px;line-height:1.1}
+.ic-head .n{font:800 11px Montserrat,Arial,sans-serif;letter-spacing:2px;color:var(--rose)}
+.ic-head .sub{color:var(--mute);font-size:15px;margin:0}
+.ic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.ic-card{position:relative;display:flex;gap:12px;text-decoration:none;background:linear-gradient(160deg,rgba(56,45,50,.92),rgba(36,30,34,.92));
+  border:1px solid rgba(240,214,200,.13);border-radius:16px;padding:14px 14px 13px;transition:border-color .18s,transform .18s,box-shadow .18s;overflow:hidden}
+.ic-card:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--rose),var(--tan),var(--up));opacity:0;transition:opacity .18s}
+.ic-card:hover{border-color:rgba(233,165,187,.55);transform:translateY(-2px);box-shadow:0 14px 30px rgba(0,0,0,.35)}
+.ic-card:hover:before{opacity:1}
+.ic-card .g{flex:0 0 36px;height:36px;border-radius:11px;background:rgba(20,15,18,.65);display:grid;place-items:center;border:1px solid rgba(240,214,200,.1)}
+.ic-card .g svg{width:24px;height:24px}
+.ic-card b{display:block;color:var(--cream);font-size:15.5px;line-height:1.25}
+.ic-card .src{display:inline-block;font:800 9.5px Montserrat,Arial,sans-serif;letter-spacing:1px;color:var(--up);margin:4px 0 5px;text-transform:uppercase}
+.ic-card .src.yt{color:#ff8f8f}
+.ic-card span.d{display:block;color:#e2d4c9;font-size:13.5px;line-height:1.42}
+.ic-card .go{position:absolute;right:12px;top:12px;color:var(--mute);font-size:13px;opacity:.6}
+.ic-vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.ic-vid{display:block;text-decoration:none;border-radius:16px;overflow:hidden;background:rgba(36,30,34,.95);border:1px solid rgba(240,214,200,.13);
+  transition:transform .18s,box-shadow .18s,border-color .18s}
+.ic-vid:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(0,0,0,.45);border-color:rgba(233,165,187,.55)}
+.ic-vid svg.cover{display:block;width:100%;height:auto;aspect-ratio:16/9}
+.ic-vid .meta{padding:11px 14px 13px}
+.ic-vid b{display:block;color:var(--cream);font-size:15.5px}
+.ic-vid span{display:block;color:#e2d4c9;font-size:13.5px;margin-top:2px}
+.ic-fav .ic-card{border-color:rgba(229,184,92,.42);background:linear-gradient(160deg,rgba(70,56,40,.85),rgba(36,30,34,.92))}
+.ic-note{margin-top:40px;padding:16px 18px;border-radius:18px;border:1px dashed rgba(240,214,200,.25);color:var(--mute);font-size:13.5px;
+  display:flex;gap:14px;align-items:center;background:rgba(20,15,18,.45)}
+.ic-note svg{flex:0 0 46px;width:46px;height:46px}
+@media(max-width:640px){.ic-jump{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-16px;margin-right:-16px;padding:10px 16px}
+  .ic-jump::-webkit-scrollbar{display:none}.ic-jump a{flex:0 0 auto}
+  .ic-hero{min-height:260px;border-radius:20px}.ic-hero h1{font-size:34px}.ic-hero .txt{padding:18px}
+  .ic-head{grid-template-columns:110px 1fr;gap:12px}.ic-head .art{width:110px}.ic-head h2{font-size:21px}
+  .ic-grid,.ic-vgrid{grid-template-columns:1fr}}
 """
 
 
 def info_center_page(user=None):
-    jump = "".join(f'<a href="#{k}">{E(t.split(":")[0].split("(")[0].strip())}</a>' for k, t, _s, _i in INFO_SECTIONS)
+    jump = "".join(f'<a href="#{k}">{_svg(24, 24, _G[k])}{E(t.split(":")[0].split("(")[0].strip())}</a>' for k, t, _s, _i in INFO_SECTIONS)
     secs = []
-    for key, title, sub, items in INFO_SECTIONS:
-        cards = "".join(
-            f'<a class="ic-card" href="{E(u)}" target="_blank" rel="noopener noreferrer"><b>{E(n)}</b>'
-            f'<span class="src{" yt" if "youtube.com" in u else ""}">{"&#9654; " if "youtube.com" in u else ""}{E(src)}</span>'
-            f'<span class="d">{E(d)}</span></a>' for n, u, src, d in items)
-        secs.append(f'<section class="ic-sec{" ic-fav" if key == "favorites" else ""}" id="{key}"><h2>{E(title)}</h2>'
-                    f'<p class="sub">{E(sub)}</p><div class="ic-grid">{cards}</div></section>')
+    for n, (key, title, sub, items) in enumerate(INFO_SECTIONS, 1):
+        if key == "videos":
+            grid = '<div class="ic-vgrid">' + "".join(
+                f'<a class="ic-vid" href="{E(u)}" target="_blank" rel="noopener noreferrer">{_cover(_VIDEO_COVER.get(nm, "prediction"), nm)}'
+                f'<div class="meta"><b>{E(nm)}</b><span>{E(d)}</span></div></a>' for nm, u, _src, d in items) + '</div>'
+        else:
+            grid = '<div class="ic-grid">' + "".join(
+                f'<a class="ic-card" href="{E(u)}" target="_blank" rel="noopener noreferrer"><span class="g">{_svg(24, 24, _G[key])}</span>'
+                f'<span><b>{E(nm)}</b><span class="src{" yt" if "youtube.com" in u else ""}">{"&#9654; " if "youtube.com" in u else ""}{E(src)}</span>'
+                f'<span class="d">{E(d)}</span></span><span class="go">&#8599;</span></a>' for nm, u, src, d in items) + '</div>'
+        secs.append(f'<section class="ic-sec{" ic-fav" if key == "favorites" else ""}" id="{key}"><div class="ic-head">'
+                    f'<div class="art">{INFO_ART[key]()}</div><div><div class="n">{n:02d} &middot; {len(items)} LINKS</div>'
+                    f'<h2>{E(title)}</h2><p class="sub">{E(sub)}</p></div></div>{grid}</section>')
     tabs = app_tabs(user, "info") if user else (
-        '<div class="top" style="padding:10px 16px"><a class="brand" href="/">' + brain_logo(34, "t") + '<b>BRAIN</b></a></div>')
-    body = (tabs + '<div class="ic"><div class="ic-hero">' + brain_logo(52, "i")
-            + '<div><h1>Info Center</h1><p>Free, trusted places to learn charts, candles, investing and trading - picked by BRAIN.</p></div></div>'
-            f'<div class="ic-jump">{jump}</div>' + "".join(secs)
-            + '<div class="ic-note">Every link goes to an outside site BRAIN doesn&rsquo;t own or control, and none of them pay us. '
-              'This page is for learning only - not financial advice. Trading and event contracts can lose money fast; '
-              'practice on a simulator first and never trade money you can&rsquo;t afford to lose. '
-              '<a href="/terms" style="color:#e9a5bb">Terms</a></div></div>')
-    return page("Info Center - BRAIN", body, GUIDE_CSS + INFO_CSS)
+        '<div class="top"><a class="brand" href="/">' + brain_logo(34, "t") + '<b>BRAIN</b></a>'
+        '<a class="btn pink" style="padding:8px 16px;font-size:13px" href="/pricing">Get BRAIN</a></div>')
+    fire = "".join(f'<i class="ic-fire" style="left:{x}%;top:{y}%;animation-delay:{dl}s"></i>' for x, y, dl in
+                   [(8, 70, 0), (22, 85, 2.5), (40, 75, 5), (61, 88, 1.2), (78, 72, 3.8), (92, 82, 6.3), (15, 40, 4.4), (85, 35, 7.1)])
+    body = ('<div class="ic-stars"></div>' + fire + tabs + '<div class="ic"><div class="ic-hero">' + hero_img("pic")
+            + '<div class="txt"><div class="kick">BRAIN &middot; Info Center</div><h1>Learn the market <em>BRAIN reads</em></h1>'
+              '<p>Free, trusted places to learn candles, 15-minute charts, investing and trading &mdash; hand-picked and sorted for you.</p></div></div>'
+            f'<nav class="ic-jump" aria-label="Sections">{jump}</nav>' + "".join(secs)
+            + '<div class="ic-note">' + _svg(48, 48, _brain(24, 26, 1.25))
+            + '<span>Every link goes to an outside site BRAIN doesn&rsquo;t own or control, and none of them pay us. This page is for learning only '
+              '&mdash; not financial advice. Trading and event contracts can lose money fast; practice on a simulator first and never trade money '
+              'you can&rsquo;t afford to lose. <a href="/terms">Terms</a></span></div></div>')
+    return page("Info Center - BRAIN", body, INFO_CSS)
