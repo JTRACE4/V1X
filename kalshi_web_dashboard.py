@@ -2623,6 +2623,7 @@ def live_scorecard(days=10):
     import backtest_engine as _bte
     cutoff = time.time() - days * 86400
     bands = (("55-80c", 0.55, 0.80), ("55-85c", 0.55, 0.85), ("80-89c", 0.80, 0.89), ("89c+", 0.89, 1.01), ("any", 0.0, 1.01))
+    print(f"[live scorecard] history on disk: " + ", ".join(f"{k}: {len(v)} rounds" for k, v in _history.items()))
     for name in ("BTC", "XRP"):
         hs = [h for h in list(_history.get(name, [])) if h.get("ticker")]
         hs = [h for h in hs if (_window_close_utc(h["ticker"]) or dt.datetime.fromtimestamp(0, dt.timezone.utc)).timestamp() > cutoff]
