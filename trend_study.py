@@ -287,6 +287,17 @@ def run():
         best = max(ok, key=lambda kv: (kv[1]["unseen"]["pnl"], kv[1]["unseen"]["win"])) if ok else None
         pick[str(mark)] = {"rule": best[0] if best else None, "stats": best[1] if best else None, "current": cur}
     res["pick"] = pick
+    try:
+        cur_by = {str(mk_): res["marks"][str(mk_)]["strategies"]["current (1m skip)"] for mk_ in MARKS}
+        m2 = method2(rows, outcome, cur_by)
+        _m2["model"] = m2
+        with open(M2_FILE + ".tmp", "w") as fh:
+            json.dump(m2, fh)
+        os.replace(M2_FILE + ".tmp", M2_FILE)
+        res["method2"] = {k: {kk: vv for kk, vv in v.items() if kk != "w"} for k, v in m2.items()}
+        res["method2_w"] = {k: dict(zip(["bias"] + M2_FEATS, [round(x, 3) for x in v["w"]])) for k, v in m2.items()}
+    except Exception as _e2:
+        print(f"[trend study] method v2 failed: {_e2!r}")
     os.makedirs(os.path.dirname(FILE), exist_ok=True)
     with open(FILE + ".tmp", "w") as fh:
         json.dump(res, fh)
@@ -304,6 +315,11 @@ def _f(s):
 
 def _log(res):
     print(f"[trend study] {res['rounds']} BTC rounds replayed, newest {res['unseen']} never used to pick")
+    for mk_, v in (res.get("method2") or {}).items():
+        lab = {"240": "4:00", "360": "6:00", "480": "8:00"}[mk_]
+        print(f"[method v2] {lab}: {'LIVE' if v['valid'] else 'not better - not used'} | confidence bar {v['thr']} flip bar {v['flip']}"
+              f" | unseen {_f(v['unseen'])} vs current {_f(v.get('current_unseen'))} | train {_f(v.get('train'))}")
+        print(f"[method v2] {lab} weights: {res['method2_w'][mk_]}")
     for mark, mk in res["marks"].items():
         lab = {"240": "4:00", "360": "6:00", "480": "8:00"}[mark]
         acc = " | ".join(f"{k} {v['unseen']['win']:.0%}/{v['unseen']['cover']:.0%}" for k, v in mk["trend_accuracy"].items()
@@ -390,3 +406,136 @@ def apply_rule(rule, call, t, early=None):
     if kind == "follow":
         return side, f"switched to the {nm} trend ({'UP' if side == 'YES' else 'DOWN'})"
     return None, f"against the {nm} trend"
+
+
+# ================================================================== METHOD v2 (2026-10-24, user: "fix the methodology behind the call")
+# One model instead of stacked rules: the market's own price (where price sits vs the line, already priced in) PLUS the
+# multi-timeframe read - trend on 1m / 5m / 15m / 1h, fair value gaps and liquidity sweeps on 1m / 5m / 15m / 1h / 1d.
+# The weights are learned (logistic regression) from the older 70% of rounds; win rate and profit are scored on the newest
+# 30%. The confidence bar (only call when the model is this sure) is also picked on the older rounds. The sealed call keeps
+# the early side unless the model is clearly surer of the other side (flip bar learned the same way).
+import math as _m
+
+M2_FEATS = ["lk", "dist", "1m", "5m", "15m", "1h", "fvg_1m", "fvg_5m", "fvg_15m", "fvg_1h", "fvg_1d",
+            "swp_1m", "swp_5m", "swp_15m", "swp_1h", "swp_1d"]
+M2_FILE = os.path.join(bt.CACHE, "method2.json")
+_m2 = {"model": None}
+
+
+def _lk(p):
+    p = min(0.97, max(0.03, p))
+    return _m.log(p / (1 - p))
+
+
+def m2_x(kp, dist, t):
+    return [_lk(kp), max(-3.0, min(3.0, dist * 1000))] + [float(t.get(k, 0)) for k in M2_FEATS[2:]]
+
+
+def _fit(X, y, l2=0.02, iters=400, lr=0.3):
+    n, d = len(X), len(X[0])
+    w = [0.0] * (d + 1)
+    for _ in range(iters):
+        g = [0.0] * (d + 1)
+        for xi, yi in zip(X, y):
+            z = w[0] + sum(a * b for a, b in zip(w[1:], xi))
+            p = 1 / (1 + _m.exp(-max(-30, min(30, z))))
+            e = p - yi
+            g[0] += e
+            for j in range(d):
+                g[j + 1] += e * xi[j]
+        for j in range(d + 1):
+            w[j] -= lr * (g[j] / n + (l2 * w[j] if j else 0))
+    return w
+
+
+def m2_p(w, x):
+    z = w[0] + sum(a * b for a, b in zip(w[1:], x))
+    return 1 / (1 + _m.exp(-max(-30, min(30, z))))
+
+
+def method2(rows, outcome, cur_by_mark):
+    """Fit + score per mark. Returns {"240": {...}, "480": {...}, "360": {...}}."""
+    out = {}
+    early_side = {}
+    for mark in MARKS:
+        R = [r for r in rows if mark in r["per"]]
+        sp = int(len(R) * 0.7)
+        tr, un = R[:sp], R[sp:]
+        X = [m2_x(r["per"][mark]["kp"], r["per"][mark]["dist"], r["per"][mark]["t"]) for r in tr]
+        y = [1.0 if r["up"] else 0.0 for r in tr]
+        w = _fit(X, y)
+
+        def score(P, thr, flip=None):
+            g = []
+            for r in P:
+                x = r["per"][mark]
+                p = m2_p(w, m2_x(x["kp"], x["dist"], x["t"]))
+                side = "YES" if p >= 0.5 else "NO"
+                conf = max(p, 1 - p)
+                if mark == 480 and flip is not None:
+                    e = early_side.get(r["ticker"])
+                    if e and e != side:
+                        if conf < flip:
+                            side = e                     # hold the early side
+                            conf = 1.0
+                if conf < thr:
+                    continue
+                g.append(outcome(r, mark, side))
+            s_ = _summ(g)
+            s_["cover"] = round(s_["n"] / len(P), 3) if P else 0
+            return s_
+        cur = cur_by_mark[str(mark)]
+        best = None
+        flips = (None,) if mark != 480 else (None, 0.6, 0.7, 0.8, 0.9, 1.01)
+        for thr in (0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8):
+            for fl in flips:
+                s_t = score(tr, thr, fl)
+                if s_t["n"] < 40 or s_t["cover"] < 0.5:
+                    continue
+                if s_t["win"] < (cur["train"]["win"] or 0):
+                    continue
+                key = (s_t["pnl"], s_t["win"])
+                if best is None or key > best[0]:
+                    best = (key, thr, fl, s_t)
+        if best is None:
+            out[str(mark)] = {"w": w, "thr": None, "flip": None, "train": None, "unseen": score(un, 0.5), "valid": False}
+            continue
+        _k, thr, fl, s_t = best
+        s_u = score(un, thr, fl)
+        valid = bool(s_u["n"] >= 40 and s_u["win"] is not None and cur["unseen"]["win"] is not None
+                     and s_u["win"] >= cur["unseen"]["win"] and s_u["pnl"] > cur["unseen"]["pnl"])
+        out[str(mark)] = {"w": w, "thr": thr, "flip": fl, "train": s_t, "unseen": s_u, "valid": valid,
+                          "current_unseen": cur["unseen"]}
+        if mark == 240:
+            for r in R:
+                x = r["per"][mark]
+                p = m2_p(w, m2_x(x["kp"], x["dist"], x["t"]))
+                if max(p, 1 - p) >= thr:
+                    early_side[r["ticker"]] = "YES" if p >= 0.5 else "NO"
+    return out
+
+
+def m2_model():
+    if _m2["model"] is None:
+        try:
+            with open(M2_FILE) as fh:
+                _m2["model"] = json.load(fh)
+        except Exception:
+            _m2["model"] = {}
+    return _m2["model"] or {}
+
+
+def m2_live(mark, kp, dist, t, early=None):
+    """(side or None, p_up, note) from the validated model for this call time, or None when it isn't live."""
+    m = m2_model().get(str(mark))
+    if not m or not m.get("valid") or kp is None or dist is None:
+        return None
+    p = m2_p(m["w"], m2_x(kp, dist, t))
+    side = "YES" if p >= 0.5 else "NO"
+    conf = max(p, 1 - p)
+    note = f"BRAIN v2 read {conf:.0%} {'UP' if side == 'YES' else 'DOWN'}"
+    if mark == 480 and m.get("flip") is not None and early and early != side and conf < m["flip"]:
+        return early, p, f"held the 4:00 side - the {'UP' if side == 'YES' else 'DOWN'} read ({conf:.0%}) isn't strong enough to flip it"
+    if conf < (m.get("thr") or 0.5):
+        return (None, p, f"{note} - not confident enough to call")
+    return side, p, note

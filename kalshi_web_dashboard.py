@@ -4960,9 +4960,42 @@ def poll_loop():
                     # replays 30 days of rounds and picks, per call time, which trend read (1m / 5m / 15m / 1h or a mix) the
                     # call should line up with, and how. When it has picked one, that rule replaces the old 1-minute skip.
                     _ts_rule, _ts_note = None, ""
+                    # 2026-10-24 (user: "fix the methodology behind the call"): METHOD v2 - one learned read of the market
+                    # price + price vs the line + trend on 1m/5m/15m/1h + fair value gaps and liquidity sweeps on
+                    # 1m/5m/15m/1h/1d. When the trend study has validated it for this call time (beat the old method on win
+                    # rate AND profit on unseen rounds), it makes the call: its side, its confidence bar, and the sealed call
+                    # keeps the 4:00 side unless v2 is clearly surer of the other one.
+                    _v2 = None
                     try:
                         import trend_study as _tst
-                        _ts_rule = _tst.decisions().get(str(_mark))
+                        if not _rev and _mtf is not None and kalshi_price is not None and live_price and target:
+                            _tt2 = _tst.trend_from_windows(_mtf.windows.get(asset["symbol"]), trend_read)
+                            _v2 = _tst.m2_live(_mark, kalshi_price, (live_price - target) / target, _tt2,
+                                               (stage_calls.get("early") or {}).get("call") if _sk == "sealed" else None)
+                    except Exception as _v2e:
+                        print(f"[method v2] {_v2e!r}")
+                        _v2 = None
+                    if _v2 is not None:
+                        _v2side, _v2p, _v2note = _v2
+                        _was_c = _call
+                        if _v2side is None:
+                            _sitout = _v2note
+                        else:
+                            _cf = max(_v2p, 1 - _v2p) if _v2side == ("YES" if _v2p >= 0.5 else "NO") else None
+                            _call = _v2side
+                            _tier = ("SUPER" if (_cf or 0) >= 0.85 else ("GOOD" if (_cf or 0) >= 0.7 else
+                                     (stage_calls.get("early") or {}).get("tier") or "GOOD"))
+                            _why = _v2note
+                            _use_p = _v2p
+                            _reg = None
+                        _ts_rule = "v2"
+                        print(f"[method v2] {asset['name']} {_sk}: old {_was_c} -> {'SIT' if _v2side is None else _v2side} "
+                              f"(p_up {_v2p:.0%}) {ticker}")
+                    try:
+                        import trend_study as _tst
+                        _ts_rule = _ts_rule or _tst.decisions().get(str(_mark))
+                        if _ts_rule == "v2":
+                            raise StopIteration
                         if _ts_rule and _call and not _rev and _mtf is not None:
                             _tt = _tst.trend_from_windows(_mtf.windows.get(asset["symbol"]), trend_read)
                             _was_c = _call
@@ -4977,6 +5010,8 @@ def poll_loop():
                                 _why = f"{_why} + {_ts_note}"
                             print(f"[trend rule] {asset['name']} {_sk}: {_ts_rule} | trend {_tt} | {_was_c} -> "
                                   f"{'SIT' if _sitout else _call} {ticker}")
+                    except StopIteration:
+                        pass
                     except Exception as _tse:
                         print(f"[trend rule] {_tse!r}")
                         _ts_rule = None
@@ -5019,7 +5054,10 @@ def poll_loop():
                         else:
                             _raw_conf = _side_chance(_call, _use_p if _use_p is not None else stage_p_yes)
                         _conf_show = _raw_conf
-                    if _call and not _rev and _raw_conf is not None and _raw_conf < CLOSE_CALL_BAND:
+                    if _ts_rule == "v2" and _call:            # v2 already applied its own learned confidence bar
+                        _raw_conf = _conf_show = max(_v2[1], 1 - _v2[1]) if _v2 and _v2[0] == ("YES" if _v2[1] >= 0.5 else "NO") \
+                            else ((stage_calls.get("early") or {}).get("conf") or _raw_conf)
+                    if _call and not _rev and _ts_rule != "v2" and _raw_conf is not None and _raw_conf < CLOSE_CALL_BAND:
                         _cw, _cn = close_call_record(_history.get(asset["name"], []), _sk)
                         if _cn >= CLOSE_CALL_MIN_N and _cw * 2 > _cn:
                             _conf_show = _cw / _cn
@@ -5064,6 +5102,7 @@ def poll_loop():
                         print(f"[80% rule] {_ze!r}")
                     stage_calls[_sk] = {
                         "zone80": _z80, "zone80_roi": _z80roi, "sitout": bool(_sitout), "lean": _lean,
+                        "method": "v2" if _ts_rule == "v2" else ("trend:" + _ts_rule if _ts_rule else "v1"),
                         "conf": round(_conf_show, 4) if _conf_show is not None else None,
                         "raw_conf": round(_raw_conf, 4) if _raw_conf is not None else None,
                         "regime": ({k: (round(v, 4) if isinstance(v, float) else v) for k, v in _reg.items()} if _reg else None),
