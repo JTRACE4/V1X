@@ -253,7 +253,9 @@ LATE_CALL_SECONDS = 4.5 * 60
 #   a quarter = the flow (every exchange's taker buy vs sell this round + Kalshi traders' money + liquidations).
 # A feed that is missing just drops out and the others are re-weighted. The bot's own "Locked first call" (which the real-
 # money auto-buy uses) is untouched by this - these are separate, display + grading only.
-STAGE_CALLS = (("early", 240, "Early call", "4:00"), ("sealed", 480, "Sealed call", "8:00"))
+STAGE_CALLS = (("early", 240, "Early call", "4:00"), ("mid", 360, "Mid call", "6:00"), ("sealed", 480, "Sealed call", "8:00"))
+# 2026-10-24 (user): a 6:00 MID call between the two, and the 8:00 sealed call goes with the MAJORITY of the three when the
+# 30-day replay shows that wins at least as often and makes at least as much as the 8:00 read on its own (trend_study.py).
 STAGE_GRACE_SECONDS = 45          # must lock within 45s of its mark; a dashboard started later than that marks it "missed"
 STAGE_WEIGHTS = {"kalshi": 0.5, "fair": 0.25, "flow": 0.25}
 
@@ -4621,6 +4623,10 @@ def poll_loop():
                             hist[-1][f"{_sk}_trend"] = (_c.get("signals") or {}).get("trend")   # 1-min trend vote at the lock
                             hist[-1][f"{_sk}_dist"] = (round((_c["spot"] - _c["line"]) / _c["line"], 6)
                                                        if (_c.get("spot") and _c.get("line")) else None)
+                        _r8 = (_sc_prev.get("sealed") or {}).get("raw8")
+                        if _r8:
+                            hist[-1]["sealed_raw_call"] = None if _r8 == "SIT" else _r8
+                            hist[-1]["sealed_raw_correct"] = (_r8 == actual_side) if _r8 in ("YES", "NO") else None
                         _lt = _sc_prev.get("late") or {}
                         if _lt.get("call"):
                             hist[-1]["decided_call"] = _lt["call"]
@@ -5110,7 +5116,37 @@ def poll_loop():
                                 _z80roi = _rule["holdout"].get("roi")
                     except Exception as _ze:
                         print(f"[80% rule] {_ze!r}")
+                    _raw8 = None
+                    if _sk == "sealed":
+                        try:
+                            import trend_study as _tst
+                            _mjm = _tst.majority_mode(asset["name"])
+                        except Exception:
+                            _mjm = None
+                        if _mjm:
+                            _raw8 = _call or "SIT"
+                            _ve = (stage_calls.get("early") or {}).get("call")
+                            _vm = (stage_calls.get("mid") or {}).get("call")
+                            _vs = [_ve, _vm, _call]
+                            _ny, _nn = _vs.count("YES"), _vs.count("NO")
+                            _lbl = lambda v: "UP" if v == "YES" else ("DOWN" if v == "NO" else "no call")
+                            _votes_txt = f"4:00 {_lbl(_ve)} - 6:00 {_lbl(_vm)} - 8:00 {_lbl(_call)}"
+                            if max(_ny, _nn) >= 2:
+                                _maj = "YES" if _ny > _nn else "NO"
+                                if _maj != _call:
+                                    _rev = None
+                                _call = _maj
+                                _tier = "SUPER" if max(_ny, _nn) == 3 else ("GOOD" if _tier in (None, "WEAK") else _tier)
+                                _why = f"majority {max(_ny, _nn)} of 3: {_votes_txt}"
+                                _sitout = None
+                                _raw_conf = _conf_show = _side_chance(_call, stage_p_yes) if stage_p_yes is not None else _conf_show
+                            elif _mjm == "sit":
+                                _lean = _call
+                                _why = f"no majority ({_votes_txt}) - no call"
+                                _call, _tier, _rev, _raw_conf, _conf_show = None, None, None, None, None
+                            print(f"[majority] {asset['name']}: {_votes_txt} -> {_call or 'NO CALL'} ({_mjm}) {ticker}")
                     stage_calls[_sk] = {
+                        "raw8": _raw8,
                         "zone80": _z80, "zone80_roi": _z80roi, "sitout": bool(_sitout), "lean": _lean,
                         "method": "v2" if _ts_rule == "v2" else ("trend:" + _ts_rule if _ts_rule else "v1"),
                         "conf": round(_conf_show, 4) if _conf_show is not None else None,
@@ -6505,6 +6541,24 @@ body[data-view="both"] .calls-row { grid-template-columns:repeat(auto-fit, minma
 body[data-view="both"] .calls-row .stage-box { padding:10px 9px 9px !important; }
 body[data-view="both"] .calls-row .sb-dir { font-size:26px !important; }
 body[data-view="both"] .calls-row .sb-line { font-size:12px !important; }
+/* 2026-10-24 (user): slim horizontal strip under the call boxes - market trend | RSI | line crosses */
+.info-strip { display:flex !important; flex-direction:row !important; align-items:stretch; gap:0 !important; padding:6px 4px !important;
+  margin:-4px 0 12px !important; min-height:0 !important; }
+.info-strip > * { flex:1 1 0; min-width:0; margin:0 !important; padding:2px 12px !important; border:0 !important; background:none !important;
+  box-shadow:none !important; border-radius:0 !important; display:flex; flex-direction:column; justify-content:center; }
+.info-strip > * + * { border-left:1px solid rgba(255,255,255,0.10) !important; }
+.info-strip .lx-mkt { border-top:0 !important; padding-top:2px !important; }
+.info-strip > * { flex-direction:row !important; flex-wrap:wrap; align-items:baseline; justify-content:center !important; column-gap:8px; row-gap:1px; }
+.info-strip .rs-title, .info-strip .lx-mkt-lbl { flex:1 1 100%; text-align:center; font-size:11px !important; margin:0 !important; }
+.info-strip .rsi-num, .info-strip .lx-num { font-size:22px !important; line-height:1.1; margin:0 !important; }
+.info-strip .rsi-zone, .info-strip .lx-zone { font-size:12px !important; margin:0 !important; }
+.info-strip .lx-quiet { flex:1 1 100%; border:0 !important; margin:0 !important; padding:0 !important; font-size:11px !important; text-align:center; }
+.info-strip .lx-quiet b { display:inline !important; margin-right:4px; }
+.info-strip .lx-quiet span { display:inline !important; }
+.info-strip .lx-sub, .info-strip .rsi-sub, .info-strip .rsi-check { display:none !important; }
+.info-strip .lx-mkt .mkt { flex:1 1 100%; }
+@media (max-width:760px) { .info-strip { flex-wrap:wrap !important; } .info-strip > * { flex:1 1 100%; padding:6px 8px !important; }
+  .info-strip > * + * { border-left:0 !important; border-top:1px solid rgba(255,255,255,0.10) !important; } }
 body[data-view="both"] .calls-row .sb-sig, body[data-view="both"] .calls-row .sb-rec { font-size:11px !important; }
 body[data-view="both"] .calls-row .sb-title, body[data-view="both"] .rs-title { font-size:11px !important; }
 body[data-view="both"] .stage-cd-t { font-size:24px; }
@@ -7159,6 +7213,16 @@ html, body { overflow-x:hidden; }
 .sc-legend .u { color:#3dd69c; font-weight:800; } .sc-legend .d { color:#f05454; font-weight:800; }
 .sc-streak.win { color:#3dd69c !important; background:rgba(61,214,156,0.12) !important; border-color:#3dd69c !important; }
 .sc-streak.loss { color:#f05454 !important; background:rgba(240,84,84,0.12) !important; border-color:#f05454 !important; }
+
+/* 2026-10-24 info strip - last so it wins over the older tile rules */
+.info-strip.rsi-lx > .lx-box, .info-strip.rsi-lx > .rs-tile.lx-box.lx-clean, .info-strip.rsi-lx > .rs-tile.lx-box.lx-some,
+.info-strip.rsi-lx > .rs-tile.lx-box.lx-chop { border:0 !important; border-left:1px solid rgba(255,255,255,0.10) !important; padding:2px 12px !important; }
+.info-strip.rsi-lx > .rs-tile { padding:2px 12px !important; }
+.info-strip.rsi-lx > .rs-tile.rsi-box { border-left:1px solid rgba(255,255,255,0.10) !important; }
+.info-strip .lx-mkt.lx-mkt-top { border:0 !important; padding:2px 12px !important; }
+.info-strip .lx-mkt .lx-mkt-lbl { display:block !important; }
+@media (max-width:760px) { .info-strip.rsi-lx > .lx-box, .info-strip.rsi-lx > .rs-tile.lx-box.lx-clean, .info-strip.rsi-lx > .rs-tile.lx-box.lx-some,
+  .info-strip.rsi-lx > .rs-tile.lx-box.lx-chop, .info-strip.rsi-lx > .rs-tile { border-left:0 !important; border-top:1px solid rgba(255,255,255,0.10) !important; padding:6px 8px !important; } }
 </style>
 <script>
 let audioCtx = null;
@@ -11582,8 +11646,8 @@ def build_stage_box(name, d, key):
     mk = {k: x for k, _m, _l, x in STAGE_CALLS}[key]
     dec = d.get("price_decimals", 2)
     c = (d.get("stage_calls") or {}).get(key) or {}
-    cls = "stage-box" + (" stage-sealed" if key == "sealed" else " stage-early")
-    title = f'{"<i class=ico data-i=lock></i> SEALED CALL" if key == "sealed" else "EARLY CALL"} &middot; {mk}'
+    cls = "stage-box" + {"sealed": " stage-sealed", "mid": " stage-early stage-mid"}.get(key, " stage-early")
+    title = f'{ {"sealed": "<i class=ico data-i=lock></i> SEALED CALL", "mid": "MID CALL"}.get(key, "EARLY CALL") } &middot; {mk}'
     if c.get("call"):
         up = c["call"] == "YES"
         p_side = call_conf(c)
@@ -12824,8 +12888,11 @@ def build_cross_box(name, d):
 @_never_break
 def build_round_strip(name, d):
     # 2026-10-22 (user): RSI + line crosses share one square; the streak tile moved up next to "time until call"
-    return (f'<div class="round-strip calls-row">{build_stage_box(name, d, "early")}{build_stage_box(name, d, "sealed")}'
-            f'{build_flip_radar(name, d)}<div class="rs-tile rsi-lx"><div class="lx-mkt lx-mkt-top" tabindex="0" title="Tap or hover for the trend details"><div class="lx-mkt-lbl">MARKET TREND</div>{build_market_box(name)}</div>{build_rsi_box(name, d)}{build_cross_box(name, d)}</div></div>')
+    # 2026-10-24 (user): the 6:00 call gets its own box; RSI, line crosses and market trend move to a slim strip underneath
+    return (f'<div class="round-strip calls-row">{build_stage_box(name, d, "early")}{build_stage_box(name, d, "mid")}'
+            f'{build_stage_box(name, d, "sealed")}{build_flip_radar(name, d)}</div>'
+            f'<div class="rs-tile rsi-lx info-strip"><div class="lx-mkt lx-mkt-top" tabindex="0" title="Tap or hover for the trend details">'
+            f'<div class="lx-mkt-lbl">MARKET TREND</div>{build_market_box(name)}</div>{build_rsi_box(name, d)}{build_cross_box(name, d)}</div>')
 
 
 def _streak_stats(results):
@@ -13039,7 +13106,7 @@ def _money_html(pnl, avg, n):
 # price the market traded at after the call was made (public trade tape, fetched once per finished round and cached).
 CASHOUT_AT = 0.90
 CASHOUT_FILE = os.path.join(_DATA_ROOT, "data_cache", "cashout_marks_v2.json")   # v2 2026-10-23: old file had tapes cut short by API errors
-_CALL_SEC = {"mini": 60, "early": 240, "sealed": 480}
+_CALL_SEC = {"mini": 60, "early": 240, "mid": 360, "sealed": 480}
 try:
     with open(CASHOUT_FILE) as _f:
         _cash_marks = json.load(_f)
@@ -13069,7 +13136,7 @@ def _fetch_round_marks(ticker):
             cs.append((float(c["end_period_ts"]) - o_ts, float(hi), float(lo)))
         if cs:
             out = {}
-            for cp in (60, 240, 480):
+            for cp in (60, 240, 360, 480):
                 sub = [x for x in cs if x[0] > cp and x[0] <= 900 + 1]
                 out[str(cp)] = [max(x[1] for x in sub), min(x[2] for x in sub)] if sub else None
             return out
@@ -13092,7 +13159,7 @@ def _fetch_round_marks(ticker):
     if not pts:
         return {}
     out = {}
-    for cp in (60, 240, 480):
+    for cp in (60, 240, 360, 480):
         sub = [y for sec, y in pts if sec >= cp]
         out[str(cp)] = [max(sub), min(sub)] if sub else None
     return out
@@ -13489,7 +13556,8 @@ def build_scoreboard(name, d):
     now_et = dt.datetime.now(dt.timezone.utc).astimezone(et)
     day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
     cols = []
-    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"))
+    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"),
+                               ("mid", "MID CALL &middot; 6:00", "mid_correct"))
                               + ((("bot", "BOT CALL (auto-buy)", "correct"),) if SHOW_BOT_RECORD else ())):
         rows = [h for h in hist if h.get(field) is not None and not (key != "bot" and h.get(f"{key}_reversal"))]
         if key == "mini":

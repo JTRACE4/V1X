@@ -432,6 +432,7 @@ def run(coin="BTC"):
         os.replace(mf + ".tmp", mf)
         res["method2"] = {k: {kk: vv for kk, vv in v.items() if kk != "w"} for k, v in m2.items()}
         res["method2_w"] = {k: dict(zip(["bias"] + M2_FEATS, [round(x, 3) for x in v["w"]])) for k, v in m2.items()}
+        res["majority"] = majority_eval(rows, outcome, m2)
     except Exception as _e2:
         print(f"[trend study] method v2 failed: {_e2!r}")
     res["coin"] = coin
@@ -458,6 +459,11 @@ def _log(res):
         print(f"[method v2] {res.get('coin', 'BTC')} {lab}: {'LIVE' if v['valid'] else 'not better - not used'} | confidence bar {v['thr']} flip bar {v['flip']}"
               f" | unseen {_f(v['unseen'])} vs current {_f(v.get('current_unseen'))} | train {_f(v.get('train'))}")
         print(f"[method v2] {res.get('coin', 'BTC')} {lab} weights: {res['method2_w'][mk_]}")
+    mj = res.get("majority") or {}
+    for nm_, v in (mj.get("modes") or {}).items():
+        print(f"[majority] {res.get('coin', 'BTC')} {nm_:<36} unseen {_f(v['unseen'])} | all {_f(v['all'])}")
+    if mj:
+        print(f"[majority] {res.get('coin', 'BTC')} PICK: {mj.get('pick') or 'the 8:00 read alone did better - majority stays off'}")
     for mark, mk in res["marks"].items():
         lab = {"240": "4:00", "360": "6:00", "480": "8:00"}[mark]
         acc = " | ".join(f"{k} {v['unseen']['win']:.0%}/{v['unseen']['cover']:.0%}" for k, v in mk["trend_accuracy"].items()
@@ -778,3 +784,63 @@ def m2_live(mark, kp, dist, t, early=None, coin="BTC"):
     if conf < (m.get("thr") or 0.5):
         return (None, p, f"{note} - not confident enough to call")
     return side, p, note
+
+
+# ================================================================== MAJORITY (2026-10-24, user: "keep the 4:00, 6:00 and 8:00 and
+# use a majority-rules approach"). The final (8:00) call = the side at least 2 of the 3 reads agree on. Scored on the same
+# newest-30% rounds as everything else; the 8:00 read on its own is the bar to beat.
+def _side_at(r, mark, m2):
+    x = r["per"].get(mark)
+    if not x:
+        return None
+    mm = m2.get(str(mark)) or {}
+    if mm.get("valid") and mm.get("feats") == M2_FEATS:
+        p = m2_p(mm["w"], m2_x(x["kp"], x["dist"], x["t"]))
+        if max(p, 1 - p) < (mm.get("thr") or 0.5):
+            return None
+        return "YES" if p >= 0.5 else "NO"
+    c = x["call"]                                       # today's rules (1-minute trend skip)
+    if c and x["t"].get("1m") and (x["t"]["1m"] > 0) != (c == "YES"):
+        return None
+    return c
+
+
+def majority_eval(rows, outcome, m2):
+    R = [r for r in rows if 480 in r["per"]]
+    sp = int(len(R) * 0.7)
+    part = {"train": R[:sp], "unseen": R[sp:], "all": R}
+    modes = {
+        "8:00 alone": lambda e, m, s: s,
+        "majority (no majority = no call)": lambda e, m, s: (
+            "YES" if [e, m, s].count("YES") >= 2 else ("NO" if [e, m, s].count("NO") >= 2 else None)),
+        "majority (no majority = 8:00 read)": lambda e, m, s: (
+            "YES" if [e, m, s].count("YES") >= 2 else ("NO" if [e, m, s].count("NO") >= 2 else s)),
+        "all 3 agree": lambda e, m, s: (s if (e and m and s and e == m == s) else None),
+    }
+    out = {}
+    for name, fn in modes.items():
+        o = {}
+        for pn, P in part.items():
+            g = []
+            for r in P:
+                side = fn(_side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2))
+                if side:
+                    g.append(outcome(r, 480, side))
+            s_ = _summ(g)
+            s_["cover"] = round(s_["n"] / len(P), 3) if P else 0
+            o[pn] = s_
+        out[name] = o
+    base = out["8:00 alone"]
+    pick = None
+    for name in ("majority (no majority = no call)", "majority (no majority = 8:00 read)"):
+        u = out[name]["unseen"]
+        if u["n"] and base["unseen"]["n"] and u["win"] >= base["unseen"]["win"] and u["pnl"] >= base["unseen"]["pnl"]:
+            if pick is None or (u["win"], u["pnl"]) > (out[pick]["unseen"]["win"], out[pick]["unseen"]["pnl"]):
+                pick = name
+    return {"modes": out, "pick": pick}
+
+
+def majority_mode(coin="BTC"):
+    """'sit' (no majority = no call), 'raw' (no majority = 8:00 read) or None (use the 8:00 read alone)."""
+    pk = (load(coin).get("majority") or {}).get("pick")
+    return {"majority (no majority = no call)": "sit", "majority (no majority = 8:00 read)": "raw"}.get(pk)
