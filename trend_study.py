@@ -582,9 +582,10 @@ import math as _m
 M2_FEATS = ["lk", "dist", "1m", "5m", "15m", "1h", "fvg_1m", "fvg_5m", "fvg_15m", "fvg_1h", "fvg_1d",
             "swp_1m", "swp_5m", "swp_15m", "swp_1h", "swp_1d",
             "crosses", "oneway_dist", "chop", "chop_dist", "r4h",
-            "xflow", "kmoney", "liq", "rsi", "walls", "has_live"] + [
-    "wick_1m", "wick_5m", "wick_15m", "sr_1m", "sr_5m", "sr_15m", "sr_1h", "rej_1m", "rej_5m", "rej_15m", "line_rej"]
-SR_KEYS = M2_FEATS[27:]
+            "xflow", "kmoney", "liq", "rsi", "walls", "has_live"]
+# 2026-10-24 (user: "if it makes more losses, don't implement it - go back to the most profitable model"): the wick / support-
+# resistance inputs are measured side by side (sr_ablation) but are NOT in the live model unless that test proves them better.
+SR_KEYS = ["wick_1m", "wick_5m", "wick_15m", "sr_1m", "sr_5m", "sr_15m", "sr_1h", "rej_1m", "rej_5m", "rej_15m", "line_rej"]
 _m2 = {}
 
 
@@ -670,7 +671,13 @@ def m2_x(kp, dist, t):
                float(ex.get("rsi") or 0.0),                 # RSI 14 (1 min), -1..+1
                float(ex.get("walls") or 0.0),               # bid wall vs ask wall near price, -1..+1
                1.0 if ex.get("has_live") else 0.0]
-            + [float(ex.get(k) or 0.0) for k in SR_KEYS])        # wicks / support-resistance / retests / line rejections
+)
+
+
+def m2_x_sr(kp, dist, t):
+    """The live model's inputs plus the wick / support-resistance / retest / rejection inputs (test only)."""
+    ex = t.get("_ex") or {}
+    return m2_x(kp, dist, t) + [float(ex.get(k) or 0.0) for k in SR_KEYS]
 
 
 def _fit(X, y, l2=0.02, iters=400, lr=0.3):
@@ -1253,11 +1260,11 @@ def sr_ablation(coin, rows, outcome):
             continue
         def X(r):
             x = r["per"][mark]
-            return m2_x(x["kp"], x["dist"], x["t"])
+            return m2_x_sr(x["kp"], x["dist"], x["t"])
         Xt = [X(r) for r in tr]
         y = [1.0 if r["up"] else 0.0 for r in tr]
         w_full = _fit(Xt, y)
-        w_no = _fit([x[:-n_sr] + [0.0] * n_sr for x in Xt], y)
+        w_no = _fit([x[:-n_sr] for x in Xt], y)
         for label, w, strip in (("without wicks/support", w_no, True), ("with wicks/support", w_full, False)):
             line = []
             for thr in (0.5, 0.6, 0.7, 0.8):
@@ -1265,7 +1272,7 @@ def sr_ablation(coin, rows, outcome):
                 for r in un:
                     x = X(r)
                     if strip:
-                        x = x[:-n_sr] + [0.0] * n_sr
+                        x = x[:-n_sr]
                     p = m2_p(w, x)
                     if max(p, 1 - p) >= thr:
                         g.append(outcome(r, mark, "YES" if p >= 0.5 else "NO"))
