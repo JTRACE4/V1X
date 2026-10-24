@@ -61,6 +61,38 @@ from kalshi_live_bot import (
 )
 from kalshi_price_projection import project_range, project_point_for_minutes, EMPIRICAL_MOVES, HORIZONS_MINUTES
 
+# 2026-10-24 (user: "site isn't refreshing fast enough every 15 min market ... make it eco efficient"): the market list was
+# asked for on every loop (~30 calls a minute for nothing). Now it is asked for every 15s mid-round (the list quote feeds
+# XRP's calls, so it stays about as fresh as before) and EVERY SECOND around the round change, the moment the old market
+# closes, so the new round's line, price and timer show up almost instantly. A closed market is never returned.
+_live_bot_get_active_market = get_active_market
+_AM_CACHE = {}                                   # series -> (fetched_at, market)
+
+
+def get_active_market(series):
+    now = time.time()
+    hit = _AM_CACHE.get(series)
+    if hit:
+        try:
+            close = dt.datetime.fromisoformat(hit[1]["close_time"].replace("Z", "+00:00")).timestamp()
+        except Exception:
+            close = 0
+        if close > now:
+            ttl = 1.0 if close - now < 15 else 15.0
+            if now - hit[0] < ttl:
+                return dict(hit[1])
+    m = _live_bot_get_active_market(series)
+    if m is not None:
+        _AM_CACHE[series] = (now, m)
+        return dict(m)
+    return None
+
+
+def _near_round_change():
+    """True in the last 20s and first 25s of every quarter hour - the poll loop runs faster only then."""
+    s = time.time() % 900
+    return s < 25 or s > 880
+
 # narrowed to BTC + XRP per user request 2026-08-15 - this only filters what
 # the DASHBOARD displays/polls, doesn't touch ASSETS itself (shared with the
 # real live trading bot's config, never mutated here). ETH's history stays
@@ -5601,7 +5633,7 @@ def poll_loop():
         _poll_loop_t["last"] = round(_el, 2)
         _poll_loop_t["n"] += 1
         _poll_loop_t["avg"] = round(_poll_loop_t["avg"] + (_el - _poll_loop_t["avg"]) / min(_poll_loop_t["n"], 30), 2)
-        time.sleep(2)
+        time.sleep(0.5 if _near_round_change() else 2)
 
 
 PAGE_TEMPLATE = r"""<!doctype html>
@@ -9487,7 +9519,7 @@ async function refreshLoop() {
   const t0 = Date.now();
   try { await refresh(); } catch (e) { /* network blip - try again next tick */ }
   // background tab: every 3s instead of every second (alerts still play, a couple of seconds later at most)
-  const every = document.hidden ? 3000 : 1000;
+  const every = document.hidden ? 6000 : 1000;   // 2026-10-24: hidden tabs were 3s - 6s halves their server load
   setTimeout(refreshLoop, Math.max(250, every - (Date.now() - t0)));
 }
 // countdowns tick in the browser between server updates, so seconds never skip
