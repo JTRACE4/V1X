@@ -433,6 +433,11 @@ def run(coin="BTC"):
         res["method2"] = {k: {kk: vv for kk, vv in v.items() if kk != "w"} for k, v in m2.items()}
         res["method2_w"] = {k: dict(zip(["bias"] + M2_FEATS, [round(x, 3) for x in v["w"]])) for k, v in m2.items()}
         res["majority"] = majority_eval(rows, outcome, m2)
+        try:
+            res["sealed_report"] = sealed_report(rows, outcome, m2)
+            _log_sealed(coin, res["sealed_report"])
+        except Exception as _sre:
+            print(f"[8:00 report] {coin}: {_sre!r}")
     except Exception as _e2:
         print(f"[trend study] method v2 failed: {_e2!r}")
     res["coin"] = coin
@@ -449,7 +454,7 @@ def run(coin="BTC"):
 def _f(s):
     if not s or not s.get("n"):
         return "n=0"
-    return f"n={s['n']} win={s['win']:.1%} ${s['pnl']:+,.0f} ({s['per']:+.1f}/call) cover={s.get('cover', 0):.0%}"
+    return f"n={s['n']} win={s['win']:.1%} ${s['pnl']:+,.0f} ({s['per']:+.1f}/call)" + (f" cover={s['cover']:.0%}" if "cover" in s else "")
 
 
 def _log(res):
@@ -844,3 +849,113 @@ def majority_mode(coin="BTC"):
     """'sit' (no majority = no call), 'raw' (no majority = 8:00 read) or None (use the 8:00 read alone)."""
     pk = (load(coin).get("majority") or {}).get("pick")
     return {"majority (no majority = no call)": "sit", "majority (no majority = 8:00 read)": "raw"}.get(pk)
+
+
+# ================================================================== 8:00 METHODS + WHEN TO SKIP (2026-10-24, user: "give me the best 8:00
+# sealed method, the most profitable, and recommend times to skip - BTC and XRP"). Every 8:00 method side by side, then broken
+# down by hour of day (ET, round start), the price paid and the line crosses at 8:00. Skip rules are picked on the older 70% of
+# rounds (a bucket is skipped when it lost money there over 15+ calls) and checked on the newest 30%.
+def _v2_side(r, mark, m2, force=False):
+    x = r["per"].get(mark)
+    mm = m2.get(str(mark)) or {}
+    if not x or mm.get("feats") != M2_FEATS or not (mm.get("valid") or force):
+        return None
+    p = m2_p(mm["w"], m2_x(x["kp"], x["dist"], x["t"]))
+    if max(p, 1 - p) < (mm.get("thr") or 0.5):
+        return None
+    return "YES" if p >= 0.5 else "NO"
+
+
+def _old_side(r, mark):
+    x = r["per"].get(mark)
+    if not x:
+        return None
+    c = x["call"]
+    if c and x["t"].get("1m") and (x["t"]["1m"] > 0) != (c == "YES"):
+        return None
+    return c
+
+
+def sealed_report(rows, outcome, m2):
+    import datetime as _dt
+    from zoneinfo import ZoneInfo as _Z
+    et = _Z("America/New_York")
+    R = [r for r in rows if 480 in r["per"]]
+    sp = int(len(R) * 0.7)
+    maj = lambda e, m, s: "YES" if [e, m, s].count("YES") >= 2 else ("NO" if [e, m, s].count("NO") >= 2 else None)
+    methods = {
+        "8:00 old rules": lambda r: _old_side(r, 480),
+        "8:00 new method": lambda r: _v2_side(r, 480, m2, force=True),
+        "majority, no majority = no call": lambda r: maj(_side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2)),
+        "majority, no majority = 8:00 read": lambda r: (maj(_side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2))
+                                                        or _side_at(r, 480, m2)),
+        "all 3 agree": lambda r: (lambda e, m, s: s if (e and m and s and e == m == s) else None)(
+            _side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2)),
+        "majority + new 8:00 must agree": lambda r: (lambda v, s: v if (v and s == v) else None)(
+            maj(_side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2)), _v2_side(r, 480, m2, force=True)),
+    }
+
+    def dims(r, side):
+        x = r["per"][480]
+        kp = x["kp"] if side == "YES" else 1 - x["kp"]
+        cr = int(((x["t"].get("_ex") or {}).get("crosses")) or 0)
+        h = _dt.datetime.fromtimestamp(r["open"], et).hour
+        pb = "under 60c" if kp < 0.60 else ("60-70c" if kp < 0.70 else ("70-80c" if kp < 0.80 else ("80-90c" if kp < 0.90 else "90c+")))
+        return {"hour": h, "price": pb, "crosses": "3+" if cr >= 3 else str(cr)}
+
+    out = {}
+    for name, fn in methods.items():
+        trades = []
+        for i, r in enumerate(R):
+            side = fn(r)
+            if side:
+                w, pl = outcome(r, 480, side)
+                trades.append({"i": i, "w": w, "pl": pl, **dims(r, side)})
+        tr = [t for t in trades if t["i"] < sp]
+        un = [t for t in trades if t["i"] >= sp]
+        S = lambda ts: _summ([(t["w"], t["pl"]) for t in ts])
+        res = {"all": S(trades), "train": S(tr), "unseen": S(un), "cover_all": round(len(trades) / len(R), 3)}
+        # skip buckets: the worst-losing buckets on the older rounds (20+ calls each), worst first, while at least 60% of the
+        # calls are kept and at most 6 hours are skipped - then checked on the newest rounds
+        skips = {"hour": [], "price": [], "crosses": []}
+        cands = []
+        for dim in skips:
+            for v in {t[dim] for t in tr}:
+                g = [t for t in tr if t[dim] == v]
+                pl = sum(t["pl"] for t in g)
+                if len(g) >= 20 and pl < 0:
+                    cands.append((pl / len(g), dim, v))
+        kept = list(tr)
+        for _per, dim, v in sorted(cands):
+            if dim == "hour" and len(skips["hour"]) >= 6:
+                continue
+            nxt = [t for t in kept if t[dim] != v]
+            if len(nxt) < 0.6 * len(tr):
+                continue
+            skips[dim].append(v)
+            kept = nxt
+        keep = lambda t: not any(t[d] in skips[d] for d in skips)
+        res["skips"] = {k: [str(x) for x in v] for k, v in skips.items()}
+        res["with_skips"] = {"train": S([t for t in tr if keep(t)]), "unseen": S([t for t in un if keep(t)]),
+                             "all": S([t for t in trades if keep(t)])}
+        # full breakdowns (all 30 days) for the report
+        res["by"] = {d: {str(v): S([t for t in trades if t[d] == v]) for v in sorted({t[d] for t in trades}, key=str)}
+                     for d in ("hour", "price", "crosses")}
+        out[name] = res
+    return out
+
+
+def _log_sealed(coin, rep):
+    print(f"[8:00 report] {coin} ===== every 8:00 method, newest 30% of rounds never used to pick | all 30 days")
+    for name, v in rep.items():
+        print(f"[8:00 report] {coin} {name:<34} unseen {_f(v['unseen'])} | all {_f(v['all'])} cover {v['cover_all']:.0%}")
+    for name, v in rep.items():
+        sk = v["skips"]
+        print(f"[8:00 report] {coin} {name:<34} SKIP hours(ET) {sk['hour'] or '-'} | price {sk['price'] or '-'} | crosses {sk['crosses'] or '-'}"
+              f" -> unseen {_f(v['with_skips']['unseen'])} | all {_f(v['with_skips']['all'])}")
+    for best in (max(rep.items(), key=lambda kv: (kv[1]["unseen"]["win"] or 0)),
+                 max(rep.items(), key=lambda kv: (kv[1]["unseen"]["pnl"] or -1e9))):
+      for d in ("hour", "price", "crosses"):
+        print(f"[8:00 report] {coin} {best[0]} by {d}: " + " | ".join(
+            f"{k}: {s['win']:.0%} ${s['pnl']:+,.0f} n={s['n']}" for k, s in sorted(best[1]["by"][d].items(),
+                                                                              key=lambda kv: (len(kv[0]), kv[0])) if s["n"]))
