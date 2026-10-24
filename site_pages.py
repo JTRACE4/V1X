@@ -492,9 +492,13 @@ PRICING_CSS = r"""
 .pr .fine{color:#bcaaa1;font-size:12.5px;margin-top:18px;line-height:1.6}
 .pr .co-h{font-family:Fraunces,Georgia,serif;font-weight:700;color:#fbf4ec;margin:26px 0 10px;font-size:22px}
 .pr .plan.co{max-width:420px}
+.pr .renew-note{color:#d6cac4;font-size:13.5px;margin:0 0 14px}
+.pr .mng{display:inline-block;margin:10px 0 2px;padding:9px 18px;border-radius:999px;border:1px solid rgba(201,247,230,.55);
+  background:rgba(201,247,230,.10);color:#c9f7e6;font:inherit;font-weight:800;cursor:pointer}
+.pr .mng-sub{font-size:12px;color:#a9cfc1}
 """
 
-PLAN_FEATURES = ["Live dashboard: early + sealed calls with BRAIN confidence", "Spoken alerts, flip watch, cash-out + coin-flip notes",
+PLAN_FEATURES = ["Live dashboard: 4:00, 6:00 + 8:00 calls with BRAIN confidence", "Spoken alerts, flip watch, cash-out + coin-flip notes",
                  "Whale impact scores + Trader Radar", "Graded record, $100 backtest, price-target history",
                  "Live charts for every coin (same as Chart Only)", "The BRAIN Playbook (PDF guide to every screen)"]
 
@@ -504,16 +508,21 @@ CHART_FEATURES = ["Live BTC + XRP charts (1m to 1D)", "EMA 12 / 25 / 50, RSI and
                   "Chart patterns with their track record", "No BRAIN bot features (calls, flip radar, alerts, voice)"]
 
 
-def pricing_page(user, plans, until_text=None, active=False, chart_until_text=None):
-    """plans: [(key, label, price, per_day_text, checkout_url_or_'')]. Keys starting with "chart" are the Chart Only pass."""
+def pricing_page(user, plans, until_text=None, active=False, chart_until_text=None, manage=False, auto_renew=None):
+    """plans: [(key, label, price, per_day_text, checkout_url_or_'')]. Keys starting with "chart" are the Chart Only pass.
+    2026-10-24 (user): memberships auto-renew by default; manage=True shows the button to Stripe's billing page."""
+    mbtn = ('<form method="post" action="/billing/portal" style="display:inline"><button class="mng">Manage membership</button></form>'
+            '<div class="mng-sub">Turn auto-renew off or on, update your card, see receipts.</div>') if manage else ""
+    ren = (" It renews automatically on that date." if auto_renew else (" Auto-renew is off - it ends on that date." if manage else ""))
     if user and active:
-        status = (f'<div class="status">Your membership is active until <b>{E(until_text or "")}</b>. Buying another adds its days on top. '
-                  f'&middot; <a href="/playbook.pdf" style="color:#c9f7e6;font-weight:800">Download your BRAIN Playbook</a></div>')
+        status = (f'<div class="status">Your membership is active until <b>{E(until_text or "")}</b>.{ren} '
+                  f'&middot; <a href="/playbook.pdf" style="color:#c9f7e6;font-weight:800">Download your BRAIN Playbook</a>{mbtn}</div>')
     elif user and chart_until_text:
-        status = (f'<div class="status">Your Chart Only membership is active until <b>{E(chart_until_text)}</b>. '
-                  f'&middot; <a href="/charts" style="color:#c9f7e6;font-weight:800">Open your charts</a> &middot; upgrade below for the full BRAIN bot.</div>')
+        status = (f'<div class="status">Your Chart Only membership is active until <b>{E(chart_until_text)}</b>.{ren} '
+                  f'&middot; <a href="/charts" style="color:#c9f7e6;font-weight:800">Open your charts</a> &middot; upgrade below for the full BRAIN bot.{mbtn}</div>')
     elif user:
-        status = '<div class="status none">No active membership yet - pick one below to unlock the live dashboard.</div>'
+        status = ('<div class="status none">No active membership yet - pick one below to unlock the live dashboard.'
+                  + (f'<br>{mbtn}' if manage else "") + '</div>')
     else:
         status = '<div class="status none">Create a free account first, then pick a membership.</div>'
     cards = chart_card = ""
@@ -527,7 +536,7 @@ def pricing_page(user, plans, until_text=None, active=False, chart_until_text=No
                 cbtn = '<span class="go off">Checkout opening soon</span>'
             chart_card = (f'<h2 class="co-h">Just the charts</h2><div class="grid"><div class="plan co">'
                           f'<div class="nm">CHART ONLY &middot; 3.5 MONTHS</div><div class="px">{E(price)}</div>'
-                          f'<div class="per">{E(per)} &middot; one-time, never renews</div>'
+                          f'<div class="per">{E(per)}</div>'
                           + "<ul>" + "".join(f"<li>{E(x)}</li>" for x in CHART_FEATURES) + "</ul>" + cbtn + "</div></div>")
             continue
         best = key == "105d"
@@ -538,14 +547,18 @@ def pricing_page(user, plans, until_text=None, active=False, chart_until_text=No
         else:
             btn = '<span class="go off">Checkout opening soon</span>'
         cards += (f'<div class="plan{" best" if best else ""}">' + ('<span class="tagb">BEST VALUE</span>' if best else "")
-                  + f'<div class="nm">{E(label.upper())}</div><div class="px">{E(price)}</div><div class="per">{E(per)} &middot; one-time, never renews</div>'
+                  + f'<div class="nm">{E(label.upper())}</div><div class="px">{E(price)}</div><div class="per">{E(per)}</div>'
                   + "<ul>" + "".join(f"<li>{E(x)}</li>" for x in PLAN_FEATURES) + "</ul>" + btn + "</div>")
     body = ((app_tabs(user, "pricing") if user else
              '<div class="top" style="padding:10px 16px"><a class="brand" href="/">' + brain_logo(34, "p") + '<b>BRAIN</b></a></div>')
             + '<div class="pr"><h1>Get BRAIN</h1><p class="lead">Live market intelligence for 15-minute BTC and XRP rounds.</p>'
-            + status + f'<div class="grid">{cards}</div>{chart_card}'
-            + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Memberships are one-time payments and never '
-              'renew on their own - we email you 2 days before yours ends. <b>All sales are final, no refunds.</b> Accounts that misuse '
+            + status + '<p class="renew-note">Memberships renew automatically at the same price, so your access never lapses. '
+              'Turn auto-renew off any time with one tap - you keep everything you already paid for.</p>'
+            + f'<div class="grid">{cards}</div>{chart_card}'
+            + '<p class="fine">Paid securely through Stripe (cards, Apple Pay, Google Pay). Memberships renew automatically every 10 days, '
+              '30 days or 3.5 months (105 days) at the price you joined at, until you turn auto-renew off on My Pass (Manage membership) - '
+              'you keep access until the end of the time already paid for, and we email you 2 days before each renewal. '
+              '<b>All sales are final, no refunds</b>, including renewals you didn\'t turn off in time. Accounts that misuse '
               'the service or put it at risk can be suspended or ended without a refund (see Terms). BRAIN is an information and '
               'data service: it gathers and shows what market data and its models are reading. Nothing here is financial advice, '
               'a recommendation, or an instruction to trade or use your money; readings can be wrong and trading can lose money. '
@@ -663,7 +676,7 @@ TERMS = [
      "freeze or go offline without warning. Past results, streaks and win rates never predict future results. BRAIN and its "
      "owner are not responsible for any loss or damage from using, or relying on, anything shown here."),
     ("Memberships and payments", "The live dashboard needs a membership: 10 days ($65), 30 days ($165) or 3.5 months ($379); the Chart Only "
-     "membership (live charts only) is 3.5 months ($35). Each is paid once through Stripe. Memberships never renew on their own - buying another adds its days on top of any time you have left. "
+     "membership (live charts only) is 3.5 months ($35). Paid through Stripe. Memberships renew automatically at the same price at the end of each period until you turn auto-renew off (My Pass > Manage membership, any time before the renewal date); you keep access until the end of the time already paid for. We email you 2 days before each renewal. "
      "ALL SALES ARE FINAL: no refunds, including for unused time."),
     ("Suspension and termination", "BRAIN can suspend or end any account or membership at any time, at the owner's discretion, "
      "including for convenience. This covers, for example: misusing the site or the bot; sharing, reselling or copying what you "

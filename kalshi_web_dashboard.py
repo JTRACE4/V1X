@@ -16537,7 +16537,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             act = _bill.has_access(user) and user.get("role") != "owner"
             _co = _bill.chart_only(user) and user.get("role") != "owner"
             return self._send(200, _site.pricing_page(user, plans, _bill.fmt_until(_bill.access_until(user)) if act else None, act,
-                                                      chart_until_text=_bill.fmt_until(_bill.chart_until(user)) if _co else None))
+                                                      chart_until_text=_bill.fmt_until(_bill.chart_until(user)) if _co else None,
+                                                      manage=bool(user and user.get("stripe_customer")),
+                                                      auto_renew=bool(user and user.get("auto_renew"))))
         if path == "/login":
             if user:
                 return self._redirect(_safe_next(q("next")))
@@ -16622,6 +16624,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(500, "error", "text/plain")
             print(f"[billing] {res}")
             return self._send(200, "ok", "text/plain")
+        if path == "/billing/portal":
+            # 2026-10-24 (user): members turn auto-renew off / on (and update their card) on Stripe's own billing page
+            if not self._same_origin():
+                return self._send(403, "Blocked: request came from another site.", "text/plain")
+            u_ = self._user()
+            if not u_:
+                return self._redirect("/login?next=/pricing")
+            try:
+                url_ = _bill.portal_url(u_)
+            except Exception as _pe:
+                print(f"[billing] portal link failed for {u_.get('username')}: {_pe!r}")
+                url_ = ""
+            if not url_:
+                return self._send(200, _site.message_page("Not available yet", "We couldn't open the billing page for your account. "
+                                                          "Email support@brainswatch.com and we'll sort it out.", "/pricing", "Back"))
+            return self._send(303, "", "text/plain", [("Location", url_)])
         if path == "/radar_admin":
             if not self._same_origin():
                 return self._send(403, "Blocked: request came from another site.", "text/plain")
