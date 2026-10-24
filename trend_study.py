@@ -282,8 +282,10 @@ def run(coin="BTC"):
                 continue
             last_min = int((f["T"] - 60) // 60 * 60)
             t = {}
+            ser = {}
             for name, sec in TF.items():
                 cs = _series_at(cb, rs.get(sec), sec, last_min)
+                ser[name] = cs
                 try:
                     t[name] = tr(cs)[0] if len(cs) >= 55 else 0
                 except Exception:
@@ -321,6 +323,10 @@ def run(coin="BTC"):
             wv = _nearest(walls.get(m["ticker"]), 900 - mark)
             if wv:
                 ex["walls"] = wv[1]
+            try:
+                ex.update(sr_feats(ser, f["spot"] / (1 + f["dist"])))
+            except Exception:
+                pass
             t["_ex"] = ex
             per[mark] = {"kp": f["kp"], "call": call, "fav": fav, "t": t, "dist": f["dist"]}
         if per:
@@ -442,6 +448,7 @@ def run(coin="BTC"):
             _log_tiers(coin, res["tier_report"])
             res["dip_report"] = dip_report(rows, outcome, m2)
             _log_dip(coin, res["dip_report"])
+            sr_ablation(coin, rows, outcome)
         except Exception as _sre:
             print(f"[8:00 report] {coin}: {_sre!r}")
     except Exception as _e2:
@@ -575,8 +582,69 @@ import math as _m
 M2_FEATS = ["lk", "dist", "1m", "5m", "15m", "1h", "fvg_1m", "fvg_5m", "fvg_15m", "fvg_1h", "fvg_1d",
             "swp_1m", "swp_5m", "swp_15m", "swp_1h", "swp_1d",
             "crosses", "oneway_dist", "chop", "chop_dist", "r4h",
-            "xflow", "kmoney", "liq", "rsi", "walls", "has_live"]
+            "xflow", "kmoney", "liq", "rsi", "walls", "has_live"] + [
+    "wick_1m", "wick_5m", "wick_15m", "sr_1m", "sr_5m", "sr_15m", "sr_1h", "rej_1m", "rej_5m", "rej_15m", "line_rej"]
+SR_KEYS = M2_FEATS[27:]
 _m2 = {}
+
+
+# ---- candle wicks, support / resistance, retests and rejections (2026-10-24, user: "factor in the retest points and rejections and
+# supports - the wicks of candles show where support and resistance are"). Same function for the replay and the live call, built
+# from [ts, o, h, l, c] candles per timeframe. Every value is signed: + points UP, - points DOWN, within -1..+1.
+#   wick_*   the last 3 candles' lower wick minus upper wick, as a share of the candle (buyers defending lows = +)
+#   sr_*     which is nearer to price, the closest swing-low support below (+) or the closest swing-high resistance above (-)
+#   rej_*    in the last 8 candles: touches of that support that held (+) minus touches of that resistance that was rejected (-)
+#   line_rej in the last 10 minutes: wicks through the round's line that closed back above it (+) or back below it (-)
+# (Backtest candles are 1-minute at best; the live feed has ticks but the model is trained on, and so uses, candle wicks.)
+def sr_feats(ser, line=None):
+    out = {k: 0.0 for k in SR_KEYS}
+    for tf in ("1m", "5m", "15m", "1h"):
+        cs = [list(c) for c in (ser.get(tf) or [])][-40:]
+        if len(cs) < 20:
+            continue
+        rng = [c[2] - c[3] for c in cs[-14:]]
+        atr = (sum(rng) / len(rng)) or 1e-9
+        px = cs[-1][4]
+        if tf != "1h":
+            w = 0.0
+            for c in cs[-3:]:
+                r = c[2] - c[3]
+                if r > 0:
+                    w += ((min(c[1], c[4]) - c[3]) - (c[2] - max(c[1], c[4]))) / r
+            out[f"wick_{tf}"] = max(-1.0, min(1.0, w / 3))
+        sup, res = [], []
+        for i in range(2, len(cs) - 2):
+            if cs[i][3] < min(cs[i - 2][3], cs[i - 1][3], cs[i + 1][3], cs[i + 2][3]):
+                sup.append(cs[i][3])
+            if cs[i][2] > max(cs[i - 2][2], cs[i - 1][2], cs[i + 1][2], cs[i + 2][2]):
+                res.append(cs[i][2])
+        S = max([x for x in sup if x <= px], default=None)
+        Rr = min([x for x in res if x >= px], default=None)
+        if S is not None and Rr is not None:
+            dS, dR = (px - S) / atr, (Rr - px) / atr
+            out[f"sr_{tf}"] = (dR - dS) / (dR + dS + 1e-9)
+        elif S is not None:
+            out[f"sr_{tf}"] = 0.3 if (px - S) / atr < 1 else 0.0
+        elif Rr is not None:
+            out[f"sr_{tf}"] = -0.3 if (Rr - px) / atr < 1 else 0.0
+        if tf != "1h":
+            held = 0
+            for c in cs[-8:]:
+                if S is not None and S - 0.5 * atr <= c[3] <= S + 0.3 * atr and c[4] > S:
+                    held += 1
+                if Rr is not None and Rr - 0.3 * atr <= c[2] <= Rr + 0.5 * atr and c[4] < Rr:
+                    held -= 1
+            out[f"rej_{tf}"] = max(-3, min(3, held)) / 3.0
+    one = [list(c) for c in (ser.get("1m") or [])][-10:]
+    if line and one:
+        v = 0
+        for c in one:
+            if c[3] < line and c[4] > line:
+                v += 1
+            elif c[2] > line and c[4] < line:
+                v -= 1
+        out["line_rej"] = max(-3, min(3, v)) / 3.0
+    return out
 
 
 def _lk(p):
@@ -601,7 +669,8 @@ def m2_x(kp, dist, t):
                float(ex.get("liq") or 0.0),                 # liquidations: shorts squeezed (+) vs longs flushed (-)
                float(ex.get("rsi") or 0.0),                 # RSI 14 (1 min), -1..+1
                float(ex.get("walls") or 0.0),               # bid wall vs ask wall near price, -1..+1
-               1.0 if ex.get("has_live") else 0.0])
+               1.0 if ex.get("has_live") else 0.0]
+            + [float(ex.get(k) or 0.0) for k in SR_KEYS])        # wicks / support-resistance / retests / line rejections
 
 
 def _fit(X, y, l2=0.02, iters=400, lr=0.3):
@@ -769,7 +838,7 @@ def live_feeds(t, tn, rsi, bw, coin):
     return t
 
 
-def live_extras(t, win, crosses):
+def live_extras(t, win, crosses, dist=None):
     """Adds the line-behavior / choppiness / 4-hour inputs for a live call (same definitions as the replay)."""
     ex = {"crosses": int(crosses or 0)}
     one = [list(c) for c in ((win or {}).get("1m") or [])]
@@ -777,6 +846,13 @@ def live_extras(t, win, crosses):
     ex["chop"] = (sum(abs(cl[i] / cl[i + 1] - 1) for i in range(len(cl) - 1)) * 1000) if len(cl) >= 3 else 0.0
     q = [list(c) for c in ((win or {}).get("15m") or [])]
     ex["r4h"] = ((q[-1][4] / q[-17][4] - 1) * 100) if len(q) >= 17 else 0.0
+    try:
+        ser = {k: [list(c) for c in ((win or {}).get(k) or [])] for k in ("1m", "5m", "15m", "1h")}
+        ser["1m"] = ser["1m"][:-1]                       # the replay only ever sees completed minutes
+        spot = ser["1m"][-1][4] if ser["1m"] else None
+        ex.update(sr_feats(ser, (spot / (1 + dist)) if (spot and dist is not None) else None))
+    except Exception:
+        pass
     t["_ex"] = ex
     return t
 
@@ -1164,6 +1240,37 @@ def _log_dip(coin, rep):
             continue
         print(f"[dip] {coin} {name:<32} buy now: unseen {_f(v['now_unseen'])} | rule: limit {v['dip']*100:.0f}c under the call price, "
               f"{v['minutes']} min, cap {v['cap']:.0%}, filled {v['fill_rate_unseen']:.0%} -> unseen {_f(v['unseen'])} | all 30d {_f(v['all'])}")
+
+
+def sr_ablation(coin, rows, outcome):
+    """Same model fitted with and without the wick / support-resistance inputs, scored on the newest 30% at each call time."""
+    n_sr = len(SR_KEYS)
+    for mark in MARKS:
+        R = [r for r in rows if mark in r["per"]]
+        sp = int(len(R) * 0.7)
+        tr, un = R[:sp], R[sp:]
+        if len(tr) < 100 or len(un) < 40:
+            continue
+        def X(r):
+            x = r["per"][mark]
+            return m2_x(x["kp"], x["dist"], x["t"])
+        Xt = [X(r) for r in tr]
+        y = [1.0 if r["up"] else 0.0 for r in tr]
+        w_full = _fit(Xt, y)
+        w_no = _fit([x[:-n_sr] + [0.0] * n_sr for x in Xt], y)
+        for label, w, strip in (("without wicks/support", w_no, True), ("with wicks/support", w_full, False)):
+            line = []
+            for thr in (0.5, 0.6, 0.7, 0.8):
+                g = []
+                for r in un:
+                    x = X(r)
+                    if strip:
+                        x = x[:-n_sr] + [0.0] * n_sr
+                    p = m2_p(w, x)
+                    if max(p, 1 - p) >= thr:
+                        g.append(outcome(r, mark, "YES" if p >= 0.5 else "NO"))
+                line.append(f">={thr:.0%}: {_f(_summ(g))}")
+            print(f"[sr test] {coin} {mark // 60}:00 {label:<22} unseen " + " | ".join(line))
 
 
 def _log_sealed(coin, rep):

@@ -5011,7 +5011,7 @@ def poll_loop():
                         import trend_study as _tst
                         if not _rev and _mtf is not None and kalshi_price is not None and live_price and target:
                             _tt2 = _tst.trend_from_windows(_mtf.windows.get(asset["symbol"]), trend_read)
-                            _tst.live_extras(_tt2, _mtf.windows.get(asset["symbol"]), _crosses)
+                            _tst.live_extras(_tt2, _mtf.windows.get(asset["symbol"]), _crosses, (live_price - target) / target)
                             try:
                                 _bw = get_book_walls(asset["symbol"], live_price) or {}
                             except Exception:
