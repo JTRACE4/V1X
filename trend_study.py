@@ -18,8 +18,104 @@ import backtest_engine as bt
 
 TF = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}
 MARKS = (240, 360, 480)
-FILE = os.path.join(bt.CACHE, "trend_study.json")
-_state = {"res": None, "ts": 0.0}
+COINS = ("BTC", "XRP")
+_state = {}                       # coin -> {"res": ..., "ts": ...}
+
+
+def _file(coin, base):
+    # BTC keeps the original file names; other coins get their own (2026-10-24: XRP was being called with BTC's lessons)
+    return os.path.join(bt.CACHE, f"{base}.json" if coin == "BTC" else f"{base}_{coin.lower()}.json")
+
+
+# ---- XRP replay data (2026-10-24, user: "data pulling problem or algorithm?"): the backtest only ever replayed BTC rounds,
+# so every learned XRP rule was really a BTC rule. This pulls XRP's own settled rounds, their market price paths and
+# XRP-USD 1-minute candles, cached and topped up incrementally.
+def _xrp_data(max_new_paths=3200):
+    series = "KXXRP15M"
+    now = time.time()
+    mk = bt._load("xrp_markets.json", [])
+    if not mk or now - max(m["close"] for m in mk) > 1800:
+        out, cursor = [], None
+        for _ in range(60):
+            params = {"series_ticker": series, "status": "settled", "limit": 1000, "min_close_ts": int(now - bt.LOOKBACK_DAYS * 86400)}
+            if cursor:
+                params["cursor"] = cursor
+            j = bt._get(f"{bt.KALSHI}/markets", params)
+            batch = j.get("markets") or []
+            out += batch
+            cursor = j.get("cursor")
+            if not batch or not cursor:
+                break
+            time.sleep(0.4)
+        rows = []
+        for m in out:
+            res_ = (m.get("result") or "").lower()
+            if res_ not in ("yes", "no"):
+                continue
+            try:
+                o, c = bt._ts(m["open_time"]), bt._ts(m["close_time"])
+            except Exception:
+                continue
+            if c - o < 800 or c - o > 1000:
+                continue
+            st = m.get("floor_strike")
+            rows.append({"ticker": m["ticker"], "open": o, "close": c, "strike": float(st) if st else None, "result": res_})
+        if rows:
+            mk = sorted(rows, key=lambda r: r["open"])
+            bt._save("xrp_markets.json", mk)
+    kc = bt._load("xrp_kalshi_paths.json", {})
+    todo = [m for m in mk if m["ticker"] not in kc][-max_new_paths:]
+    for i, m in enumerate(todo):
+        try:
+            j = bt._get(f"{bt.KALSHI}/series/{series}/markets/{m['ticker']}/candlesticks",
+                        {"period_interval": 1, "start_ts": int(m["open"]), "end_ts": int(m["close"])})
+            pts = []
+            for c in j.get("candlesticks") or []:
+                pr, bid, ask = c.get("price") or {}, c.get("yes_bid") or {}, c.get("yes_ask") or {}
+                p_ = bt._cents(pr.get("close_dollars"))
+                b_ = bt._cents(bid.get("close_dollars"))
+                a_ = bt._cents(ask.get("close_dollars"))
+                mid = (b_ + a_) / 2 if (b_ is not None and a_ is not None and a_ > 0) else None
+                v = mid if mid is not None else p_
+                if v is not None:
+                    pts.append((int(c["end_period_ts"]), round(v, 4), b_, a_))
+            kc[m["ticker"]] = pts
+        except Exception:
+            kc[m["ticker"]] = []
+        time.sleep(0.4)                                   # leave room for the live market tape
+        if i % 100 == 99:
+            bt._save("xrp_kalshi_paths.json", kc)
+    if todo:
+        bt._save("xrp_kalshi_paths.json", kc)
+    cb = {int(k): v for k, v in bt._load("xrp_coinbase_1m.json", {}).items()}
+    if mk:
+        start = mk[0]["open"] - 3 * 86400                  # 3 extra days so 1h / daily reads have history
+        end = mk[-1]["close"] + 60
+        have = sorted(cb)
+        ranges = []
+        if not have or have[0] > start + 3600:
+            ranges.append((start, end))
+        elif have[-1] < end - 120:
+            ranges.append((have[-1] - 600, end))
+        for a, b in ranges:
+            t = int(a // 60 * 60)
+            while t < b:
+                t2 = min(b, t + 300 * 60)
+                try:
+                    j = bt._get("https://api.exchange.coinbase.com/products/XRP-USD/candles",
+                                {"granularity": 60, "start": bt.dt.datetime.fromtimestamp(t, bt.dt.timezone.utc).isoformat(),
+                                 "end": bt.dt.datetime.fromtimestamp(t2, bt.dt.timezone.utc).isoformat()})
+                    for r in j or []:
+                        cb[int(r[0])] = [float(r[3]), float(r[2]), float(r[1]), float(r[4]), float(r[5])]
+                except Exception:
+                    pass
+                t = t2
+                time.sleep(0.25)
+        cb = {t: v for t, v in cb.items() if t >= start}
+        bt._save("xrp_coinbase_1m.json", cb)
+    done = sum(1 for m in mk if m["ticker"] in kc)
+    print(f"[trend study] XRP data: {len(mk)} settled rounds, {done} with market prices, {len(cb):,} price minutes")
+    return mk, kc, cb, {}
 
 
 def _resample(cb, sec):
@@ -142,17 +238,29 @@ def _summ(rows):
     return {"n": n, "win": round(w / n, 4), "pnl": round(p, 1), "per": round(p / n, 2)}
 
 
-def run():
+def run_all():
+    for coin in COINS:
+        try:
+            run(coin)
+        except Exception as e:
+            print(f"[trend study] {coin}: {e!r}")
+
+
+def run(coin="BTC"):
     tr = bt._fn.get("trend_read")
     if not tr:
         print("[trend study] trend_read not handed over yet")
         return None
-    markets = [m for m in bt._load("markets.json", []) if m.get("result") in ("yes", "no")]
-    kcache = bt._load("kalshi_paths.json", {})
-    cb = {int(k): v for k, v in bt._load("coinbase_1m.json", {}).items()}
-    bn = {int(k): v for k, v in bt._load("binance_1m.json", {}).items()}
+    if coin == "BTC":
+        markets = [m for m in bt._load("markets.json", []) if m.get("result") in ("yes", "no")]
+        kcache = bt._load("kalshi_paths.json", {})
+        cb = {int(k): v for k, v in bt._load("coinbase_1m.json", {}).items()}
+        bn = {int(k): v for k, v in bt._load("binance_1m.json", {}).items()}
+    else:
+        markets, kcache, cb, bn = _xrp_data()
+        markets = [m for m in markets if m.get("result") in ("yes", "no") and kcache.get(m["ticker"])]
     if len(markets) < 200 or not cb:
-        print(f"[trend study] not enough cached data ({len(markets)} rounds)")
+        print(f"[trend study] {coin}: not enough data yet ({len(markets)} rounds)")
         return None
     rs = {sec: _resample(cb, sec) for sec in (300, 900, 3600, 86400)}
     rows = []                                    # one per round: {mark: {...}}
@@ -290,19 +398,22 @@ def run():
     try:
         cur_by = {str(mk_): res["marks"][str(mk_)]["strategies"]["current (1m skip)"] for mk_ in MARKS}
         m2 = method2(rows, outcome, cur_by)
-        _m2["model"] = m2
-        with open(M2_FILE + ".tmp", "w") as fh:
+        _m2[coin] = m2
+        mf = _file(coin, "method2")
+        with open(mf + ".tmp", "w") as fh:
             json.dump(m2, fh)
-        os.replace(M2_FILE + ".tmp", M2_FILE)
+        os.replace(mf + ".tmp", mf)
         res["method2"] = {k: {kk: vv for kk, vv in v.items() if kk != "w"} for k, v in m2.items()}
         res["method2_w"] = {k: dict(zip(["bias"] + M2_FEATS, [round(x, 3) for x in v["w"]])) for k, v in m2.items()}
     except Exception as _e2:
         print(f"[trend study] method v2 failed: {_e2!r}")
+    res["coin"] = coin
+    FILE = _file(coin, "trend_study")
     os.makedirs(os.path.dirname(FILE), exist_ok=True)
     with open(FILE + ".tmp", "w") as fh:
         json.dump(res, fh)
     os.replace(FILE + ".tmp", FILE)
-    _state["res"], _state["ts"] = res, time.time()
+    _state[coin] = {"res": res, "ts": time.time()}
     _log(res)
     return res
 
@@ -314,45 +425,46 @@ def _f(s):
 
 
 def _log(res):
-    print(f"[trend study] {res['rounds']} BTC rounds replayed, newest {res['unseen']} never used to pick")
+    print(f"[trend study] {res.get('coin', 'BTC')}: {res['rounds']} rounds replayed, newest {res['unseen']} never used to pick")
     for mk_, v in (res.get("method2") or {}).items():
         lab = {"240": "4:00", "360": "6:00", "480": "8:00"}[mk_]
-        print(f"[method v2] {lab}: {'LIVE' if v['valid'] else 'not better - not used'} | confidence bar {v['thr']} flip bar {v['flip']}"
+        print(f"[method v2] {res.get('coin', 'BTC')} {lab}: {'LIVE' if v['valid'] else 'not better - not used'} | confidence bar {v['thr']} flip bar {v['flip']}"
               f" | unseen {_f(v['unseen'])} vs current {_f(v.get('current_unseen'))} | train {_f(v.get('train'))}")
-        print(f"[method v2] {lab} weights: {res['method2_w'][mk_]}")
+        print(f"[method v2] {res.get('coin', 'BTC')} {lab} weights: {res['method2_w'][mk_]}")
     for mark, mk in res["marks"].items():
         lab = {"240": "4:00", "360": "6:00", "480": "8:00"}[mark]
         acc = " | ".join(f"{k} {v['unseen']['win']:.0%}/{v['unseen']['cover']:.0%}" for k, v in mk["trend_accuracy"].items()
                          if v["unseen"]["win"] is not None)
-        print(f"[trend study] {lab} trend read -> round result (unseen win / how often it has a side): {acc}")
+        print(f"[trend study] {res.get('coin', 'BTC')} {lab} trend read -> round result (unseen win / how often it has a side): {acc}")
         S = mk["strategies"]
         top = sorted(((k, v) for k, v in S.items() if v["unseen"]["n"] >= 60 and v["unseen"]["cover"] >= 0.5),
                      key=lambda kv: -((kv[1]["unseen"]["win"] or 0) + (0.0 if (kv[1]["unseen"]["per"] or 0) > 0 else -1)))[:8]
         for k in ("current (1m skip)", "call, no trend", "market favorite"):
-            print(f"[trend study] {lab} {k:<22} unseen {_f(S[k]['unseen'])} | all {_f(S[k]['all'])}")
+            print(f"[trend study] {res.get('coin', 'BTC')} {lab} {k:<22} unseen {_f(S[k]['unseen'])} | all {_f(S[k]['all'])}")
         for k, v in top:
-            print(f"[trend study] {lab} TOP {k:<18} unseen {_f(v['unseen'])} | all {_f(v['all'])}")
+            print(f"[trend study] {res.get('coin', 'BTC')} {lab} TOP {k:<18} unseen {_f(v['unseen'])} | all {_f(v['all'])}")
         if mk.get("disagree"):
             d_ = mk["disagree"]
-            print(f"[trend study] 8:00 vs 4:00: the calls disagreed in {d_['rate']:.0%} of rounds ({d_['n']}); when they did, the sealed side was right {d_['sealed_right']:.0%}")
+            print(f"[trend study] {res.get('coin', 'BTC')} 8:00 vs 4:00: the calls disagreed in {d_['rate']:.0%} of rounds ({d_['n']}); when they did, the sealed side was right {d_['sealed_right']:.0%}")
         p = res["pick"][mark]
-        print(f"[trend study] {lab} PICK: {p['rule'] or 'none beat the current rule on win rate AND profit - kept'}"
+        print(f"[trend study] {res.get('coin', 'BTC')} {lab} PICK: {p['rule'] or 'none beat the current rule on win rate AND profit - kept'}"
               + (f" | unseen {_f(p['stats']['unseen'])} vs current {_f(p['current']['unseen'])}" if p['rule'] else ""))
 
 
-def load():
-    if _state["res"] is None:
+def load(coin="BTC"):
+    st = _state.setdefault(coin, {"res": None})
+    if st.get("res") is None:
         try:
-            with open(FILE) as fh:
-                _state["res"] = json.load(fh)
+            with open(_file(coin, "trend_study")) as fh:
+                st["res"] = json.load(fh)
         except Exception:
-            _state["res"] = {}
-    return _state["res"] or {}
+            st["res"] = {}
+    return st["res"] or {}
 
 
-def decisions():
+def decisions(coin="BTC"):
     """{"240": rule or None, "360": ..., "480": ...} - the picked trend rule per call time."""
-    return {k: v.get("rule") for k, v in (load().get("pick") or {}).items()}
+    return {k: v.get("rule") for k, v in (load(coin).get("pick") or {}).items()}
 
 
 def trend_from_windows(win, trend_read):
@@ -418,8 +530,7 @@ import math as _m
 
 M2_FEATS = ["lk", "dist", "1m", "5m", "15m", "1h", "fvg_1m", "fvg_5m", "fvg_15m", "fvg_1h", "fvg_1d",
             "swp_1m", "swp_5m", "swp_15m", "swp_1h", "swp_1d"]
-M2_FILE = os.path.join(bt.CACHE, "method2.json")
-_m2 = {"model": None}
+_m2 = {}
 
 
 def _lk(p):
@@ -515,19 +626,19 @@ def method2(rows, outcome, cur_by_mark):
     return out
 
 
-def m2_model():
-    if _m2["model"] is None:
+def m2_model(coin="BTC"):
+    if _m2.get(coin) is None:
         try:
-            with open(M2_FILE) as fh:
-                _m2["model"] = json.load(fh)
+            with open(_file(coin, "method2")) as fh:
+                _m2[coin] = json.load(fh)
         except Exception:
-            _m2["model"] = {}
-    return _m2["model"] or {}
+            _m2[coin] = {}
+    return _m2[coin] or {}
 
 
-def m2_live(mark, kp, dist, t, early=None):
-    """(side or None, p_up, note) from the validated model for this call time, or None when it isn't live."""
-    m = m2_model().get(str(mark))
+def m2_live(mark, kp, dist, t, early=None, coin="BTC"):
+    """(side or None, p_up, note) from this coin's validated model for this call time, or None when it isn't live."""
+    m = m2_model(coin).get(str(mark))
     if not m or not m.get("valid") or kp is None or dist is None:
         return None
     p = m2_p(m["w"], m2_x(kp, dist, t))

@@ -4835,7 +4835,10 @@ def poll_loop():
                 except Exception:
                     _f2 = None
                 try:
-                    _cs1 = _mtf.books[asset["symbol"]].series(60, 120) if (_mtf is not None and asset["symbol"] in _mtf.books) else None
+                    # 2026-10-24: the exchange's own 1-minute candles (what the backtest learned from), not the blended tick book
+                    _cs1 = [list(c) for c in ((_mtf.windows.get(asset["symbol"]) or {}).get("1m") or [])] if _mtf is not None else None
+                    if not _cs1 or len(_cs1) < 55:
+                        _cs1 = _mtf.books[asset["symbol"]].series(60, 120) if (_mtf is not None and asset["symbol"] in _mtf.books) else None
                     _trend_v, _trend_d = trend_read(_cs1)
                 except Exception:
                     _trend_v, _trend_d = 0, {}
@@ -4971,7 +4974,8 @@ def poll_loop():
                         if not _rev and _mtf is not None and kalshi_price is not None and live_price and target:
                             _tt2 = _tst.trend_from_windows(_mtf.windows.get(asset["symbol"]), trend_read)
                             _v2 = _tst.m2_live(_mark, kalshi_price, (live_price - target) / target, _tt2,
-                                               (stage_calls.get("early") or {}).get("call") if _sk == "sealed" else None)
+                                               (stage_calls.get("early") or {}).get("call") if _sk == "sealed" else None,
+                                               coin=asset["name"])
                     except Exception as _v2e:
                         print(f"[method v2] {_v2e!r}")
                         _v2 = None
@@ -4993,7 +4997,7 @@ def poll_loop():
                               f"(p_up {_v2p:.0%}) {ticker}")
                     try:
                         import trend_study as _tst
-                        _ts_rule = _ts_rule or _tst.decisions().get(str(_mark))
+                        _ts_rule = _ts_rule or _tst.decisions(asset["name"]).get(str(_mark))
                         if _ts_rule == "v2":
                             raise StopIteration
                         if _ts_rule and _call and not _rev and _mtf is not None:
@@ -17400,7 +17404,7 @@ def main():
             while True:
                 try:
                     import trend_study as _tst
-                    _tst.run()
+                    _tst.run_all()
                 except Exception as _tse:
                     print(f"[trend study] {_tse!r}")
                 time.sleep(6 * 3600)
