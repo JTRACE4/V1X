@@ -5702,6 +5702,13 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 #sound-enable-btn.sound-on { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
 .asset-sound-on { background:#0d2818; border-color:#3dd69c; color:#3dd69c; }
 .asset-sound-off { background:#2d0d0d; border-color:#f05454; color:#f05454; }
+.voice-widget { display:inline-flex; align-items:center; flex-wrap:wrap; gap:8px; vertical-align:middle; margin:0 8px 6px 0; padding:6px 10px; border-radius:12px; background:rgba(53,43,48,.55); border:1px solid rgba(232,170,190,.22); box-shadow:0 0 14px rgba(232,150,180,.10); }
+.voice-widget .vw-title { color:#e8c9b8; font-size:13px; font-weight:600; letter-spacing:.02em; }
+.voice-widget #toggle-voice { margin:0 !important; }
+.vw-seg { display:inline-flex; border:1px solid #4a3c43; border-radius:10px; overflow:hidden; }
+.sound-bar .vw-seg .vw-opt { margin:0 !important; border:0 !important; border-radius:0 !important; padding:7px 12px; background:transparent; color:#bcaaa1; }
+.sound-bar .vw-seg .vw-opt + .vw-opt { border-left:1px solid #4a3c43 !important; }
+.sound-bar .vw-seg .vw-opt.on { background:linear-gradient(135deg, rgba(232,150,180,.35), rgba(190,140,90,.30)); color:#fbf4ec; box-shadow:inset 0 0 10px rgba(232,150,180,.25); }
 .sound-bar .hint { color:#bcaaa1; font-size:12px; margin-top:6px; }
 .live-trading-row { align-items:flex-start; background:#2a2226; border:1px solid #4a3c43; border-radius:8px; padding:10px 12px; margin:4px 0 10px; }
 .live-trading-row .hint { color:#bcaaa1; font-size:12px; margin-top:4px; }
@@ -7318,7 +7325,7 @@ function toggleVoiceAlerts() {
 function updateVoiceToggleButton() {
   const btn = document.getElementById('toggle-voice');
   if (!btn) return;
-  btn.textContent = 'Voice alerts: ' + (voiceAlertsEnabled ? 'ON' : 'OFF');
+  btn.textContent = voiceAlertsEnabled ? 'ON' : 'OFF';      // sits inside the 'Voice alerts' widget
   btn.classList.toggle('asset-sound-on', voiceAlertsEnabled);
   btn.classList.toggle('asset-sound-off', !voiceAlertsEnabled);
 }
@@ -7345,9 +7352,22 @@ function setNeuralVoice(v) {
 }
 function syncVoicePick() {
   const sel = document.getElementById('voice-pick');
-  if (!sel) return;
-  if (!window.SARGE_REAL) { const o = sel.querySelector('option[value="sarge"]'); if (o) o.remove(); }
-  sel.value = neuralVoice;
+  if (sel) {
+    if (!window.SARGE_REAL) { const o = sel.querySelector('option[value="sarge"]'); if (o) o.remove(); }
+    sel.value = neuralVoice;
+  }
+  document.querySelectorAll('.vw-opt').forEach(b => {
+    if (b.dataset.v === 'sarge' && !window.SARGE_REAL) { b.remove(); return; }
+    b.classList.toggle('on', b.dataset.v === neuralVoice);
+    b.setAttribute('aria-pressed', String(b.dataset.v === neuralVoice));
+  });
+}
+// the Voice alerts widget: pick Ava / Sarge / Device in one tap (sound turns on if it was off, so you hear the hello)
+function pickVoice2(v) {
+  if (typeof soundEnabled !== 'undefined' && !soundEnabled) enableSound(true);
+  if (typeof voiceAlertsEnabled !== 'undefined' && !voiceAlertsEnabled) toggleVoiceAlerts();
+  setNeuralVoice(v);
+  syncVoicePick();
 }
 document.addEventListener('DOMContentLoaded', syncVoicePick);
 // browser fallback: the most natural-sounding female voices first (premium / enhanced / natural before the old robotic ones)
@@ -9817,6 +9837,17 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
 <div id="content">Loading...</div>
 <div class="sound-bar">
   <button id="sound-enable-btn" onclick="toggleSound()">Sound OFF - tap to turn on</button>
+  <!-- 2026-10-24 (user): one "Voice alerts" widget with Ava and the ElevenLabs Sarge side by side -->
+  <div class="voice-widget" role="group" aria-label="Voice alerts">
+    <span class="vw-title">Voice alerts</span>
+    <button id="toggle-voice" onclick="toggleVoiceAlerts()" title="Turn spoken alerts on or off">ON</button>
+    <div class="vw-seg">
+      <button class="vw-opt" data-v="ava" onclick="pickVoice2('ava')">Ava</button><button class="vw-opt" data-v="sarge" onclick="pickVoice2('sarge')">Sarge</button><button class="vw-opt" data-v="device" onclick="pickVoice2('device')">Device</button>
+    </div>
+    <select id="voice-pick" onchange="setNeuralVoice(this.value)" hidden>
+      <option value="ava">Ava</option><option value="sarge">Sarge</option><option value="device">This device's voice</option>
+    </select>
+  </div>
   <details class="sound-details">
     <summary>Sound &amp; alert settings</summary>
     <div class="sound-details-body">
@@ -9828,12 +9859,6 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       </span>
       <button id="toggle-BTC" onclick="toggleAssetSound('BTC')">BTC alerts: ON</button>
       <button id="toggle-XRP" onclick="toggleAssetSound('XRP')">XRP alerts: ON</button>
-      <button id="toggle-voice" onclick="toggleVoiceAlerts()">Voice alerts: ON</button>
-      <label style="color:#bcaaa1; font-size:13px; margin:0 6px 0 4px;">Voice
-        <select id="voice-pick" onchange="setNeuralVoice(this.value)" style="background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit;">
-          <option value="ava">Ava (natural)</option><option value="sarge">Sarge (shouting drill sergeant)</option>
-          <option value="device">This device's voice</option>
-        </select></label>
       <br>
       
       <button onclick="speakRaw('XRP is flipping down.')">Test flip alert</button>
