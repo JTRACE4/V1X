@@ -2647,7 +2647,7 @@ def live_scorecard(days=10):
                     price = kp if c == "YES" else 1 - kp
                     if ck == "locked_call":
                         price = kp                    # locked_kalshi_price is already the side's price
-                    if not (lo <= price < hi):
+                    if not (lo <= price < hi) or not (0.03 <= price <= 0.99):
                         continue
                     seq.append((bool(w), _bte.pnl(bool(w), price)))
                 if len(seq) < 5:
