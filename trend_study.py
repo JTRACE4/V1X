@@ -436,6 +436,8 @@ def run(coin="BTC"):
         try:
             res["sealed_report"] = sealed_report(rows, outcome, m2)
             _log_sealed(coin, res["sealed_report"])
+            res["edge_report"] = edge_report(rows, outcome, m2)
+            _log_edge(coin, res["edge_report"])
         except Exception as _sre:
             print(f"[8:00 report] {coin}: {_sre!r}")
     except Exception as _e2:
@@ -943,6 +945,69 @@ def sealed_report(rows, outcome, m2):
                      for d in ("hour", "price", "crosses")}
         out[name] = res
     return out
+
+
+# ================================================================== GOOD BUY-INS (2026-10-24, user: "winning isn't the same as profitable - I want good buy-ins,
+# not a bunch of skipped rounds, and a great profitable ratio"). A call is only worth buying when the model's chance of being right
+# beats the price by a margin (edge = chance - price), and not when the price is so high that one miss wipes out ten wins (price cap).
+# Margin + cap are picked on the older 70% of rounds while still buying at least 65% of the calls, then checked on the newest 30%.
+def edge_report(rows, outcome, m2):
+    R = [r for r in rows if 480 in r["per"]]
+    sp = int(len(R) * 0.7)
+    mm = m2.get("480") or {}
+    if mm.get("feats") != M2_FEATS or not R:
+        return {}
+    maj = lambda e, m, s: "YES" if [e, m, s].count("YES") >= 2 else ("NO" if [e, m, s].count("NO") >= 2 else None)
+    methods = {
+        "8:00 new method": lambda r: _v2_side(r, 480, m2, force=True),
+        "majority, no majority = no call": lambda r: maj(_side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2)),
+        "majority + new 8:00 must agree": lambda r: (lambda v, s: v if (v and s == v) else None)(
+            maj(_side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2)), _v2_side(r, 480, m2, force=True)),
+    }
+    out = {}
+    for name, fn in methods.items():
+        T = []
+        for i, r in enumerate(R):
+            side = fn(r)
+            if not side:
+                continue
+            x = r["per"][480]
+            p = m2_p(mm["w"], m2_x(x["kp"], x["dist"], x["t"]))
+            pc = p if side == "YES" else 1 - p
+            c = x["kp"] if side == "YES" else 1 - x["kp"]
+            w, pl = outcome(r, 480, side)
+            T.append({"i": i, "w": w, "pl": pl, "c": c, "edge": pc - c})
+        tr = [t for t in T if t["i"] < sp]
+        un = [t for t in T if t["i"] >= sp]
+        S = lambda ts: _summ([(t["w"], t["pl"]) for t in ts])
+        best = None
+        for mg in (-0.03, -0.01, 0.0, 0.01, 0.02, 0.03, 0.05, 0.08, 0.12):
+            for cap in (0.80, 0.85, 0.88, 0.91, 0.94, 0.97, 1.0):
+                keep = [t for t in tr if t["edge"] >= mg and t["c"] <= cap]
+                if len(keep) < 40 or len(keep) < 0.65 * len(tr):
+                    continue
+                s_ = S(keep)
+                key = (s_["per"], s_["win"])
+                if best is None or key > best[0]:
+                    best = (key, mg, cap)
+        res = {"all": S(T), "unseen": S(un), "cover_all": round(len(T) / len(R), 3)}
+        if best:
+            _k, mg, cap = best
+            kp_ = lambda t: t["edge"] >= mg and t["c"] <= cap
+            res.update({"margin": mg, "cap": cap, "train": S([t for t in tr if kp_(t)]),
+                        "with_unseen": S([t for t in un if kp_(t)]), "with_all": S([t for t in T if kp_(t)]),
+                        "cover_unseen": round(sum(1 for t in un if kp_(t)) / len(un), 3) if un else 0})
+        out[name] = res
+    return out
+
+
+def _log_edge(coin, rep):
+    for name, v in rep.items():
+        if "margin" not in v:
+            print(f"[buy-in] {coin} {name}: no margin/cap kept 65% of calls with 40+ trades")
+            continue
+        print(f"[buy-in] {coin} {name:<34} before: unseen {_f(v['unseen'])} | now margin>={v['margin']:+.2f} price<={v['cap']:.2f} "
+              f"keeps {v['cover_unseen']:.0%} of calls -> unseen {_f(v['with_unseen'])} | all 30d {_f(v['with_all'])}")
 
 
 def _log_sealed(coin, rep):
