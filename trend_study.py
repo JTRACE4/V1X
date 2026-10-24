@@ -438,6 +438,8 @@ def run(coin="BTC"):
             _log_sealed(coin, res["sealed_report"])
             res["edge_report"] = edge_report(rows, outcome, m2)
             _log_edge(coin, res["edge_report"])
+            res["tier_report"] = tier_report(rows, outcome, m2)
+            _log_tiers(coin, res["tier_report"])
         except Exception as _sre:
             print(f"[8:00 report] {coin}: {_sre!r}")
     except Exception as _e2:
@@ -1008,6 +1010,79 @@ def _log_edge(coin, rep):
             continue
         print(f"[buy-in] {coin} {name:<34} before: unseen {_f(v['unseen'])} | now margin>={v['margin']:+.2f} price<={v['cap']:.2f} "
               f"keeps {v['cover_unseen']:.0%} of calls -> unseen {_f(v['with_unseen'])} | all 30d {_f(v['with_all'])}")
+
+
+# ================================================================== LABELS THAT MEAN SOMETHING (2026-10-24, user: "don't enter calls above 89 and don't enter on
+# weak - factor in the confidence tiers weak / good / super and reprogram it to be more effective with better labeling").
+# Tiers are cut on the model's own chance of being right (not the old blend), and the cut points are the ones that made the most
+# money on the older 70% of rounds when buying only GOOD + SUPER calls priced 89c or lower. Checked on the newest 30%.
+ENTRY_CAP = 0.89
+
+
+def tier_report(rows, outcome, m2):
+    R = [r for r in rows if 480 in r["per"]]
+    sp = int(len(R) * 0.7)
+    mm = m2.get("480") or {}
+    if mm.get("feats") != M2_FEATS or not R:
+        return {}
+    maj = lambda e, m, s: "YES" if [e, m, s].count("YES") >= 2 else ("NO" if [e, m, s].count("NO") >= 2 else None)
+    methods = {
+        "8:00 new method": lambda r: _v2_side(r, 480, m2, force=True),
+        "majority + new 8:00 must agree": lambda r: (lambda v, s: v if (v and s == v) else None)(
+            maj(_side_at(r, 240, m2), _side_at(r, 360, m2), _side_at(r, 480, m2)), _v2_side(r, 480, m2, force=True)),
+    }
+    out = {}
+    for name, fn in methods.items():
+        T = []
+        for i, r in enumerate(R):
+            side = fn(r)
+            if not side:
+                continue
+            x = r["per"][480]
+            p = m2_p(mm["w"], m2_x(x["kp"], x["dist"], x["t"]))
+            pc = p if side == "YES" else 1 - p
+            c = x["kp"] if side == "YES" else 1 - x["kp"]
+            w, pl = outcome(r, 480, side)
+            T.append({"i": i, "w": w, "pl": pl, "c": c, "pc": pc})
+        tr = [t for t in T if t["i"] < sp]
+        un = [t for t in T if t["i"] >= sp]
+        S = lambda ts: _summ([(t["w"], t["pl"]) for t in ts])
+        best = None
+        for g in (0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85):
+            for s_ in (0.80, 0.85, 0.90, 0.93, 0.96):
+                if s_ <= g:
+                    continue
+                enter = [t for t in tr if t["pc"] >= g and t["c"] <= ENTRY_CAP]
+                if len(enter) < 40 or len(enter) < 0.4 * len(tr):
+                    continue
+                sm = S(enter)
+                if best is None or (sm["per"], sm["win"]) > best[0]:
+                    best = (( sm["per"], sm["win"]), g, s_)
+        res = {"calls": len(T), "all_before": S(T), "unseen_before": S(un)}
+        if best:
+            _k, g, s_ = best
+            tier = lambda t: "SUPER" if t["pc"] >= s_ else ("GOOD" if t["pc"] >= g else "WEAK")
+            ent = lambda t: tier(t) != "WEAK" and t["c"] <= ENTRY_CAP
+            res.update({"good_at": g, "super_at": s_, "cap": ENTRY_CAP,
+                        "enter_unseen": S([t for t in un if ent(t)]), "enter_all": S([t for t in T if ent(t)]),
+                        "enter_train": S([t for t in tr if ent(t)]),
+                        "kept_unseen": round(sum(1 for t in un if ent(t)) / len(un), 3) if un else 0,
+                        "by_tier_all": {k: S([t for t in T if tier(t) == k and t["c"] <= ENTRY_CAP]) for k in ("SUPER", "GOOD", "WEAK")},
+                        "above_cap_all": S([t for t in T if t["c"] > ENTRY_CAP])})
+        out[name] = res
+    return out
+
+
+def _log_tiers(coin, rep):
+    for name, v in rep.items():
+        if "good_at" not in v:
+            print(f"[tiers] {coin} {name}: no tier cut kept 40% of calls with 40+ trades")
+            continue
+        print(f"[tiers] {coin} {name:<32} GOOD at >={v['good_at']:.0%}, SUPER at >={v['super_at']:.0%}, price <= {v['cap']:.0%}: "
+              f"buy {v['kept_unseen']:.0%} of calls -> unseen {_f(v['enter_unseen'])} | all 30d {_f(v['enter_all'])}")
+        print(f"[tiers] {coin} {name:<32} all 30d by tier (price<=89c): " + " | ".join(
+            f"{k} {_f(s)}" for k, s in v["by_tier_all"].items()) + f" | over 89c (never bought) {_f(v['above_cap_all'])}")
+        print(f"[tiers] {coin} {name:<32} before (every call, any price): unseen {_f(v['unseen_before'])} | all {_f(v['all_before'])}")
 
 
 def _log_sealed(coin, rep):
