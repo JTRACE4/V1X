@@ -1,7 +1,7 @@
 """Server-side backtest of the 15-minute Kalshi BTC calls (added 2026-10-20).
 
 Runs on the dashboard's own server (it needs the public Kalshi / Coinbase / Binance APIs). For every settled KXBTC15M round
-in the look-back window it rebuilds what the dashboard would have seen at the EARLY (4:00) and SEALED (8:00) marks, then
+in the look-back window it rebuilds what the dashboard would have seen at the EARLY (6:00) and SEALED (8:00) marks, then
 replays the call rules and grades them against Kalshi's real result:
 
   * baseline      - simply buying Kalshi's favorite at the mark
@@ -37,6 +37,7 @@ SLIPPAGE = 0.01
 MIN_TRAIN_N = 40
 MIN_HOLD_N = 25
 TARGET_WIN = 0.80
+EARLY_MARK = 360           # 2026-10-24: the early call moved from 4:00 to 6:00 (trend study)
 
 _ROOT = os.environ.get("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(_ROOT, "data_cache", "backtest")
@@ -580,7 +581,7 @@ def rev_rule_match(f, rule):
 
 # ============================================================================ FLIP HISTORY (2026-10-22, user)
 # "The reversal/underdog doesn't have to call a reversal every round - use a way more effective system based on the
-# history of all the flips in the last month." Every round of the last 30 days, at 4:00 and 8:00, is filed into a cell:
+# history of all the flips in the last month." Every round of the last 30 days, at 6:00 and 8:00, is filed into a cell:
 #   underdog price band x how close price is to the line x line crosses so far x how many reads turned on the favorite
 # and the cell remembers how often the UNDERDOG actually won from there (recent days count more, and small cells are
 # pulled toward the price the market charged). A reversal fires only when the cell's real history says the underdog wins
@@ -673,7 +674,7 @@ def evaluate(rounds):
         return {"win": win, "price": p, "pnl": pnl(win, p), "t": rd["m"]["close"]}
 
     _tabs_tr = {}
-    for key, mark in (("early", 240), ("sealed", 480)):
+    for key, mark in (("early", EARLY_MARK), ("sealed", 480)):
         rs = [r for r in rounds if r["f"].get(mark)]
         hs = [r for r in hold if r["f"].get(mark)]
         hold_ids = {id(r) for r in hs}
@@ -810,7 +811,7 @@ def evaluate(rounds):
                         "loss_check": loss_check(rs, mark)}
         out["stages"][key] = st
     # ---- 2026-10-22 (user: "when the early call is more profitable than the sealed call we need to review it better on
-    # time"): every round where the 8:00 sealed call would FLIP the 4:00 early call. Learn (on the older 70%) how sure the
+    # time"): every round where the 8:00 sealed call would FLIP the 6:00 early call. Learn (on the older 70%) how sure the
     # sealed call has to be before a flip pays off; below that, the sealed call HOLDS the early side. Checked on the newest 30%.
     def _live_call(f, key):
         st_ = out["stages"][key].get("regime") or {}
@@ -823,7 +824,7 @@ def evaluate(rounds):
     stage_pnl = {"early": [], "sealed": []}
     hold_set = {id(r) for r in hold}
     for r in rounds:
-        fe, fs_ = r["f"].get(240), r["f"].get(480)
+        fe, fs_ = r["f"].get(EARLY_MARK), r["f"].get(480)
         if not fe or not fs_:
             continue
         ce, _pe = _live_call(fe, "early")
@@ -861,7 +862,7 @@ def evaluate(rounds):
     # ---- 2026-10-22: which RSI reads the round better, and are the line-cross zones right? ----
     out["rsi_check"] = {}
     out["cross_check"] = {}
-    for key, mark in (("early", 240), ("sealed", 480)):
+    for key, mark in (("early", EARLY_MARK), ("sealed", 480)):
         rs = [r for r in rounds if r["f"].get(mark)]
         rc = {}
         for meth, fld in (("tradingview", "r1_tv"), ("webull", "r1_wb")):
@@ -968,7 +969,7 @@ def run(days=LOOKBACK_DAYS):
                 o_min = int(m["open"] // 60 * 60)
                 line_fb = cb.get(o_min, [None] * 4)[0]
             fs = {}
-            for mark in (240, 480):
+            for mark in (EARLY_MARK, 480):
                 try:
                     f = features(m, mark, cb, bn, kp, line_fb)
                 except Exception:
@@ -1014,7 +1015,7 @@ def cached_rounds():
             o_min = int(m["open"] // 60 * 60)
             line_fb = cb.get(o_min, [None] * 4)[0]
         fs = {}
-        for mark in (240, 480):
+        for mark in (EARLY_MARK, 480):
             try:
                 f = features(m, mark, cb, bn, kp, line_fb)
             except Exception:
@@ -1078,7 +1079,7 @@ def summary_text(r=None):
          "ROI = profit per $1 staked at the market's price at that minute + 1c slippage + taker fee"]
     for k in ("early", "sealed"):
         s = r["stages"][k]
-        L.append(f"\n== {k.upper()} ({'4:00' if k == 'early' else '8:00'})")
+        L.append(f"\n== {k.upper()} ({'6:00' if k == 'early' else '8:00'})")
         for lab in ("favorite", "current", "reversal", "reversal_holdout"):
             x = s[lab]
             ap = "-" if x["avg_price"] is None else f"{x['avg_price']:.2f}"

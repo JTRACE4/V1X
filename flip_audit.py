@@ -43,7 +43,7 @@ def _split(rounds):
 
 # ------------------------------------------------------------------------------------------------ stay-out (backtest)
 def stayout_backtest(rounds, out):
-    for mark, name in ((240, "EARLY 4:00"), (480, "SEALED 8:00")):
+    for mark, name in ((360, "EARLY 6:00"), (480, "SEALED 8:00")):
         against, flip50 = {"call": [], "trend": []}, {"fav": [], "trend": []}
         rows_called = []
         for r in rounds:
@@ -125,7 +125,7 @@ def _match(x, rule):
 
 
 def flips(rounds, out, live_tables=None):
-    for mark, name in ((240, "EARLY 4:00"), (480, "SEALED 8:00")):
+    for mark, name in ((360, "EARLY 6:00"), (480, "SEALED 8:00")):
         rows = []
         for r in rounds:
             f = r["f"].get(mark)
@@ -204,7 +204,7 @@ def flips(rounds, out, live_tables=None):
         out.append(f"  luck check: shuffled outcomes find {sum(ctrl) / len(ctrl):.0f} money rules on average vs {len(found)} on the real data")
         # reversal (underdog) calls stay on only while real data clearly beats luck - re-checked daily
         _on = len(found) >= 3 and len(found) >= 2 * (sum(ctrl) / len(ctrl))
-        DECISIONS["reversal_on"]["early" if mark == 240 else "sealed"] = bool(_on)
+        DECISIONS["reversal_on"]["early" if mark == 360 else "sealed"] = bool(_on)
         out.append(f"  reversal calls at {name}: " + ("ON - the flip signal beat luck" if _on else "OFF - no underdog signal beat luck on unseen rounds"))
         out.append(f"  underdog rules that made money on BOTH the older 70% and the newest 30% ({len(found)} found, best 8):")
         for roi, rule, ta, hb in found[:8]:
@@ -233,7 +233,7 @@ DECISIONS = {"stayout": {"early": "sit", "sealed": "sit"}, "reversal_on": {"earl
 def fixes(rounds, out):
     tr_r, ho_r = _split(rounds)
     out.append("== CANDIDATE FIXES (built on the older 70%, scored ONLY on the newest 30% they never saw) ==")
-    for mark, name in ((240, "EARLY"), (480, "SEALED")):
+    for mark, name in ((360, "EARLY"), (480, "SEALED")):
         # flip-history table for the favorite
         tab = {}
         for r in tr_r:

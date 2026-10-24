@@ -244,7 +244,7 @@ CHECKPOINT_MINUTES = [5, 10]
 LATE_CALL_SECONDS = 4.5 * 60
 
 # added 2026-10-20 per user request: two fixed-time calls every round.
-#   EARLY call  - locked at the 4:00 mark of the 15-minute round (an early read, it can still change after).
+#   EARLY call  - locked at the 6:00 mark of the 15-minute round (an early read, it can still change after).
 #   SEALED call - locked at the 8:00 mark and never changed again: the round's final call.
 # Both ALWAYS pick a side (UP = YES, DOWN = NO) - no "no call" - and both are graded against Kalshi's real settled result,
 # with their own track record. The side comes from one blended chance of UP:
@@ -253,7 +253,7 @@ LATE_CALL_SECONDS = 4.5 * 60
 #   a quarter = the flow (every exchange's taker buy vs sell this round + Kalshi traders' money + liquidations).
 # A feed that is missing just drops out and the others are re-weighted. The bot's own "Locked first call" (which the real-
 # money auto-buy uses) is untouched by this - these are separate, display + grading only.
-STAGE_CALLS = (("early", 240, "Early call", "4:00"), ("sealed", 480, "Sealed call", "8:00"))
+STAGE_CALLS = (("early", 360, "Early call", "6:00"), ("sealed", 480, "Sealed call", "8:00"))   # 2026-10-24: early 6:00 -> 6:00 (backtest, user)
 STAGE_GRACE_SECONDS = 45          # must lock within 45s of its mark; a dashboard started later than that marks it "missed"
 STAGE_WEIGHTS = {"kalshi": 0.5, "fair": 0.25, "flow": 0.25}
 
@@ -4796,7 +4796,7 @@ def poll_loop():
                 fair_yes, fair_sigma_bps_min = (None, None) if is_gold else fair_yes_probability(
                     asset["symbol"], live_price, target, seconds_left)
 
-                # ---- the 4:00 EARLY call and the 8:00 SEALED call (see STAGE_CALLS) ----
+                # ---- the 6:00 EARLY call and the 8:00 SEALED call (see STAGE_CALLS) ----
                 try:
                     _tn = tug_numbers(asset["name"], {"spot_price": live_price, "target_price": target, "seconds_left": seconds_left,
                                                       "fair_yes": fair_yes, "ticker": ticker})
@@ -4967,7 +4967,7 @@ def poll_loop():
                     # price + price vs the line + trend on 1m/5m/15m/1h + fair value gaps and liquidity sweeps on
                     # 1m/5m/15m/1h/1d. When the trend study has validated it for this call time (beat the old method on win
                     # rate AND profit on unseen rounds), it makes the call: its side, its confidence bar, and the sealed call
-                    # keeps the 4:00 side unless v2 is clearly surer of the other one.
+                    # keeps the 6:00 side unless v2 is clearly surer of the other one.
                     _v2 = None
                     try:
                         import trend_study as _tst
@@ -8617,7 +8617,7 @@ function checkLockAlerts() {
 }
 
 
-// ---- 2026-10-20: the 4:00 EARLY call and the 8:00 SEALED call - pop-up + voice the moment each one locks
+// ---- 2026-10-20: the 6:00 EARLY call and the 8:00 SEALED call - pop-up + voice the moment each one locks
 const alertedStages = new Set();
 try { JSON.parse(sessionStorage.getItem('alertedStages') || '[]').forEach(k => alertedStages.add(k)); } catch (e) {}
 // early call = soft two-note chime; call locked (sealed) = a firmer three-note chime
@@ -9959,7 +9959,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button onclick="playChaChingBig(); setTimeout(()=>speakRaw('Bitcoin whales: 2.4 million bought, 600 thousand sold.'),1300)">Test whale BUY (cha-ching)</button>
       <button onclick="playDenied(); setTimeout(()=>speakRaw('XRP whales: 200 thousand bought, 850 thousand sold.'),1300)">Test whale SELL (double beep)</button>
       <div class="hint">Click "enable" once per visit - browsers block audio until you do. Only four things make sound: flip warnings,
-        the early (4:00) and sealed (8:00) calls, and whale trades - a cha-ching when the whale pushes price further the way it is
+        the early (6:00) and sealed (8:00) calls, and whale trades - a cha-ching when the whale pushes price further the way it is
         already going, a "denied" buzz when it trades against the move.</div>
     </div>
   </details>
@@ -11576,7 +11576,7 @@ def _conf_lines(p_side, tier, kp, extra=""):
 
 @_never_break
 def build_stage_box(name, d, key):
-    """The big EARLY (4:00) or SEALED (8:00) call box: direction, confidence tier (SUPER / GOOD / WEAK) or SKIPPED + why."""
+    """The big EARLY (6:00) or SEALED (8:00) call box: direction, confidence tier (SUPER / GOOD / WEAK) or SKIPPED + why."""
     mark = {k: m for k, m, _l, _mk in STAGE_CALLS}[key]
     lab = {k: l for k, _m, l, _mk in STAGE_CALLS}[key]
     mk = {k: x for k, _m, _l, x in STAGE_CALLS}[key]
@@ -11765,7 +11765,7 @@ def _round_svg(rec, w=300, h=96, live=False):
            f'<clipPath id="{cid}b"><rect x="0" y="{h / 2}" width="{w}" height="{h / 2}"/></clipPath></defs>',
            f'<polygon points="{area}" fill="#3dd69c" fill-opacity="0.22" clip-path="url(#{cid}a)"/>',
            f'<polygon points="{area}" fill="#f05454" fill-opacity="0.22" clip-path="url(#{cid}b)"/>']
-    for e, lbl in ((240, "4:00"), (480, "8:00")):
+    for e, lbl in ((360, "6:00"), (480, "8:00")):
         out.append(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#dcbb91" stroke-dasharray="2 3" stroke-width="1" opacity="0.7"/>'
                    f'<text x="{X(e) + 2:.1f}" y="10" fill="#f6d9e2" font-size="9">{lbl}</text>')
     out.append(f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#fbf4ec" stroke-width="1" opacity="0.55"/>')
@@ -11793,7 +11793,7 @@ def _kalshi_spark(pts, w=300, h=54):
     last = pts[-1][1]
     col = "#3dd69c" if last >= 0.5 else "#f05454"
     marks = "".join(f'<line x1="{X(e):.1f}" y1="0" x2="{X(e):.1f}" y2="{h}" stroke="#dcbb91" stroke-dasharray="2 3" opacity="0.6"/>'
-                    for e in (240, 480))
+                    for e in (360, 480))
     return (f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" preserveAspectRatio="none">{marks}'
             f'<line x1="0" y1="{h / 2}" x2="{w}" y2="{h / 2}" stroke="#bcaaa1" stroke-dasharray="3 3" opacity="0.6"/>'
             f'<polyline points="{line}" fill="none" stroke="{col}" stroke-width="2.2"/>'
@@ -11915,7 +11915,7 @@ def build_kalshi_tile(name, d):
             f'<div class="rs-odds-nums"><span class="up">UP <b>{up}%</b></span><span class="down"><b>{dn}%</b> DOWN</span></div>'
             f'<div class="rs-odds-bar"><i style="width:{up}%"></i><b></b></div>'
             f'<div class="rs-lean {lcls}">{lean}</div>{_kalshi_spark(pts)}<div class="rs-sub">{chg}'
-            f'<span class="hint">This round &middot; dashed lines mark 4:00 and 8:00</span></div></div>')
+            f'<span class="hint">This round &middot; dashed lines mark 6:00 and 8:00</span></div></div>')
 
 
 @_never_break
@@ -12468,7 +12468,7 @@ def reversal_check(name, spot, line, seconds_left, elapsed, line_stats, rsi_mult
     """None, or {"call", "tier", "why", "score", "votes", "payout"} - call the UNDERDOG.
     2026-10-22 (d, user: "the reversal/underdog doesn't have to call a reversal every round - use a way more effective
     system based on the history of all the flips in the last month"): ONE system now - the backtest's flip-history table.
-    Every 4:00 / 8:00 moment of the last 30 days is filed by underdog price, distance to the line, crosses so far and how
+    Every 6:00 / 8:00 moment of the last 30 days is filed by underdog price, distance to the line, crosses so far and how
     many reads turned; a reversal fires only when that exact situation's real history says the underdog wins 50%+ AND
     beats its own price by 8+ points, and only at a mark where the table also won on the newest rounds it never saw."""
     if not spot or not line or kalshi_yes is None:
@@ -12625,7 +12625,7 @@ _ARROW_DN = '<svg class="v-arr" viewBox="0 0 20 20" aria-label="down"><path d="M
 
 def _flips_4h(name):
     """2026-10-22 (user): teach with history - how many of the last 4 hours of rounds flipped (price on one side of the line
-    at 4:00, settled on the other) and how many line crosses there were."""
+    at 6:00, settled on the other) and how many line crosses there were."""
     try:
         now = time.time()
         rs = [r for r in (_rounds.get(name) or []) if (lambda t: t and now - t.timestamp() <= 4 * 3600)(_window_close_utc(r.get("ticker")))]
@@ -12634,12 +12634,12 @@ def _flips_4h(name):
         flips = 0
         for r in rs:
             pth = r.get("path") or []
-            at4 = next((p_[1] for p_ in pth if p_[0] >= 240), None)
+            at4 = next((p_[1] for p_ in pth if p_[0] >= 360), None)
             act = r.get("actual")
             if at4 is not None and act in ("YES", "NO") and abs(at4) > 1e-9 and ((at4 > 0) != (act == "YES")):
                 flips += 1
         crosses = sum(r.get("crosses", 0) for r in rs)
-        return (f'<div class="fr-txt fr-hist">Last 4 hrs: <b>{flips}</b> of {len(rs)} round{"s" if len(rs) != 1 else ""} flipped after 4:00 '
+        return (f'<div class="fr-txt fr-hist">Last 4 hrs: <b>{flips}</b> of {len(rs)} round{"s" if len(rs) != 1 else ""} flipped after 6:00 '
                 f'&middot; {crosses} line cross{"es" if crosses != 1 else ""}</div>')
     except Exception:
         return ""
@@ -12856,7 +12856,7 @@ def _streak_stats(results):
 # history file - set SHOW_BOT_RECORD = True to bring it back).
 SHOW_BOT_RECORD = False
 WR_CALLS = {"sealed": ("Sealed 8:00", "sealed_correct", "sealed_call"),
-            "early": ("Early 4:00", "early_correct", "early_call")}
+            "early": ("Early 6:00", "early_correct", "early_call")}
 if SHOW_BOT_RECORD:
     WR_CALLS["bot"] = ("Bot call", "correct", "call")
 
@@ -13038,8 +13038,9 @@ def _money_html(pnl, avg, n):
 # ---- 2026-10-22 (user): "what would have happened if you cashed out at 90" - for every graded call, the highest / lowest
 # price the market traded at after the call was made (public trade tape, fetched once per finished round and cached).
 CASHOUT_AT = 0.90
+EARLY_6_SINCE = 1792854900          # 2026-10-24 15:15 UTC - rounds after this have the early call at 6:00
 CASHOUT_FILE = os.path.join(_DATA_ROOT, "data_cache", "cashout_marks_v2.json")   # v2 2026-10-23: old file had tapes cut short by API errors
-_CALL_SEC = {"mini": 60, "early": 240, "sealed": 480}
+_CALL_SEC = {"mini": 60, "early": 360, "sealed": 480}
 try:
     with open(CASHOUT_FILE) as _f:
         _cash_marks = json.load(_f)
@@ -13069,7 +13070,7 @@ def _fetch_round_marks(ticker):
             cs.append((float(c["end_period_ts"]) - o_ts, float(hi), float(lo)))
         if cs:
             out = {}
-            for cp in (60, 240, 480):
+            for cp in (60, 240, 360, 480):
                 sub = [x for x in cs if x[0] > cp and x[0] <= 900 + 1]
                 out[str(cp)] = [max(x[1] for x in sub), min(x[2] for x in sub)] if sub else None
             return out
@@ -13092,7 +13093,7 @@ def _fetch_round_marks(ticker):
     if not pts:
         return {}
     out = {}
-    for cp in (60, 240, 480):
+    for cp in (60, 240, 360, 480):
         sub = [y for sec, y in pts if sec >= cp]
         out[str(cp)] = [max(sub), min(sub)] if sub else None
     return out
@@ -13107,7 +13108,12 @@ def _cash_pnl(h, key, at=CASHOUT_AT):
     m = _cash_marks.get(h.get("ticker"))
     if m is None:
         return (hold, None, None)
-    mk = m.get(str(_CALL_SEC[key])) if m else None
+    _sec = _CALL_SEC[key]
+    if key == "early":                    # 2026-10-24: early calls before the move to 6:00 were made at 4:00
+        _ct = _window_close_utc(h.get("ticker"))
+        if not _ct or _ct.timestamp() < EARLY_6_SINCE:
+            _sec = 240
+    mk = (m.get(str(_sec)) or (m.get("240") if _sec == 360 else None)) if m else None
     hit = bool(mk) and kp < at and ((side == "YES" and mk[0] >= at) or (side == "NO" and mk[1] <= 1 - at))
     return (hold, (100 * at / kp - 100) if hit else hold, hit)
 
@@ -13208,7 +13214,7 @@ def _ps_rows(hist, key):
         p = h.get(f"{key}_p")
         conf = (p if side == "YES" else 1 - p) if isinstance(p, (int, float)) else None
         # agreement only with a call that is ALREADY made when this one is bought (no peeking ahead):
-        # early (4:00) <- mini (1:00, v2 only); sealed (8:00) <- early (4:00)
+        # early (6:00) <- mini (1:00, v2 only); sealed (8:00) <- early (6:00)
         if key == "early":
             oc = h.get("mini_call") if h.get("mini_v") == 2 else None
         elif key == "sealed":
@@ -13235,7 +13241,7 @@ def _ps_sum(rows):
 def profit_study():
     et = ZoneInfo("America/New_York")
     res = {"ts": time.time(), "coins": {}}
-    print("[profit study] agree = early with the 1:00 mini call / sealed with the 4:00 early call (no peeking); "
+    print("[profit study] agree = early with the 1:00 mini call / sealed with the 6:00 early call (no peeking); "
           "pnl_after_fee = minus the Kalshi taker fee")
     for name, hist in list(_history.items()):
         cres = {}
@@ -13339,7 +13345,7 @@ def _disagree_html(hist, keep):
 def _fav_rows(hist, keep, at_by=None):
     """Per call: record + $100/call profit (held to the end = primary; cashing out at 90c = secondary) for rounds kept."""
     out = []
-    for key, lab in (("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00")):
+    for key, lab in (("early", "Early call &middot; 6:00"), ("sealed", "Sealed call &middot; 8:00")):
         g, res, kps = [], [], []
         for h in hist:
             if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
@@ -13489,7 +13495,7 @@ def build_scoreboard(name, d):
     now_et = dt.datetime.now(dt.timezone.utc).astimezone(et)
     day0 = now_et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
     cols = []
-    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 4:00", "early_correct"))
+    for key, label, field in ((("sealed", "SEALED CALL &middot; 8:00", "sealed_correct"), ("early", "EARLY CALL &middot; 6:00", "early_correct"))
                               + ((("bot", "BOT CALL (auto-buy)", "correct"),) if SHOW_BOT_RECORD else ())):
         rows = [h for h in hist if h.get(field) is not None and not (key != "bot" and h.get(f"{key}_reversal"))]
         if key == "mini":
@@ -13578,7 +13584,7 @@ def build_scoreboard(name, d):
 @_never_break
 def build_rounds_panel(name, d, part="all"):
     """Price vs the line for this round (live) and the last 6 finished rounds: one small chart each, the white line =
-    the Kalshi line, green above / red below, a dot at every line cross, dashed marks at 4:00 and 8:00."""
+    the Kalshi line, green above / red below, a dot at every line cross, dashed marks at 6:00 and 8:00."""
     hist_by = {h.get("ticker"): h for h in _history.get(name, [])}
     cells = []
     ls = d.get("line_stats")
@@ -13621,7 +13627,7 @@ def build_rounds_panel(name, d, part="all"):
     _mwr = (f'<span class="mc-wr"><b>{sum(_mr) / len(_mr):.0%}</b> win rate &middot; {sum(_mr)}W {len(_mr) - sum(_mr)}L</span>' if _mr
             else '<span class="mc-wr">win rate: no graded rounds yet</span>')
     _mnote = ('<span class="mc-sub">A quick scan from history &ndash; not BRAIN&rsquo;s main call. '
-              'The early (4:00) and sealed (8:00) calls are the main calls.</span>')
+              'The early (6:00) and sealed (8:00) calls are the main calls.</span>')
     if not MINI_CALL_ON:
         m2_html = ""
     elif _m2.get("v") == 2 and _m2.get("call"):
@@ -13648,10 +13654,10 @@ def _call_tag(c, actual, key="early"):
     if c.get("call"):
         ok = "" if actual is None else (" <i class=ico data-i=check></i>" if c["call"] == actual else " <i class=ico data-i=x></i>")
         okc = "" if actual is None else (" tag-ok" if c["call"] == actual else " tag-bad")
-        return (f'<span class="call-tag{okc}">{"4:00" if key == "early" else "8:00"} call: '
+        return (f'<span class="call-tag{okc}">{"6:00" if key == "early" else "8:00"} call: '
                 f'{"<i class=va-u></i> UP" if c["call"] == "YES" else "<i class=va-d></i> DOWN"} ({(c.get("tier") or "").lower()}){ok}</span>')
     if c.get("skipped"):
-        return f'<span class="call-tag tag-skip">{"4:00" if key == "early" else "8:00"}: no call</span>'
+        return f'<span class="call-tag tag-skip">{"6:00" if key == "early" else "8:00"}: no call</span>'
     return ""
 
 
@@ -14386,8 +14392,8 @@ def render_html():
         # compares the LIVE leaning against the locked call on EVERY poll
         # (every ~2s), so it catches a flip the moment it actually happens
         # instead of only at two fixed checkpoints.
-        # 2026-10-20: once the 4:00 / 8:00 calls exist the "Flipped" voice follows THEM (sealed first), so it always
-        # matches the call shown on screen; before 4:00 it still follows the bot's own locked call.
+        # 2026-10-20: once the 6:00 / 8:00 calls exist the "Flipped" voice follows THEM (sealed first), so it always
+        # matches the call shown on screen; before 6:00 it still follows the bot's own locked call.
         _sref_key, _sref_call = _stage_ref(d)
         locked_call_for_flip = _sref_call or d.get("locked_call")
         live_leaning = d.get("leaning")
@@ -15138,7 +15144,7 @@ from cryptography.hazmat.primitives import serialization
 
 
 # ---- 2026-10-22: "$100 a trade" record for the auto-buy widget, and which call auto-buy follows.
-# Every graded round stores, per call (early 4:00 / sealed 8:00), the call, whether it won, and Kalshi's price for the
+# Every graded round stores, per call (early 6:00 / sealed 8:00), the call, whether it won, and Kalshi's price for the
 # called side at the moment of the call (*_kp). This replays all of them at $100 a trade, holding to settlement, with the
 # same Kalshi taker fee + 1c slippage the backtest engine uses. For the coins in AUTO_PICK_ASSETS, auto-buy follows
 # whichever call made more money inside that coin's buy band (needs AUTO_PICK_MIN_TRADES of each; otherwise sealed).
@@ -15239,7 +15245,7 @@ def bt100_widget_html(name):
                 f'<td class="{cls}"><b>{"+" if b["pnl"] >= 0 else "-"}${abs(b["pnl"]):,.0f}</b></td>'
                 f'<td class="{cls}">{b["roi"]:+.1f}%</td>')
     rows = ""
-    for call, lab in (("early", "Early 4:00"), ("sealed", "Sealed 8:00")):
+    for call, lab in (("early", "Early 6:00"), ("sealed", "Sealed 8:00")):
         star = ' <i class=ico data-i=star></i>' if r["pick"] == call else ""
         rows += (f'<tr class="{"bt100-pick" if r["pick"] == call else ""}"><td><b>{lab}</b>{star}</td>{cell(r[call]["band"])}</tr>'
                  f'<tr class="bt100-any"><td class="hint">&nbsp;&nbsp;any price</td>{cell(r[call]["any"])}</tr>')
