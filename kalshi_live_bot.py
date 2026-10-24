@@ -262,16 +262,40 @@ def _get_public(url, params=None, retries=5):
     raise RuntimeError(f"failed after {retries} retries: {url}")
 
 
+_DEAD_STATUSES = {"initialized", "unopened", "closed", "settled", "finalized", "determined", "inactive"}
+
+
 def get_active_market(series):
-    data = _get_public(f"{PUBLIC_BASE}/markets", params={"series_ticker": series, "status": "open", "limit": 10})
-    markets = data.get("markets", [])
+    # 2026-10-24: the market API began reporting live markets as status "active" and the
+    # status=open filter started returning nothing (site showed "no active market"). Ask for the
+    # markets closing in the next ~20 min instead and pick the one that has opened and isn't done -
+    # works with either status name. status=open is still tried as a fallback.
     now = dt.datetime.now(dt.timezone.utc)
+    ts = int(now.timestamp())
 
-    def close_dt(m):
-        return dt.datetime.fromisoformat(m["close_time"].replace("Z", "+00:00"))
+    def _t(m, k):
+        try:
+            return dt.datetime.fromisoformat(m[k].replace("Z", "+00:00"))
+        except Exception:
+            return None
 
-    upcoming = [m for m in markets if close_dt(m) > now]
-    return min(upcoming, key=close_dt) if upcoming else None
+    def _pick(markets):
+        live = [m for m in markets
+                if (_t(m, "close_time") or now) > now
+                and (_t(m, "open_time") is None or _t(m, "open_time") <= now)
+                and str(m.get("status", "")).lower() not in _DEAD_STATUSES]
+        return min(live, key=lambda m: _t(m, "close_time")) if live else None
+
+    try:
+        data = _get_public(f"{PUBLIC_BASE}/markets", params={
+            "series_ticker": series, "min_close_ts": ts, "max_close_ts": ts + 1200, "limit": 10}, retries=2)
+        m = _pick(data.get("markets", []))
+        if m:
+            return m
+    except Exception:
+        pass
+    data = _get_public(f"{PUBLIC_BASE}/markets", params={"series_ticker": series, "status": "open", "limit": 10})
+    return _pick(data.get("markets", []))
 
 
 def get_market_snapshot(ticker):
