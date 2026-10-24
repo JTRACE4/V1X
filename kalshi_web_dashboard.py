@@ -4973,6 +4973,7 @@ def poll_loop():
                         import trend_study as _tst
                         if not _rev and _mtf is not None and kalshi_price is not None and live_price and target:
                             _tt2 = _tst.trend_from_windows(_mtf.windows.get(asset["symbol"]), trend_read)
+                            _tst.live_extras(_tt2, _mtf.windows.get(asset["symbol"]), _crosses)
                             _v2 = _tst.m2_live(_mark, kalshi_price, (live_price - target) / target, _tt2,
                                                (stage_calls.get("early") or {}).get("call") if _sk == "sealed" else None,
                                                coin=asset["name"])

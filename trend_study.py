@@ -295,6 +295,14 @@ def run(coin="BTC"):
             _struct(t, sv)
             call, _tier, p = bt.stage_call(f)
             fav = "YES" if f["kp"] >= 0.5 else "NO"
+            # 2026-10-24 (ideas from the Dominator dashboard the user shared): line behavior (crosses so far + one-way
+            # market), choppiness of the last 4 minutes, and the 4-hour regime - all learnable from history
+            ex = {"crosses": f["crosses"]}
+            cl4 = [cb[last_min - 60 * k][3] for k in range(5) if (last_min - 60 * k) in cb]
+            ex["chop"] = (sum(abs(cl4[i] / cl4[i + 1] - 1) for i in range(len(cl4) - 1)) * 1000) if len(cl4) >= 3 else 0.0
+            p4 = cb.get(last_min - 240 * 60)
+            ex["r4h"] = ((f["spot"] / p4[3] - 1) * 100) if p4 else 0.0
+            t["_ex"] = ex
             per[mark] = {"kp": f["kp"], "call": call, "fav": fav, "t": t, "dist": f["dist"]}
         if per:
             rows.append({"up": up, "ticker": m["ticker"], "open": m["open"], "per": per})
@@ -529,7 +537,8 @@ def apply_rule(rule, call, t, early=None):
 import math as _m
 
 M2_FEATS = ["lk", "dist", "1m", "5m", "15m", "1h", "fvg_1m", "fvg_5m", "fvg_15m", "fvg_1h", "fvg_1d",
-            "swp_1m", "swp_5m", "swp_15m", "swp_1h", "swp_1d"]
+            "swp_1m", "swp_5m", "swp_15m", "swp_1h", "swp_1d",
+            "crosses", "oneway_dist", "chop", "chop_dist", "r4h"]
 _m2 = {}
 
 
@@ -539,7 +548,17 @@ def _lk(p):
 
 
 def m2_x(kp, dist, t):
-    return [_lk(kp), max(-3.0, min(3.0, dist * 1000))] + [float(t.get(k, 0)) for k in M2_FEATS[2:]]
+    ex = t.get("_ex") or {}
+    d = max(-3.0, min(3.0, dist * 1000))
+    cr = min(4, int(ex.get("crosses") or 0))
+    chop = min(5.0, float(ex.get("chop") or 0.0))
+    sgn = (1 if d > 0 else (-1 if d < 0 else 0))
+    return ([_lk(kp), d] + [float(t.get(k, 0)) for k in M2_FEATS[2:16]]
+            + [-sgn * cr / 4.0,                          # more line crosses = less trust in the side price is on
+               d if cr == 0 else 0.0,                    # one-way market: distance counts extra when it never crossed
+               -sgn * chop / 5.0,                        # choppy last 4 minutes = less trust in the side price is on
+               d * chop / 5.0,
+               max(-2.0, min(2.0, float(ex.get("r4h") or 0.0)))])
 
 
 def _fit(X, y, l2=0.02, iters=400, lr=0.3):
@@ -616,7 +635,7 @@ def method2(rows, outcome, cur_by_mark):
         valid = bool(s_u["n"] >= 40 and s_u["win"] is not None and cur["unseen"]["win"] is not None
                      and s_u["win"] >= cur["unseen"]["win"] and s_u["pnl"] > cur["unseen"]["pnl"])
         out[str(mark)] = {"w": w, "thr": thr, "flip": fl, "train": s_t, "unseen": s_u, "valid": valid,
-                          "current_unseen": cur["unseen"]}
+                          "current_unseen": cur["unseen"], "feats": M2_FEATS}
         if mark == 240:
             for r in R:
                 x = r["per"][mark]
@@ -636,10 +655,22 @@ def m2_model(coin="BTC"):
     return _m2[coin] or {}
 
 
+def live_extras(t, win, crosses):
+    """Adds the line-behavior / choppiness / 4-hour inputs for a live call (same definitions as the replay)."""
+    ex = {"crosses": int(crosses or 0)}
+    one = [list(c) for c in ((win or {}).get("1m") or [])]
+    cl = [c[4] for c in one[-6:-1]][::-1] if len(one) >= 6 else []        # completed minutes, newest first
+    ex["chop"] = (sum(abs(cl[i] / cl[i + 1] - 1) for i in range(len(cl) - 1)) * 1000) if len(cl) >= 3 else 0.0
+    q = [list(c) for c in ((win or {}).get("15m") or [])]
+    ex["r4h"] = ((q[-1][4] / q[-17][4] - 1) * 100) if len(q) >= 17 else 0.0
+    t["_ex"] = ex
+    return t
+
+
 def m2_live(mark, kp, dist, t, early=None, coin="BTC"):
     """(side or None, p_up, note) from this coin's validated model for this call time, or None when it isn't live."""
     m = m2_model(coin).get(str(mark))
-    if not m or not m.get("valid") or kp is None or dist is None:
+    if not m or not m.get("valid") or kp is None or dist is None or m.get("feats") != M2_FEATS:
         return None
     p = m2_p(m["w"], m2_x(kp, dist, t))
     side = "YES" if p >= 0.5 else "NO"
