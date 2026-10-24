@@ -7332,21 +7332,26 @@ const LEGACY_SOUNDS = false;
 // 2026-10-23 (user): "all the other voices are bad except Ava" - Snoop + Caller are gone. Sarge is a REAL shouting drill
 // sergeant (an ElevenLabs voice) and only shows up once his voice key is set on the server (window.SARGE_REAL).
 // Switching voices no longer reads a fake "84 percent" call - just a short hello in the new voice.
-const NEURAL_VOICES = { ava: 'Ava', sarge: 'Sarge' };
+// 2026-10-23 (user): SDS + DS - two drill sergeants made from the owner's own clips (owner-only until approved).
+const NEURAL_VOICES = { ava: 'Ava', sarge: 'Sarge', sds: 'SDS', ds: 'DS' };
+const DRILL = { sarge: 1, sds: 1, ds: 1 };
+function _voiceOk(v) { return v === 'sarge' ? !!window.SARGE_REAL : (v === 'sds' || v === 'ds') ? (window.DRILL_VOICES || []).indexOf(v) >= 0 : true; }
 let neuralVoice = 'ava';
 try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VOICES || nv === 'device')) neuralVoice = nv; } catch (e) {}
-if (neuralVoice === 'sarge' && !window.SARGE_REAL) neuralVoice = 'ava';
+if (!_voiceOk(neuralVoice)) neuralVoice = 'ava';
 function setNeuralVoice(v) {
-  if (v === 'sarge' && !window.SARGE_REAL) v = 'ava';
+  if (!_voiceOk(v)) v = 'ava';
   neuralVoice = v; neuralBroken = false;
   try { localStorage.setItem('neuralVoice', v); } catch (e) {}
   if (v === 'sarge') { speakRaw('Sarge here. Eyes on the market.'); return; }
+  if (v === 'sds') { speakRaw('S D S here. Eyes on the market.'); return; }
+  if (v === 'ds') { speakRaw('D S here. Eyes on the market.'); return; }
   speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is Ava. I am watching the market for you.');
 }
 function syncVoicePick() {
   const sel = document.getElementById('voice-pick');
   if (!sel) return;
-  if (!window.SARGE_REAL) { const o = sel.querySelector('option[value="sarge"]'); if (o) o.remove(); }
+  ['sarge', 'sds', 'ds'].forEach(k => { if (!_voiceOk(k)) { const o = sel.querySelector('option[value="' + k + '"]'); if (o) o.remove(); } });
   sel.value = neuralVoice;
 }
 document.addEventListener('DOMContentLoaded', syncVoicePick);
@@ -7393,7 +7398,7 @@ function _voicePunch(a) {
       src.connect(lo); lo.connect(eq); eq.connect(comp); comp.connect(g); g.connect(ctx.destination);
       _vChain = { eq: eq, lo: lo, g: g };
     }
-    const hard = neuralVoice === 'sarge';
+    const hard = !!DRILL[neuralVoice];
     _vChain.eq.gain.value = hard ? 5 : 0;          // presence: crisp consonants
     _vChain.lo.gain.value = hard ? 3 : 0;          // chest: a bigger, manlier voice
     _vChain.g.gain.value = hard ? 1.9 : 1.0;       // loud
@@ -7429,7 +7434,7 @@ function _voiceNext() {
   const fallback = () => { if (finished) return; try { a.onended = null; a.onerror = null; a.pause(); } catch (e) {} neuralBroken = true; _deviceSay(item.text, done); setTimeout(() => { neuralBroken = false; }, 120000); };
   a.onended = done; a.onerror = fallback;
   a.src = '/tts?v=' + neuralVoice + '&t=' + encodeURIComponent(item.text);
-  if (neuralVoice === 'sarge' || _vChain) _voicePunch(a);
+  if (DRILL[neuralVoice] || _vChain) _voicePunch(a);
   a.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
   const pr = a.play();
   if (pr && pr.catch) pr.catch(fallback);
@@ -9828,7 +9833,7 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
       <button id="toggle-voice" onclick="toggleVoiceAlerts()">Voice alerts: ON</button>
       <label style="color:#bcaaa1; font-size:13px; margin:0 6px 0 4px;">Voice
         <select id="voice-pick" onchange="setNeuralVoice(this.value)" style="background:#352b30; color:#fbf4ec; border:1px solid #4a3c43; border-radius:8px; padding:6px 8px; font:inherit;">
-          <option value="ava">Ava (natural)</option><option value="sarge">Sarge (shouting drill sergeant)</option>
+          <option value="ava">Ava (natural)</option><option value="sarge">Sarge (shouting drill sergeant)</option><option value="sds">SDS (drill sergeant 1)</option><option value="ds">DS (drill sergeant 2)</option>
           <option value="device">This device's voice</option>
         </select></label>
       <br>
@@ -14798,8 +14803,15 @@ def render_html():
 # 2026-10-22 (user): only Ava + Snoop + Sarge (drill sergeant) + Caller (clear, proper, fast, demanding - for the calls).
 # Real human voices come from Speechify (or ElevenLabs) when their key + voice ID are set in Railway - see _speechify_voice.
 _TTS_VOICES = {"ava": "en-US-AvaNeural",
-               "sarge": "en-US-ChristopherNeural"}   # only used if the real Sarge voice errors out mid-round
-_TTS_STYLE = {"sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"}}
+               "sarge": "en-US-ChristopherNeural",   # only used if the real Sarge voice errors out mid-round
+               "sds": "en-US-ChristopherNeural", "ds": "en-US-GuyNeural"}
+_TTS_STYLE = {"sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"},
+              "sds": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"},
+              "ds": {"rate": "+18%", "pitch": "-6Hz", "volume": "+50%"}}
+# 2026-10-23 (user): two drill sergeants built from the owner's own voice clips - SDS (clip 1) and DS (clip 2). They read the
+# same scripts Sarge does. Owner-only until VOICES_PUBLIC (Railway) lists them, e.g. VOICES_PUBLIC=sds,ds.
+_DRILL = ("sarge", "sds", "ds")
+_CLONE_SRC = {"sds": "sds.mp3", "ds": "ds.mp3"}
 _NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b", "'bout"), (r"\bAlright\b", "Awright"),
              (r"\b(go|head|mov|flipp|hold|look|build|com|tell|buy|sell|runn|push|turn|hang|watch|bring|happen|mak|stay|get|tak|break)ing\b", r"\1in'"),
              (r"\byour\b", "ya"), (r"\byou\b", "ya"), (r"\bsure\b", "shuah"), (r"\bhere\b", "heah"), (r"\bover\b", "ovah"),
@@ -14821,10 +14833,66 @@ _CAUTION = re.compile(r"(?i)flip|other way|overbought|oversold|warning|lost|coin
 # are spoken by that voice instead - pick a consented New York-accent voice from the ElevenLabs Voice Library:
 #   ELEVENLABS_API_KEY, ELEVENLABS_TONY_VOICE_ID, (optional) ELEVENLABS_SARGE_VOICE_ID
 # The real accent then does the work, so Tony's lines are NOT respelled ("goin'", "shuah") for that voice.
+_VOICE_IDS_FILE = os.path.join(_DATA_ROOT, "voice_ids.json")
+_clone_lock = threading.Lock()
+_clone_fail_until = {}
+
+
+def _cloned_voice(key):
+    """SDS / DS: the ElevenLabs voice made once from the bundled clip (assets/voices/<key>.mp3), kept on the data volume."""
+    try:
+        with open(_VOICE_IDS_FILE, encoding="utf-8") as f:
+            vid = (json.load(f) or {}).get(key)
+        if vid:
+            return vid
+    except Exception:
+        pass
+    if time.time() < _clone_fail_until.get(key, 0):
+        return None
+    with _clone_lock:
+        try:
+            with open(_VOICE_IDS_FILE, encoding="utf-8") as f:
+                ids = json.load(f) or {}
+        except Exception:
+            ids = {}
+        if ids.get(key):
+            return ids[key]
+        try:
+            import requests as _rq
+            src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "voices", _CLONE_SRC[key])
+            with open(src, "rb") as f:
+                r = _rq.post("https://api.elevenlabs.io/v1/voices/add",
+                             headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
+                             data={"name": f"BRAIN {key.upper()}", "description": "BRAIN drill sergeant voice (owner's clip)"},
+                             files={"files": (_CLONE_SRC[key], f, "audio/mpeg")}, timeout=60)
+            r.raise_for_status()
+            ids[key] = r.json()["voice_id"]
+            os.makedirs(os.path.dirname(_VOICE_IDS_FILE), exist_ok=True)
+            with open(_VOICE_IDS_FILE + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(ids, f)
+            os.replace(_VOICE_IDS_FILE + ".tmp", _VOICE_IDS_FILE)
+            print(f"[tts] made the {key.upper()} voice: {ids[key]}")
+            return ids[key]
+        except Exception as e:
+            _clone_fail_until[key] = time.time() + 600
+            print(f"[tts] could not make the {key.upper()} voice: {e!r}")
+            return None
+
+
 def _eleven_voice(key):
     if not os.environ.get("ELEVENLABS_API_KEY"):
         return None
-    return os.environ.get(f"ELEVENLABS_{key.upper()}_VOICE_ID") or None
+    vid = os.environ.get(f"ELEVENLABS_{key.upper()}_VOICE_ID")
+    if not vid and key in _CLONE_SRC:
+        vid = _cloned_voice(key)
+    return vid or None
+
+
+def _voice_public(key):
+    """SDS / DS stay owner-only until the owner approves them (VOICES_PUBLIC=sds,ds in Railway)."""
+    if key not in _CLONE_SRC:
+        return True
+    return key in {x.strip().lower() for x in os.environ.get("VOICES_PUBLIC", "").split(",")}
 
 
 # 2026-10-22 (user: "real human voices like Speechify - Snoop, an American drill sergeant, a clear call guy"):
@@ -14852,7 +14920,7 @@ def _speechify_mp3(text, voice_id):
 
 def _eleven_mp3(text, voice_id, key):
     import requests as _rq
-    if key == "sarge":
+    if key in _DRILL:
         # 2026-10-23 (user: "a real military drill sergeant who's shouting"): Eleven v3 reads audio tags, so every line is
         # delivered as a bark. Stability 0.0 = "creative", the most expressive / loudest delivery v3 allows.
         model = os.environ.get("ELEVENLABS_SARGE_MODEL", "eleven_v3")
@@ -14874,13 +14942,21 @@ def _sarge_real():
     return bool(_eleven_voice("sarge") or _speechify_voice("sarge"))
 
 
+def _voice_real(key):
+    if key == "sarge":
+        return _sarge_real()
+    if key in _CLONE_SRC:
+        return bool(os.environ.get("ELEVENLABS_API_KEY"))      # made from the clip on first use
+    return True
+
+
 def _persona(text, key, respell=True):
     """Rewrite a plain alert line in Tony's or Sarge's words. Same line always gets the same sign-off (so it caches)."""
-    if key != "sarge":
+    if key not in _DRILL:
         return text
     pick = int(hashlib.md5(text.encode()).hexdigest(), 16)
     t = text
-    if key == "sarge":
+    if key in _DRILL:
         for pat, rep in _SARGE_START:
             t = re.sub(pat, rep, t)
         t = t.replace("Going up,", "Going UP!").replace("Going down,", "Going DOWN!")
@@ -14915,7 +14991,7 @@ def _tts_mp3(text, voice_key):
     text = " ".join((text or "").split())
     if not _TTS_OK.match(text):
         return None
-    if voice_key not in _TTS_VOICES or (voice_key == "sarge" and not _sarge_real()):
+    if voice_key not in _TTS_VOICES or (voice_key in _DRILL and not _voice_real(voice_key)):
         voice_key = "ava"
     voice = _TTS_VOICES[voice_key]
     style = _TTS_STYLE.get(voice_key, {})
@@ -16607,9 +16683,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with open(_pb, "rb") as _f:
                 return self._send(200, _f.read(), "application/pdf",
                                   [("Content-Disposition", 'inline; filename="BRAIN-Playbook.pdf"'), ("Cache-Control", "private, max-age=3600")])
+        if parsed.path == "/voice-test" and user.get("role") == "owner":
+            # 2026-10-23 (user: "give me a test audio sample before you embed it"): owner-only page that reads real BRAIN lines
+            # in SDS and DS so they can be approved before members ever hear them.
+            _lines = ["Bitcoin sealed call: up, 72 percent sure.", "Heads up: a big sell order just hit Bitcoin.",
+                      "Bitcoin possible flip down.", "XRP sealed call switched.", "Bitcoin flipped up.", "Three minutes left."]
+            _rows = "".join(
+                f'<h2>{nm}</h2>' + "".join(f'<p>{_html_attr(t)}<br><audio controls preload="none" '
+                                           f'src="/tts?v={k}&amp;t={urllib.parse.quote(t)}"></audio></p>' for t in _lines)
+                for k, nm in (("sds", "SDS (clip 1)"), ("ds", "DS (clip 2)")))
+            _note = ("" if os.environ.get("ELEVENLABS_API_KEY") else
+                     "<p><b>No ElevenLabs key set yet - these will play in the backup voice.</b></p>")
+            return self._send(200, f'<!doctype html><meta name=viewport content="width=device-width"><title>Voice test</title>'
+                                   f'<body style="font-family:system-ui;background:#1c1a18;color:#eee;padding:16px">'
+                                   f'<h1>Drill sergeant voice test</h1>{_note}{_rows}</body>')
         if parsed.path == "/tts":
             qs_t = urllib.parse.parse_qs(parsed.query)
-            mp3 = _tts_mp3((qs_t.get("t") or [""])[0], (qs_t.get("v") or ["ava"])[0])
+            _vk = (qs_t.get("v") or ["ava"])[0]
+            if not _voice_public(_vk) and user.get("role") != "owner":
+                _vk = "ava"                                  # SDS / DS: owner-only until approved
+            mp3 = _tts_mp3((qs_t.get("t") or [""])[0], _vk)
             if not mp3:
                 return self._send(503, "voice unavailable", "text/plain")
             return self._send(200, mp3, "audio/mpeg", [("Cache-Control", "private, max-age=86400")])
@@ -17171,6 +17264,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _co = _co_view
             body = (PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json())
                     .replace('<script>', '<script>window.IS_OWNER = ' + _own + ';window.SARGE_REAL = ' + ('true' if _sarge_real() else 'false')
+                             + ';window.DRILL_VOICES = ' + json.dumps([k for k in _CLONE_SRC if _voice_real(k) and (_voice_public(k) or user.get("role") == "owner")])
                              + ';window.CHART_ONLY = ' + ('true' if _co else 'false') + ';', 1)
                     .replace('</head><body>', ('<style>' + CHART_ONLY_CSS + '</style></head><body class="chart-only">') if _co else '</head><body>', 1)
                     .replace('</header>', '</header>' + _site.app_tabs(user, "charts" if _co else "live", _pend), 1)).encode()
