@@ -262,6 +262,10 @@ def run(coin="BTC"):
     if len(markets) < 200 or not cb:
         print(f"[trend study] {coin}: not enough data yet ({len(markets)} rounds)")
         return None
+    try:
+        _state.setdefault("legacy", {})[coin] = legacy_report(coin, markets, kcache, cb)
+    except Exception as _le:
+        print(f"[oct10 vs brain] {coin}: {_le!r}")
     rs = {sec: _resample(cb, sec) for sec in (300, 900, 3600, 86400)}
     feeds, walls = _load_live_logs()
     print(f"[trend study] {coin}: live feed log covers {sum(1 for m in markets if m['ticker'] in feeds)} rounds, walls {sum(1 for m in markets if m['ticker'] in walls)}")
@@ -1278,6 +1282,193 @@ def sr_ablation(coin, rows, outcome):
                         g.append(outcome(r, mark, "YES" if p >= 0.5 else "NO"))
                 line.append(f">={thr:.0%}: {_f(_summ(g))}")
             print(f"[sr test] {coin} {mark // 60}:00 {label:<22} unseen " + " | ".join(line))
+
+
+# ================================================================== OCT-10 BOT vs BRAIN (2026-10-24, user: "compare the bot configuration from Oct 10 to
+# what BRAIN has now and identify the best, most consistent method for profit"). The Oct-10 bot's call was a LOCK: from 1:00 in, the
+# first minute the market's favorite reaches a confidence floor (BTC 66c, XRP 58c), not too choppy (BTC: last 4 minutes moved < 0.08%),
+# bought only at 70c or less, held to settlement. Its research folder's best idea was "favorite at 12:00 (3 min left), skip if the last
+# minute moved against it, sell if a minute moves against it" - tested there WITHOUT fees, spread or slippage. Everything below is
+# replayed on the same rounds with the same costs as every other BRAIN number: buy at the ask + 1c, sell at the bid - 1c, Kalshi fee both
+# ways. Streaks and worst run are per $100 a call, in time order over all 30 days.
+_SLIP = bt.SLIPPAGE
+
+
+def _fee(p):
+    return _m.ceil(0.07 * p * (1 - p) * 100) / 100
+
+
+def _cost(p):                      # dollars per contract to buy at price p
+    p = min(0.99, max(0.01, p + _SLIP))
+    return p + _fee(p)
+
+
+def _proceeds(p):                  # dollars per contract from selling at price p
+    p = min(0.99, max(0.01, p - _SLIP))
+    return p - _fee(p)
+
+
+def _streaks(seq):
+    """seq = [(win, pnl_per_$1)] in time order -> longest win run, longest loss run, worst drawdown per $100 a call."""
+    bw = bl = cw = cl = 0
+    eq = pk = dd = 0.0
+    for w, pl in seq:
+        cw, cl = (cw + 1, 0) if w else (0, cl + 1)
+        bw, bl = max(bw, cw), max(bl, cl)
+        eq += pl * 100
+        pk = max(pk, eq)
+        dd = min(dd, eq - pk)
+    return bw, bl, round(dd)
+
+
+def legacy_report(coin, markets, kcache, cb):
+    import datetime as _dt
+    R = sorted([m for m in markets if m.get("result") in ("yes", "no") and kcache.get(m["ticker"])], key=lambda m: m["open"])
+    if len(R) < 200:
+        return {}
+    sp = int(len(R) * 0.7)
+    floor_ = 0.66 if coin == "BTC" else 0.58
+    chop_veto = 0.0008 if coin == "BTC" else None
+
+    def ret1(t):                   # last complete 1-minute spot return before second t
+        a, b = cb.get(int(t // 60 * 60) - 60), cb.get(int(t // 60 * 60) - 120)
+        return (a[3] / b[3] - 1) if (a and b and b[3]) else None
+
+    def chop(t):
+        cl = [cb.get(int(t // 60 * 60) - 60 * k) for k in range(5)]
+        cl = [c[3] for c in cl if c]
+        return sum(abs(cl[i] / cl[i + 1] - 1) for i in range(len(cl) - 1)) if len(cl) >= 3 else 0.0
+
+    def side_px(pt, side):         # (ask to buy, bid to sell) for a side from a path point (e, mid, bid, ask)
+        _e, mid, b_, a_ = pt
+        if b_ is None or a_ is None or a_ <= 0:
+            b_ = a_ = mid
+        return (a_, b_) if side == "YES" else (1 - b_, 1 - a_)
+
+    def settle(m, side, cost):
+        win = (side == "YES") == (m["result"] == "yes")
+        return win, ((1 - cost) / cost if win else -1.0)
+
+    def lock(m, cap, hold=True, exit_thr=None):
+        pts = kcache[m["ticker"]]
+        for i, pt in enumerate(pts):
+            el = pt[0] - m["open"]
+            if el < 60 or el > 840:
+                continue
+            mid = pt[1]
+            side = "YES" if mid >= 0.5 else "NO"
+            if max(mid, 1 - mid) < floor_:
+                continue
+            if chop_veto and chop(pt[0]) >= chop_veto:
+                continue
+            ask, _bid = side_px(pt, side)
+            if ask > cap:
+                continue
+            cost = _cost(ask)
+            if exit_thr:
+                for pt2 in pts[i + 1:]:
+                    r = ret1(pt2[0])
+                    if r is not None and ((side == "YES" and r <= -exit_thr) or (side == "NO" and r >= exit_thr)):
+                        _a2, bid2 = side_px(pt2, side)
+                        pr = _proceeds(bid2)
+                        return pr >= cost, (pr - cost) / cost
+            return settle(m, side, cost)
+        return None
+
+    def at_mark(m, sec, cap=1.0, filt=None, exit_thr=None):
+        pts = kcache[m["ticker"]]
+        T = m["open"] + sec
+        i0 = None
+        for i, pt in enumerate(pts):
+            if pt[0] <= T:
+                i0 = i
+        if i0 is None:
+            return None
+        pt = pts[i0]
+        mid = pt[1]
+        if mid == 0.5:
+            return None
+        side = "YES" if mid > 0.5 else "NO"
+        ask, _bid = side_px(pt, side)
+        if ask > cap:
+            return None
+        if filt:
+            r = ret1(T)
+            if r is not None and ((side == "YES" and r <= -filt) or (side == "NO" and r >= filt)):
+                return None
+        cost = _cost(ask)
+        if exit_thr:
+            for pt2 in pts[i0 + 1:]:
+                r = ret1(pt2[0])
+                if r is not None and ((side == "YES" and r <= -exit_thr) or (side == "NO" and r >= exit_thr)):
+                    _a2, bid2 = side_px(pt2, side)
+                    pr = _proceeds(bid2)
+                    return pr >= cost, (pr - cost) / cost
+        return settle(m, side, cost)
+
+    def momentum(m, jump=0.001, lock_in=0.02, trail=0.02, be=0.01):
+        pts = kcache[m["ticker"]]
+        for i, pt in enumerate(pts):
+            el = pt[0] - m["open"]
+            if el < 60 or el > 720:
+                continue
+            r = ret1(pt[0])
+            if r is None or abs(r) < jump:
+                continue
+            side = "YES" if r > 0 else "NO"
+            ask, _bid = side_px(pt, side)
+            if ask > 0.95 or ask < 0.05:
+                return None
+            cost = _cost(ask)
+            peak = ask
+            for pt2 in pts[i + 1:]:
+                a2, b2 = side_px(pt2, side)
+                peak = max(peak, b2)
+                gain = b2 - ask
+                if (peak - ask >= lock_in and peak - b2 >= trail) or gain <= -be:
+                    pr = _proceeds(b2)
+                    return pr >= cost, (pr - cost) / cost
+            return settle(m, side, cost)
+        return None
+
+    xthr = 0.00035 if coin == "BTC" else 0.0005
+    strategies = {
+        "Oct-10 lock (floor, chop veto, buy <=70c, hold)": lambda m: lock(m, 0.70),
+        "Oct-10 lock, buy <=80c": lambda m: lock(m, 0.80),
+        "Oct-10 lock, buy <=89c": lambda m: lock(m, 0.89),
+        "Oct-10 lock <=89c + sell on adverse minute": lambda m: lock(m, 0.89, exit_thr=xthr),
+        "favorite at 8:00, hold": lambda m: at_mark(m, 480),
+        "favorite at 8:00 <=89c, hold": lambda m: at_mark(m, 480, 0.89),
+        "favorite at 10:00 <=89c, hold": lambda m: at_mark(m, 600, 0.89),
+        "favorite at 12:00 (3 min left), hold": lambda m: at_mark(m, 720),
+        "favorite at 12:00 + skip if last minute against": lambda m: at_mark(m, 720, filt=0.0001),
+        "favorite at 12:00 + sell on adverse minute": lambda m: at_mark(m, 720, exit_thr=xthr),
+        "favorite at 12:00 + skip + sell (Oct-10 research best)": lambda m: at_mark(m, 720, filt=0.0001, exit_thr=xthr),
+        "favorite at 12:00 <=89c + skip + sell": lambda m: at_mark(m, 720, 0.89, filt=0.0001, exit_thr=xthr),
+        "favorite at 8:00 <=89c + skip + sell": lambda m: at_mark(m, 480, 0.89, filt=0.0001, exit_thr=xthr),
+        "momentum jump 0.10% + trailing stop (Oct-10 paper bot)": lambda m: momentum(m),
+    }
+    out = {}
+    for name, fn in strategies.items():
+        seq, un = [], []
+        for i, m in enumerate(R):
+            try:
+                r = fn(m)
+            except Exception:
+                r = None
+            if r is None:
+                continue
+            seq.append(r)
+            if i >= sp:
+                un.append(r)
+        s_all, s_un = _summ(seq), _summ(un)
+        bw, bl, dd = _streaks(seq)
+        out[name] = {"all": s_all, "unseen": s_un, "cover": round(len(seq) / len(R), 3), "win_streak": bw, "loss_streak": bl, "drawdown": dd}
+    print(f"[oct10 vs brain] {coin} ===== {len(R)} rounds, newest 30% ({len(R) - sp}) never used to pick | per $100 a call, fees + 1c slippage both ways")
+    for name, v in sorted(out.items(), key=lambda kv: -(kv[1]["unseen"]["per"] or -99)):
+        print(f"[oct10 vs brain] {coin} {name:<58} unseen {_f(v['unseen'])} | all {_f(v['all'])} | calls {v['cover']:.0%} of rounds | "
+              f"best run {v['win_streak']} wins, worst {v['loss_streak']} losses, worst drawdown ${v['drawdown']:+,}")
+    return out
 
 
 def _log_sealed(coin, rep):
