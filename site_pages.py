@@ -429,6 +429,8 @@ def admin_page(user, db, email_on, flash="", reset_links=None, kalshi=None):
                 st, pas = '<span class="st st-on">OWNER</span>', "always"
             elif u["status"] != "approved":
                 st, pas = '<span class="st st-off">BLOCKED</span>', "no access"
+            elif u["username"].lower() in {"j44", "itsjordayer", "jordanmcontact", "j4admin"}:   # billing.COMP_ACCOUNTS
+                st, pas = '<span class="st st-on">BRAIN ACTIVE</span>', "always (your account)"
             elif au > time.time():
                 _et = _ET_TZ
                 _w = (__import__("datetime").datetime.fromtimestamp(au, _et).strftime("%b %d %-I:%M %p ET") if _et else

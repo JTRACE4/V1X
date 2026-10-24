@@ -17460,15 +17460,12 @@ def main():
     if total:
         print(f"Loaded {total} past graded windows from disk ({HISTORY_FILE}).")
     _load_whale_scorecard()
-    try:      # 2026-10-22: people approved before passes existed keep access for 7 days, once
-        _g = [u_["username"] for u_ in _auth.DB["users"].values()
-              if u_.get("role") != "owner" and u_.get("status") == "approved" and "access_until" not in u_]
-        for _n in _g:
-            _bill.grant_days(_n, 7, why="grace - approved before passes")
-        if _g:
-            print(f"[billing] 7-day grace for {len(_g)} existing account(s): {', '.join(_g)}")
+    # 2026-10-24 (user): the old "7-day grace" step re-ran on every redeploy and gave free days to every new sign-up.
+    # Removed. Access now comes only from a Stripe payment, an admin gift, or the comp accounts in billing.COMP_ACCOUNTS.
+    try:
+        _bill.revoke_unpaid_once()
     except Exception as _ge:
-        print(f"[billing] grace step failed: {_ge!r}")
+        print(f"[billing] unpaid-access cleanup failed: {_ge!r}")
     try:
         _radar.load()
     except Exception as _rle:

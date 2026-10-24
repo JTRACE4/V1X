@@ -87,16 +87,8 @@ def _stripe(method, path, data=None):
     req = _r.Request("https://api.stripe.com/v1/" + path, data=body, method=method,
                      headers={"Authorization": "Bearer " + os.environ["STRIPE_SECRET_KEY"],
                               "Content-Type": "application/x-www-form-urlencoded"})
-    try:
-        with _r.urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read().decode())
-    except Exception as e:                       # show Stripe's own reason in the log, not just "400 Bad Request"
-        body = ""
-        try:
-            body = e.read().decode()[:400]
-        except Exception:
-            pass
-        raise RuntimeError(f"Stripe {method} {path.split('?')[0]}: {e} {body}") from None
+    with _r.urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read().decode())
 
 
 def ensure_stripe():
@@ -150,11 +142,11 @@ def ensure_stripe():
     try:
         if not st.get("portal_cfg"):
             cfg = _stripe("POST", "billing_portal/configurations", {
-                "business_profile[headline]": "BRAIN membership: auto-renew, card, receipts",
+                "business_profile[headline]": "BRAIN membership - turn auto-renew off or on, update your card, see receipts",
                 "business_profile[privacy_policy_url]": base + "/terms", "business_profile[terms_of_service_url]": base + "/terms",
                 "features[subscription_cancel][enabled]": "true", "features[subscription_cancel][mode]": "at_period_end",
                 "features[payment_method_update][enabled]": "true", "features[invoice_history][enabled]": "true",
-                "default_return_url": base + "/pricing"})
+                "features[customer_update][enabled]": "false", "default_return_url": base + "/pricing"})
             st["portal_cfg"] = cfg["id"]
             made.append("billing page")
             with _auth._lock:
@@ -258,12 +250,48 @@ def chart_only(user):
     return bool(user) and not has_access(user) and chart_until(user) > time.time()
 
 
+# 2026-10-24 (user): the owner's own Jordan / J4 accounts always have full BRAIN access, like the owner.
+COMP_ACCOUNTS = {"j44", "itsjordayer", "jordanmcontact", "j4admin"}
+# kept through the 2026-10-24 cleanup with the time the admin gave them
+KEEP_GIFTED = {"mogsonkalshi"}
+
+
+def _comp(user):
+    return bool(user) and (user.get("username") or "").lower() in COMP_ACCOUNTS
+
+
 def has_access(user):
     if not user:
         return False
-    if user.get("role") == "owner":
+    if user.get("role") == "owner" or _comp(user):
         return True
     return access_until(user) > time.time()
+
+
+def revoke_unpaid_once():
+    """One time (2026-10-24, user): take away BRAIN and Chart Only time from every account that never paid through Stripe
+    (the old startup 'grace' step had handed out free days). Comp accounts and KEEP_GIFTED keep theirs."""
+    with _auth._lock:
+        if _auth.DB.get("unpaid_cleanup_2026_10_24"):
+            return []
+        paid = {(p.get("user") or "").lower() for p in _auth.DB.get("payments", [])
+                if p.get("user") and not p.get("unmatched") and str(p.get("session", "")).startswith(("cs_", "in:"))}
+        gone = []
+        for key, u in _auth.DB["users"].items():
+            name = (u.get("username") or key).lower()
+            if u.get("role") == "owner" or name in COMP_ACCOUNTS or name in KEEP_GIFTED or name in paid:
+                continue
+            if u.get("access_until") or u.get("chart_until"):
+                u["access_until"] = 0
+                u["chart_until"] = 0
+                gone.append(u.get("username") or key)
+        _auth.DB["unpaid_cleanup_2026_10_24"] = int(time.time())
+        if gone:
+            _auth._log(f"access removed (never paid via Stripe): {', '.join(gone)}")
+        _auth.save()
+    if gone:
+        print(f"[billing] removed unpaid access from {len(gone)} account(s): {', '.join(gone)}")
+    return gone
 
 
 def fmt_until(ts):
