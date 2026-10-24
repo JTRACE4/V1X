@@ -812,7 +812,8 @@ INFO_SECTIONS = [
 # video thumbnails, artsy and high quality"). Flat-vector, the same dusk palette as the hero (static/hero.*): night ink, rose and tan
 # brain halves, teal-up / pink-down candles, gold sparkle. Everything is inline SVG - no extra requests, sharp at any size.
 _C = {"ink": "#1a1416", "panel": "#2a2f33", "panel2": "#1f2427", "grid": "#3a4247", "up": "#43cdb7", "down": "#e8798f",
-      "rose": "#e9a5bb", "tan": "#dcbb91", "gold": "#e5b85c", "cream": "#fbf4ec", "sky": "#2c3446", "dusk": "#c99aa3"}
+      "rose": "#e9a5bb", "tan": "#dcbb91", "gold": "#e5b85c", "cream": "#fbf4ec", "sky": "#2c3446", "dusk": "#c99aa3",
+      "pink": "#f4a6c6", "sea": "#2ec4c6", "lagoon": "#7fe3dc", "deep": "#14606f", "sand": "#f2d3b0"}
 
 
 def _cand(x, o, c, w=7, wick=4):
@@ -825,7 +826,8 @@ def _cand(x, o, c, w=7, wick=4):
 
 def _monitor(inner, w=160, h=100, tag=True):
     """A little BRAIN desk monitor (same as the three screens in the hero)."""
-    return (f'<rect x="2" y="2" width="{w - 4}" height="{h - 4}" rx="9" fill="{_C["panel2"]}" stroke="#0e1113" stroke-width="3"/>'
+    return (f'<defs><linearGradient id="mn{w}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a2650"/><stop offset="1" stop-color="#123c48"/></linearGradient></defs>'
+            f'<rect x="2" y="2" width="{w - 4}" height="{h - 4}" rx="9" fill="url(#mn{w})" stroke="{_C["pink"]}" stroke-opacity=".45" stroke-width="2"/>'
             + "".join(f'<line x1="10" y1="{y}" x2="{w - 10}" y2="{y}" stroke="{_C["grid"]}" stroke-width=".7" opacity=".7"/>'
                       for y in range(22, h - 6, 16))
             + (f'<rect x="12" y="9" width="26" height="3.5" rx="1.7" fill="{_C["rose"]}"/>'
@@ -932,7 +934,7 @@ def _art_videos():
 
 
 def _art_favorites():
-    b = (f'<rect x="2" y="2" width="156" height="96" rx="12" fill="{_C["panel2"]}" stroke="#0e1113" stroke-width="3"/>'
+    b = (f'<rect x="2" y="2" width="156" height="96" rx="12" fill="url(#mn160)" stroke="{_C["pink"]}" stroke-opacity=".45" stroke-width="2"/><defs><linearGradient id="mn160" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a2650"/><stop offset="1" stop-color="#123c48"/></linearGradient></defs>'
          + _brain(80, 54, 1.9)
          + "".join(_sparkle(x, y, r) for x, y, r in [(32, 30, 7), (128, 28, 6), (40, 76, 4), (124, 74, 5), (80, 18, 4)])
          + f'<path d="M50 54 C30 40 30 70 50 54" stroke="{_C["up"]}" stroke-width="1" fill="none" opacity=".5"/>')
@@ -940,7 +942,7 @@ def _art_favorites():
 
 
 def _art_help():          # shield with check
-    b = (f'<rect x="2" y="2" width="156" height="96" rx="12" fill="{_C["panel2"]}" stroke="#0e1113" stroke-width="3"/>'
+    b = (f'<rect x="2" y="2" width="156" height="96" rx="12" fill="url(#mn160)" stroke="{_C["pink"]}" stroke-opacity=".45" stroke-width="2"/><defs><linearGradient id="mn160" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a2650"/><stop offset="1" stop-color="#123c48"/></linearGradient></defs>'
          f'<path d="M80 16 L110 26 C110 58 98 76 80 86 C62 76 50 58 50 26Z" fill="#2f5a4c" stroke="{_C["up"]}" stroke-width="2.5"/>'
          f'<path d="M66 50 L77 61 L96 40" stroke="{_C["cream"]}" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
          + _sparkle(120, 30, 5) + _sparkle(40, 70, 4, _C["rose"]))
@@ -963,17 +965,32 @@ _G = {
     "help": f'<path d="M12 3l7 3c0 7-3 12-7 15-4-3-7-8-7-15z" fill="#2f5a4c" stroke="{_C["up"]}" stroke-width="1.5"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="{_C["cream"]}" stroke-width="2" fill="none"/>',
 }
 
+def _palm(x, y, k=1.0, col="#1d3b37"):
+    """A palm tree silhouette (same as the hero cove) rooted at x, y."""
+    t = f'<g transform="translate({x} {y}) scale({k})" fill="{col}">'
+    t += '<path d="M-2 0 C0 -30 4 -60 10 -86 L13 -85 C8 -60 4 -30 2 0Z"/>'
+    for a, l in ((-150, 34), (-120, 30), (-60, 30), (-25, 34), (-95, 26), (10, 26), (-175, 24)):
+        t += (f'<path transform="translate(11 -86) rotate({a})" d="M0 0 C{l * .4} -7 {l * .8} -6 {l} 2 C{l * .7} -1 {l * .4} -1 0 3Z"/>')
+    return t + '</g>'
+
+
 # video covers: each topic gets its own 16:9 illustrated thumbnail (the links open live YouTube results, so a fixed real thumbnail
 # would misrepresent what opens - these covers describe the topic instead)
 def _cover(kind, title):
     w, h = 320, 180
-    sky = (f'<defs><linearGradient id="v{kind}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{_C["sky"]}"/>'
-           f'<stop offset=".7" stop-color="#4a3540"/><stop offset="1" stop-color="{_C["dusk"]}"/></linearGradient></defs>'
+    sky = (f'<defs><linearGradient id="v{kind}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b2f5c"/>'
+           f'<stop offset=".45" stop-color="#b8679a"/><stop offset=".72" stop-color="{_C["pink"]}"/><stop offset="1" stop-color="#ffd1b8"/></linearGradient>'
+           f'<linearGradient id="s{kind}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{_C["lagoon"]}"/><stop offset="1" stop-color="{_C["deep"]}"/></linearGradient></defs>'
            f'<rect width="{w}" height="{h}" fill="url(#v{kind})"/>'
            + "".join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="#fff" opacity="{o}"/>' for x, y, r, o in
-                     [(30, 20, 1, .7), (80, 34, .8, .5), (150, 14, 1.1, .8), (210, 30, .8, .5), (270, 18, 1, .7), (300, 44, .8, .4), (120, 46, .7, .4)])
-           + f'<path d="M0 150 C40 120 70 130 110 112 C150 96 180 118 220 104 C260 92 290 110 320 98 L320 180 L0 180Z" fill="#2c3d3a" opacity=".85"/>'
-           + f'<path d="M0 164 C60 150 120 160 180 150 C240 142 280 152 320 146 L320 180 L0 180Z" fill="#1e2b29"/>')
+                     [(30, 16, 1, .8), (80, 28, .8, .6), (150, 12, 1.1, .8), (210, 24, .8, .5), (270, 14, 1, .7), (120, 36, .7, .4)])
+           + f'<circle cx="250" cy="128" r="22" fill="#ffe0b8" opacity=".85"/>'
+           + f'<path d="M150 136 C175 112 205 108 236 136Z" fill="#2f5a4c" opacity=".9"/>'
+           + f'<rect y="134" width="{w}" height="46" fill="url(#s{kind})"/>'
+           + "".join(f'<path d="M{x} {y}q10 -3 20 0" stroke="#e8fffb" stroke-width="1.4" fill="none" opacity=".6"/>' for x, y in
+                     [(40, 146), (120, 152), (200, 144), (260, 160), (80, 168), (170, 172)])
+           + f'<path d="M0 180 L0 160 C30 156 50 162 70 170 L80 180Z" fill="{_C["sand"]}"/>'
+           + _palm(18, 166, 1.0) + _palm(300, 170, .8))
     if kind == "candles":
         art = "".join(_cand(x, o, c, 12, 8) for x, o, c in
                       [(40, 110, 92), (60, 92, 100), (80, 100, 76), (100, 76, 84), (120, 84, 60), (140, 60, 70), (160, 70, 46), (180, 46, 56)])
@@ -1014,72 +1031,75 @@ _VIDEO_COVER = {"How to read candlestick charts": "candles", "Trading 15-minute 
                 "Khan Academy: options, calls and puts": "options", "Prediction markets explained": "prediction"}
 
 INFO_CSS = r"""
-body{background:#17121a;
-  background-image:radial-gradient(1200px 600px at 85% -10%,rgba(233,165,187,.16),transparent 60%),
-  radial-gradient(900px 500px at -10% 30%,rgba(67,205,183,.10),transparent 60%),
-  radial-gradient(800px 600px at 50% 110%,rgba(229,184,92,.10),transparent 60%),
-  linear-gradient(180deg,#1b1a26 0%,#211b1e 45%,#1a1416 100%);background-attachment:fixed}
-.ic-stars{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.55;
+body{background:#1c1530;
+  background-image:radial-gradient(1100px 520px at 80% -8%,rgba(244,166,198,.34),transparent 62%),
+  radial-gradient(900px 480px at 5% 10%,rgba(160,110,200,.22),transparent 60%),
+  radial-gradient(1000px 520px at 50% 105%,rgba(46,196,198,.30),transparent 62%),
+  linear-gradient(180deg,#22183a 0%,#2a1b33 35%,#1d2236 70%,#0f2e38 100%);background-attachment:fixed}
+.ic-stars{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.6;
   background-image:radial-gradient(1.2px 1.2px at 12% 18%,#fff,transparent),radial-gradient(1px 1px at 28% 8%,#fff,transparent),
   radial-gradient(1px 1px at 46% 22%,#fff,transparent),radial-gradient(1.4px 1.4px at 63% 12%,#fff,transparent),
   radial-gradient(1px 1px at 78% 28%,#fff,transparent),radial-gradient(1.2px 1.2px at 91% 9%,#fff,transparent),
-  radial-gradient(1px 1px at 8% 44%,#fff,transparent),radial-gradient(1px 1px at 36% 52%,#fff,transparent),
-  radial-gradient(1.1px 1.1px at 70% 48%,#fff,transparent),radial-gradient(1px 1px at 88% 62%,#fff,transparent),
-  radial-gradient(1px 1px at 20% 78%,#fff,transparent),radial-gradient(1.2px 1.2px at 55% 84%,#fff,transparent)}
-.ic-fire{position:fixed;width:4px;height:4px;border-radius:50%;background:#e5b85c;box-shadow:0 0 10px 3px rgba(229,184,92,.55);
+  radial-gradient(1px 1px at 8% 44%,#fff,transparent),radial-gradient(1px 1px at 36% 32%,#fff,transparent),
+  radial-gradient(1.1px 1.1px at 70% 38%,#fff,transparent),radial-gradient(1px 1px at 88% 42%,#fff,transparent)}
+.ic-isle{position:fixed;left:0;right:0;bottom:0;height:200px;pointer-events:none;z-index:0;opacity:.75}
+.ic-isle svg{width:100%;height:100%;display:block}
+.ic-isle .wv{animation:icWave 7s ease-in-out infinite alternate}
+@keyframes icWave{from{transform:translateX(0)}to{transform:translateX(-40px)}}
+.ic-fire{position:fixed;width:4px;height:4px;border-radius:50%;background:#ffd1e3;box-shadow:0 0 12px 4px rgba(244,166,198,.6);
   pointer-events:none;z-index:0;opacity:0;animation:icFloat 9s ease-in-out infinite}
 @keyframes icFloat{0%{opacity:0;transform:translateY(0)}20%{opacity:.9}80%{opacity:.6}100%{opacity:0;transform:translateY(-120px) translateX(20px)}}
-@media (prefers-reduced-motion:reduce){.ic-fire{display:none}}
+@media (prefers-reduced-motion:reduce){.ic-fire{display:none}.ic-isle .wv{animation:none}}
 .ic{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:10px 16px 70px;font-family:var(--sans)}
 .ic-hero{position:relative;border-radius:26px;overflow:hidden;min-height:330px;display:flex;align-items:flex-end;
-  border:1px solid rgba(240,214,200,.16);box-shadow:0 30px 80px rgba(0,0,0,.45);margin-top:6px}
+  border:1px solid rgba(244,166,198,.35);box-shadow:0 30px 80px rgba(0,0,0,.45);margin-top:6px}
 .ic-hero picture,.ic-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 62%}
-.ic-hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(23,18,26,.05) 0%,rgba(23,18,26,.35) 45%,rgba(23,18,26,.93) 100%)}
+.ic-hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(60,30,80,.0) 0%,rgba(150,70,120,.25) 40%,rgba(28,21,48,.94) 100%),linear-gradient(90deg,rgba(244,166,198,.18),rgba(46,196,198,.14))}
 .ic-hero .txt{position:relative;z-index:1;padding:26px 26px 22px}
-.ic-hero .kick{font:800 11px Montserrat,Arial,sans-serif;letter-spacing:2.4px;color:var(--gold);text-transform:uppercase}
+.ic-hero .kick{font:800 11px Montserrat,Arial,sans-serif;letter-spacing:2.4px;color:#7fe3dc;text-transform:uppercase}
 .ic-hero h1{font-family:var(--serif);font-weight:700;color:var(--cream);margin:4px 0 6px;font-size:46px;line-height:1.02;
   font-variation-settings:"SOFT" 100;text-shadow:0 4px 30px rgba(0,0,0,.6)}
-.ic-hero h1 em{font-style:normal;background:linear-gradient(90deg,#f7bfd2,#f0d3a8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ic-hero h1 em{font-style:normal;background:linear-gradient(90deg,#ffb3d1,#7fe3dc);-webkit-background-clip:text;background-clip:text;color:transparent}
 .ic-hero p{margin:0;color:#efe3d8;max-width:560px;font-size:16px}
 .ic-jump{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 4px;position:sticky;top:0;z-index:4;padding:10px 0;
-  background:linear-gradient(180deg,rgba(23,18,26,.92),rgba(23,18,26,.75));backdrop-filter:blur(8px)}
-.ic-jump a{display:inline-flex;align-items:center;gap:6px;font:700 11.5px Montserrat,Arial,sans-serif;letter-spacing:.6px;text-decoration:none;color:var(--tan);
-  border:1px solid rgba(220,187,145,.32);border-radius:999px;padding:6px 12px 6px 8px;background:rgba(48,38,43,.7)}
+  background:linear-gradient(180deg,rgba(34,24,58,.92),rgba(34,24,58,.7));backdrop-filter:blur(10px)}
+.ic-jump a{display:inline-flex;align-items:center;gap:6px;font:700 11.5px Montserrat,Arial,sans-serif;letter-spacing:.6px;text-decoration:none;color:#ffd1e3;
+  border:1px solid rgba(244,166,198,.4);border-radius:999px;padding:6px 12px 6px 8px;background:rgba(60,36,80,.6)}
 .ic-jump a svg{width:16px;height:16px}
-.ic-jump a:hover{background:rgba(233,165,187,.16);color:var(--cream);border-color:var(--rose)}
+.ic-jump a:hover{background:rgba(46,196,198,.2);color:#fff;border-color:#7fe3dc}
 .ic-sec{margin-top:34px;scroll-margin-top:64px}
 .ic-head{display:grid;grid-template-columns:200px 1fr;gap:20px;align-items:center;margin-bottom:14px}
 .ic-head .art{width:200px;filter:drop-shadow(0 14px 26px rgba(0,0,0,.45))}
 .ic-head .art svg{width:100%;height:auto;display:block}
 .ic-head h2{font-family:var(--serif);font-weight:700;color:var(--cream);font-size:26px;margin:0 0 4px;line-height:1.1}
-.ic-head .n{font:800 11px Montserrat,Arial,sans-serif;letter-spacing:2px;color:var(--rose)}
+.ic-head .n{font:800 11px Montserrat,Arial,sans-serif;letter-spacing:2px;color:#7fe3dc}
 .ic-head .sub{color:var(--mute);font-size:15px;margin:0}
 .ic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-.ic-card{position:relative;display:flex;gap:12px;text-decoration:none;background:linear-gradient(160deg,rgba(56,45,50,.92),rgba(36,30,34,.92));
-  border:1px solid rgba(240,214,200,.13);border-radius:16px;padding:14px 14px 13px;transition:border-color .18s,transform .18s,box-shadow .18s;overflow:hidden}
-.ic-card:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--rose),var(--tan),var(--up));opacity:0;transition:opacity .18s}
-.ic-card:hover{border-color:rgba(233,165,187,.55);transform:translateY(-2px);box-shadow:0 14px 30px rgba(0,0,0,.35)}
+.ic-card{position:relative;display:flex;gap:12px;text-decoration:none;background:linear-gradient(160deg,rgba(78,44,92,.72),rgba(22,52,66,.72));backdrop-filter:blur(8px);
+  border:1px solid rgba(244,166,198,.22);border-radius:16px;padding:14px 14px 13px;transition:border-color .18s,transform .18s,box-shadow .18s;overflow:hidden}
+.ic-card:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,#f4a6c6,#ffd1b8,#2ec4c6);opacity:0;transition:opacity .18s}
+.ic-card:hover{border-color:#7fe3dc;transform:translateY(-2px);box-shadow:0 14px 30px rgba(0,0,0,.35)}
 .ic-card:hover:before{opacity:1}
-.ic-card .g{flex:0 0 36px;height:36px;border-radius:11px;background:rgba(20,15,18,.65);display:grid;place-items:center;border:1px solid rgba(240,214,200,.1)}
+.ic-card .g{flex:0 0 36px;height:36px;border-radius:11px;background:rgba(20,18,40,.6);display:grid;place-items:center;border:1px solid rgba(127,227,220,.25)}
 .ic-card .g svg{width:24px;height:24px}
 .ic-card b{display:block;color:var(--cream);font-size:15.5px;line-height:1.25}
-.ic-card .src{display:inline-block;font:800 9.5px Montserrat,Arial,sans-serif;letter-spacing:1px;color:var(--up);margin:4px 0 5px;text-transform:uppercase}
+.ic-card .src{display:inline-block;font:800 9.5px Montserrat,Arial,sans-serif;letter-spacing:1px;color:#7fe3dc;margin:4px 0 5px;text-transform:uppercase}
 .ic-card .src.yt{color:#ff8f8f}
 .ic-card span.d{display:block;color:#e2d4c9;font-size:13.5px;line-height:1.42}
 .ic-card .go{position:absolute;right:12px;top:12px;color:var(--mute);font-size:13px;opacity:.6}
 .ic-vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.ic-vid{display:block;text-decoration:none;border-radius:16px;overflow:hidden;background:rgba(36,30,34,.95);border:1px solid rgba(240,214,200,.13);
+.ic-vid{display:block;text-decoration:none;border-radius:16px;overflow:hidden;background:linear-gradient(180deg,rgba(22,52,66,.9),rgba(40,28,60,.9));border:1px solid rgba(244,166,198,.25);
   transition:transform .18s,box-shadow .18s,border-color .18s}
-.ic-vid:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(0,0,0,.45);border-color:rgba(233,165,187,.55)}
+.ic-vid:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(0,0,0,.45);border-color:#7fe3dc}
 .ic-vid svg.cover{display:block;width:100%;height:auto;aspect-ratio:16/9}
 .ic-vid .meta{padding:11px 14px 13px}
 .ic-vid b{display:block;color:var(--cream);font-size:15.5px}
 .ic-vid span{display:block;color:#e2d4c9;font-size:13.5px;margin-top:2px}
-.ic-fav .ic-card{border-color:rgba(229,184,92,.42);background:linear-gradient(160deg,rgba(70,56,40,.85),rgba(36,30,34,.92))}
-.ic-note{margin-top:40px;padding:16px 18px;border-radius:18px;border:1px dashed rgba(240,214,200,.25);color:var(--mute);font-size:13.5px;
-  display:flex;gap:14px;align-items:center;background:rgba(20,15,18,.45)}
+.ic-fav .ic-card{border-color:rgba(255,209,184,.5);background:linear-gradient(160deg,rgba(120,60,100,.75),rgba(30,80,90,.7))}
+.ic-note{margin-top:40px;padding:16px 18px;border-radius:18px;border:1px dashed rgba(240,214,200,.25);color:#e6d6ea;font-size:13.5px;
+  display:flex;gap:14px;align-items:center;background:rgba(30,22,52,.6);margin-bottom:140px}
 .ic-note svg{flex:0 0 46px;width:46px;height:46px}
-@media(max-width:640px){.ic-jump{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-16px;margin-right:-16px;padding:10px 16px}
+@media(max-width:640px){.ic-isle{height:110px;opacity:.6}.ic-jump{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-16px;margin-right:-16px;padding:10px 16px}
   .ic-jump::-webkit-scrollbar{display:none}.ic-jump a{flex:0 0 auto}
   .ic-hero{min-height:260px;border-radius:20px}.ic-hero h1{font-size:34px}.ic-hero .txt{padding:18px}
   .ic-head{grid-template-columns:110px 1fr;gap:12px}.ic-head .art{width:110px}.ic-head h2{font-size:21px}
@@ -1108,7 +1128,19 @@ def info_center_page(user=None):
         '<a class="btn pink" style="padding:8px 16px;font-size:13px" href="/pricing">Get BRAIN</a></div>')
     fire = "".join(f'<i class="ic-fire" style="left:{x}%;top:{y}%;animation-delay:{dl}s"></i>' for x, y, dl in
                    [(8, 70, 0), (22, 85, 2.5), (40, 75, 5), (61, 88, 1.2), (78, 72, 3.8), (92, 82, 6.3), (15, 40, 4.4), (85, 35, 7.1)])
-    body = ('<div class="ic-stars"></div>' + fire + tabs + '<div class="ic"><div class="ic-hero">' + hero_img("pic")
+    isle = ('<div class="ic-isle"><svg viewBox="0 0 1440 200" preserveAspectRatio="xMidYMax slice" aria-hidden="true">'
+            '<defs><linearGradient id="isea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fe3dc"/><stop offset=".5" stop-color="#2ec4c6"/>'
+            '<stop offset="1" stop-color="#0d4a5a"/></linearGradient></defs>'
+            '<path d="M980 120 C1040 60 1120 50 1200 70 C1260 84 1300 100 1340 120Z" fill="#1f4a44"/>'
+            '<path d="M60 124 C110 96 170 92 230 124Z" fill="#244f48"/>'
+            '<rect y="118" width="1440" height="82" fill="url(#isea)"/>'
+            '<g class="wv">' + "".join(f'<path d="M{x} {y}q24 -8 48 0" stroke="#e8fffb" stroke-width="2" fill="none" opacity=".55"/>'
+                                       for x, y in [(80, 140), (260, 150), (430, 136), (610, 158), (790, 142), (980, 152), (1160, 138), (1330, 156), (180, 176), (720, 182), (1240, 180)])
+            + '</g><path d="M0 200 L0 168 C80 160 160 170 240 190 L260 200Z" fill="#f2d3b0"/>'
+            '<path d="M1200 200 C1260 176 1360 170 1440 172 L1440 200Z" fill="#f2d3b0"/>'
+            '<svg x="0" y="0" width="1440" height="200" viewBox="0 0 1440 200">' + _palm(70, 176, 1.35, "#17322f") + _palm(150, 184, 1.0, "#17322f")
+            + _palm(1300, 178, 1.3, "#17322f") + _palm(1380, 182, 1.05, "#17322f") + _palm(1090, 98, .7, "#1d3b37") + '</svg></svg></div>')
+    body = ('<div class="ic-stars"></div>' + isle + fire + tabs + '<div class="ic"><div class="ic-hero">' + hero_img("pic")
             + '<div class="txt"><div class="kick">BRAIN &middot; Info Center</div><h1>Learn the market <em>BRAIN reads</em></h1>'
               '<p>Free, trusted places to learn candles, 15-minute charts, investing and trading &mdash; hand-picked and sorted for you.</p></div></div>'
             f'<nav class="ic-jump" aria-label="Sections">{jump}</nav>' + "".join(secs)
