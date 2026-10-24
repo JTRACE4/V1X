@@ -843,8 +843,8 @@ def _sparkle(x, y, r=6, col=None):
 def _brain(x, y, s=1.0):
     """The two-tone BRAIN (rose + tan halves) - tiny mascot for the art."""
     return (f'<g transform="translate({x} {y}) scale({s})">'
-            f'<path d="M0 -14C-4 -18 -12 -17 -13 -11C-19 -10 -20 -2 -16 1C-19 6 -15 12 -9 11C-7 15 -2 15 0 13Z" fill="{_C["rose"]}"/>'
-            f'<path d="M0 -14C4 -18 12 -17 13 -11C19 -10 20 -2 16 1C19 6 15 12 9 11C7 15 2 15 0 13Z" fill="{_C["tan"]}"/>'
+            f'<path d="M0 -14C-4 -18 -12 -17 -13 -11C-19 -10 -20 -2 -16 1C-19 6 -15 12 -9 11C-7 15 -2 15 0 13Z" fill="{_C["rose"]}" stroke="#0b0710" stroke-width="1.8" stroke-linejoin="round"/>'
+            f'<path d="M0 -14C4 -18 12 -17 13 -11C19 -10 20 -2 16 1C19 6 15 12 9 11C7 15 2 15 0 13Z" fill="{_C["tan"]}" stroke="#0b0710" stroke-width="1.8" stroke-linejoin="round"/>'
             f'<line x1="0" y1="-14" x2="0" y2="13" stroke="#6b4a52" stroke-width="1.2"/>'
             f'<path d="M-10 -5q3 -2 6 0M-9 4q3 -2 6 0M4 -5q3 -2 6 0M3 4q3 -2 6 0" stroke="#fff" stroke-width="1.2" fill="none" opacity=".85"/></g>')
 
@@ -1021,9 +1021,24 @@ def _cover(kind, title):
                f'<text x="210" y="114" font-size="20" font-weight="900" fill="{_C["ink"]}" font-family="Arial" text-anchor="middle">NO</text>'
                f'<text x="110" y="52" font-size="13" font-weight="800" fill="{_C["cream"]}" font-family="Arial" text-anchor="middle">68&cent;</text>'
                f'<text x="210" y="82" font-size="13" font-weight="800" fill="{_C["cream"]}" font-family="Arial" text-anchor="middle">32&cent;</text>')
-    play = (f'<g transform="translate(286 150)"><circle r="17" fill="{_C["ink"]}" opacity=".85"/><path d="M-6 -9 L11 0 L-6 9Z" fill="{_C["rose"]}"/></g>')
-    brainm = _brain(30, 150, 1.05)
-    return _svg(w, h, sky + art + brainm + play + _sparkle(36, 30, 6), "cover")
+    play = (f'<g transform="translate(286 150)"><circle r="18" fill="#ffe14d" stroke="#0b0710" stroke-width="3"/><path d="M-6 -9 L11 0 L-6 9Z" fill="#0b0710"/></g>')
+    brainm = _brain(30, 150, 1.15)
+    fx = (f'<defs><pattern id="ht{kind}" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="1.25" fill="#0b0710"/></pattern>'
+          f'<filter id="fm{kind}"><feFlood flood-color="#ff2e88"/><feComposite in2="SourceAlpha" operator="in"/></filter>'
+          f'<filter id="fc{kind}"><feFlood flood-color="#21e6ff"/><feComposite in2="SourceAlpha" operator="in"/></filter></defs>')
+    burst = "".join(f'<line x1="160" y1="90" x2="{160 + 400 * __import__("math").cos(a / 36 * 6.2832):.0f}" y2="{90 + 400 * __import__("math").sin(a / 36 * 6.2832):.0f}" '
+                    f'stroke="#fff" stroke-width="{1.2 if a % 2 else 2.4}" opacity=".18"/>' for a in range(36))
+    ink = f'<g stroke="#0b0710" stroke-width="0" >{art}</g>'
+    misreg = (f'<g filter="url(#fm{kind})" opacity=".55" transform="translate(-3 1)">{art}</g>'
+              f'<g filter="url(#fc{kind})" opacity=".5" transform="translate(3 -1)">{art}</g>')
+    halftone = (f'<rect width="{w}" height="134" fill="url(#ht{kind})" opacity=".22"/>'
+                f'<rect y="134" width="{w}" height="46" fill="url(#ht{kind})" opacity=".3"/>')
+    cap = {"candles": "LESSON 1", "short": "FAST CHARTS", "levels": "PRICE ACTION", "bagel": "INVESTING 101",
+           "options": "CALLS + PUTS", "prediction": "YES / NO"}.get(kind, "WATCH")
+    capbox = (f'<g transform="translate(12 12) rotate(-3)"><rect width="{len(cap) * 9.6 + 20}" height="22" fill="#ffe14d" stroke="#0b0710" stroke-width="2.5"/>'
+              f'<text x="9" y="16" font-family="Bangers,Impact,Arial Black,sans-serif" font-size="15" letter-spacing="1" fill="#0b0710">{cap}</text></g>')
+    frame = f'<rect x="1.5" y="1.5" width="{w - 3}" height="{h - 3}" fill="none" stroke="#0b0710" stroke-width="5"/>'
+    return _svg(w, h, fx + sky + burst + halftone + misreg + ink + brainm + play + capbox + frame, "cover")
 
 
 _VIDEO_COVER = {"How to read candlestick charts": "candles", "Trading 15-minute and 1-minute charts": "short",
@@ -1031,80 +1046,131 @@ _VIDEO_COVER = {"How to read candlestick charts": "candles", "Trading 15-minute 
                 "Khan Academy: options, calls and puts": "options", "Prediction markets explained": "prediction"}
 
 INFO_CSS = r"""
-body{background:#1c1530;
-  background-image:radial-gradient(1100px 520px at 80% -8%,rgba(244,166,198,.34),transparent 62%),
-  radial-gradient(900px 480px at 5% 10%,rgba(160,110,200,.22),transparent 60%),
-  radial-gradient(1000px 520px at 50% 105%,rgba(46,196,198,.30),transparent 62%),
-  linear-gradient(180deg,#22183a 0%,#2a1b33 35%,#1d2236 70%,#0f2e38 100%);background-attachment:fixed}
-.ic-stars{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.6;
-  background-image:radial-gradient(1.2px 1.2px at 12% 18%,#fff,transparent),radial-gradient(1px 1px at 28% 8%,#fff,transparent),
-  radial-gradient(1px 1px at 46% 22%,#fff,transparent),radial-gradient(1.4px 1.4px at 63% 12%,#fff,transparent),
-  radial-gradient(1px 1px at 78% 28%,#fff,transparent),radial-gradient(1.2px 1.2px at 91% 9%,#fff,transparent),
-  radial-gradient(1px 1px at 8% 44%,#fff,transparent),radial-gradient(1px 1px at 36% 32%,#fff,transparent),
-  radial-gradient(1.1px 1.1px at 70% 38%,#fff,transparent),radial-gradient(1px 1px at 88% 42%,#fff,transparent)}
-.ic-isle{position:fixed;left:0;right:0;bottom:0;height:200px;pointer-events:none;z-index:0;opacity:.75}
-.ic-isle svg{width:100%;height:100%;display:block}
-.ic-isle .wv{animation:icWave 7s ease-in-out infinite alternate}
+:root{--ink9:#0b0710;--mag:#ff2e88;--cy:#21e6ff;--yel:#ffe14d;--pk:#f4a6c6;--tq:#2ec4c6}
+body{background:#1b0f2e;
+  background-image:radial-gradient(900px 520px at 85% 0%,rgba(255,46,136,.40),transparent 62%),
+  radial-gradient(800px 480px at 0% 20%,rgba(33,230,255,.22),transparent 60%),
+  radial-gradient(900px 500px at 50% 100%,rgba(46,196,198,.35),transparent 62%),
+  linear-gradient(180deg,#2a0f3d 0%,#3a1446 30%,#1d1a3e 65%,#0d2a3a 100%);background-attachment:fixed}
+/* full-page halftone dots + faint print grain */
+.ic-dots{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.32;
+  background-image:radial-gradient(circle,rgba(11,7,16,.9) 1.05px,transparent 1.6px);background-size:7px 7px;
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,transparent 45%,transparent 60%,#000 100%);mask-image:linear-gradient(180deg,#000 0%,transparent 45%,transparent 60%,#000 100%)}
+.ic-city{position:fixed;left:0;right:0;bottom:0;height:240px;pointer-events:none;z-index:0;opacity:.9}
+.ic-city svg{width:100%;height:100%;display:block}
+.ic-city .wv{animation:icWave 7s ease-in-out infinite alternate}
 @keyframes icWave{from{transform:translateX(0)}to{transform:translateX(-40px)}}
-.ic-fire{position:fixed;width:4px;height:4px;border-radius:50%;background:#ffd1e3;box-shadow:0 0 12px 4px rgba(244,166,198,.6);
-  pointer-events:none;z-index:0;opacity:0;animation:icFloat 9s ease-in-out infinite}
-@keyframes icFloat{0%{opacity:0;transform:translateY(0)}20%{opacity:.9}80%{opacity:.6}100%{opacity:0;transform:translateY(-120px) translateX(20px)}}
-@media (prefers-reduced-motion:reduce){.ic-fire{display:none}.ic-isle .wv{animation:none}}
+.ic-fire{position:fixed;width:5px;height:5px;background:var(--yel);pointer-events:none;z-index:0;opacity:0;
+  clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);animation:icFloat 8s ease-in-out infinite;transform-origin:center}
+@keyframes icFloat{0%{opacity:0;transform:translateY(0) scale(.6)}20%{opacity:1;transform:scale(1.6)}80%{opacity:.7}100%{opacity:0;transform:translateY(-140px) translateX(20px) scale(.8)}}
+@media (prefers-reduced-motion:reduce){.ic-fire{display:none}.ic-city .wv{animation:none}}
 .ic{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:10px 16px 70px;font-family:var(--sans)}
-.ic-hero{position:relative;border-radius:26px;overflow:hidden;min-height:330px;display:flex;align-items:flex-end;
-  border:1px solid rgba(244,166,198,.35);box-shadow:0 30px 80px rgba(0,0,0,.45);margin-top:6px}
-.ic-hero picture,.ic-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 62%}
-.ic-hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(60,30,80,.0) 0%,rgba(150,70,120,.25) 40%,rgba(28,21,48,.94) 100%),linear-gradient(90deg,rgba(244,166,198,.18),rgba(46,196,198,.14))}
-.ic-hero .txt{position:relative;z-index:1;padding:26px 26px 22px}
-.ic-hero .kick{font:800 11px Montserrat,Arial,sans-serif;letter-spacing:2.4px;color:#7fe3dc;text-transform:uppercase}
-.ic-hero h1{font-family:var(--serif);font-weight:700;color:var(--cream);margin:4px 0 6px;font-size:46px;line-height:1.02;
-  font-variation-settings:"SOFT" 100;text-shadow:0 4px 30px rgba(0,0,0,.6)}
-.ic-hero h1 em{font-style:normal;background:linear-gradient(90deg,#ffb3d1,#7fe3dc);-webkit-background-clip:text;background-clip:text;color:transparent}
-.ic-hero p{margin:0;color:#efe3d8;max-width:560px;font-size:16px}
-.ic-jump{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 4px;position:sticky;top:0;z-index:4;padding:10px 0;
-  background:linear-gradient(180deg,rgba(34,24,58,.92),rgba(34,24,58,.7));backdrop-filter:blur(10px)}
-.ic-jump a{display:inline-flex;align-items:center;gap:6px;font:700 11.5px Montserrat,Arial,sans-serif;letter-spacing:.6px;text-decoration:none;color:#ffd1e3;
-  border:1px solid rgba(244,166,198,.4);border-radius:999px;padding:6px 12px 6px 8px;background:rgba(60,36,80,.6)}
-.ic-jump a svg{width:16px;height:16px}
-.ic-jump a:hover{background:rgba(46,196,198,.2);color:#fff;border-color:#7fe3dc}
-.ic-sec{margin-top:34px;scroll-margin-top:64px}
-.ic-head{display:grid;grid-template-columns:200px 1fr;gap:20px;align-items:center;margin-bottom:14px}
-.ic-head .art{width:200px;filter:drop-shadow(0 14px 26px rgba(0,0,0,.45))}
-.ic-head .art svg{width:100%;height:auto;display:block}
-.ic-head h2{font-family:var(--serif);font-weight:700;color:var(--cream);font-size:26px;margin:0 0 4px;line-height:1.1}
-.ic-head .n{font:800 11px Montserrat,Arial,sans-serif;letter-spacing:2px;color:#7fe3dc}
-.ic-head .sub{color:var(--mute);font-size:15px;margin:0}
-.ic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-.ic-card{position:relative;display:flex;gap:12px;text-decoration:none;background:linear-gradient(160deg,rgba(78,44,92,.72),rgba(22,52,66,.72));backdrop-filter:blur(8px);
-  border:1px solid rgba(244,166,198,.22);border-radius:16px;padding:14px 14px 13px;transition:border-color .18s,transform .18s,box-shadow .18s;overflow:hidden}
-.ic-card:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,#f4a6c6,#ffd1b8,#2ec4c6);opacity:0;transition:opacity .18s}
-.ic-card:hover{border-color:#7fe3dc;transform:translateY(-2px);box-shadow:0 14px 30px rgba(0,0,0,.35)}
-.ic-card:hover:before{opacity:1}
-.ic-card .g{flex:0 0 36px;height:36px;border-radius:11px;background:rgba(20,18,40,.6);display:grid;place-items:center;border:1px solid rgba(127,227,220,.25)}
-.ic-card .g svg{width:24px;height:24px}
-.ic-card b{display:block;color:var(--cream);font-size:15.5px;line-height:1.25}
-.ic-card .src{display:inline-block;font:800 9.5px Montserrat,Arial,sans-serif;letter-spacing:1px;color:#7fe3dc;margin:4px 0 5px;text-transform:uppercase}
-.ic-card .src.yt{color:#ff8f8f}
-.ic-card span.d{display:block;color:#e2d4c9;font-size:13.5px;line-height:1.42}
-.ic-card .go{position:absolute;right:12px;top:12px;color:var(--mute);font-size:13px;opacity:.6}
-.ic-vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.ic-vid{display:block;text-decoration:none;border-radius:16px;overflow:hidden;background:linear-gradient(180deg,rgba(22,52,66,.9),rgba(40,28,60,.9));border:1px solid rgba(244,166,198,.25);
-  transition:transform .18s,box-shadow .18s,border-color .18s}
-.ic-vid:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(0,0,0,.45);border-color:#7fe3dc}
-.ic-vid svg.cover{display:block;width:100%;height:auto;aspect-ratio:16/9}
-.ic-vid .meta{padding:11px 14px 13px}
-.ic-vid b{display:block;color:var(--cream);font-size:15.5px}
-.ic-vid span{display:block;color:#e2d4c9;font-size:13.5px;margin-top:2px}
-.ic-fav .ic-card{border-color:rgba(255,209,184,.5);background:linear-gradient(160deg,rgba(120,60,100,.75),rgba(30,80,90,.7))}
-.ic-note{margin-top:40px;padding:16px 18px;border-radius:18px;border:1px dashed rgba(240,214,200,.25);color:#e6d6ea;font-size:13.5px;
-  display:flex;gap:14px;align-items:center;background:rgba(30,22,52,.6);margin-bottom:140px}
-.ic-note svg{flex:0 0 46px;width:46px;height:46px}
-@media(max-width:640px){.ic-isle{height:110px;opacity:.6}.ic-jump{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-16px;margin-right:-16px;padding:10px 16px}
+/* hero = big comic panel */
+.ic-hero{position:relative;overflow:hidden;min-height:360px;display:flex;align-items:flex-end;margin-top:10px;
+  border:5px solid var(--ink9);box-shadow:10px 10px 0 var(--mag),-4px -4px 0 var(--cy);transform:rotate(-.6deg)}
+.ic-hero picture,.ic-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 62%;filter:saturate(1.35) contrast(1.08) hue-rotate(-12deg)}
+.ic-hero:before{content:"";position:absolute;inset:0;z-index:1;
+  background:repeating-conic-gradient(from 0deg at 72% 40%,rgba(255,255,255,.10) 0 2deg,transparent 2deg 9deg)}
+.ic-hero:after{content:"";position:absolute;inset:0;z-index:1;
+  background:radial-gradient(circle,rgba(11,7,16,.55) 1.1px,transparent 1.7px) 0 0/6px 6px,
+  linear-gradient(180deg,rgba(255,46,136,.10) 0%,rgba(58,20,70,.35) 45%,rgba(20,10,34,.95) 100%)}
+.ic-hero .txt{position:relative;z-index:2;padding:26px 28px 24px;max-width:66%}
+.ic-hb{position:absolute;z-index:2;right:2%;top:50%;transform:translateY(-50%);width:min(36%,360px)}
+.ic-hb svg{width:100%;height:auto;display:block;animation:icBob 3.2s ease-in-out infinite}
+@keyframes icBob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-8px) rotate(-2deg)}}
+@media (prefers-reduced-motion:reduce){.ic-hb svg{animation:none}}
+.ic-cap{position:absolute;z-index:3;top:16px;left:16px;background:var(--yel);color:var(--ink9);border:3px solid var(--ink9);
+  font:400 17px Bangers,Impact,sans-serif;letter-spacing:1.4px;padding:4px 12px;transform:rotate(-2deg);box-shadow:4px 4px 0 var(--ink9)}
+.ic-hero .kick{display:inline-block;font:400 16px Bangers,Impact,sans-serif;letter-spacing:2px;color:var(--ink9);background:var(--cy);
+  padding:2px 10px;border:2.5px solid var(--ink9);transform:rotate(1.5deg);margin-bottom:6px}
+.ic-hero h1{font:400 64px/0.95 Bangers,Impact,sans-serif;letter-spacing:2px;color:#fff;margin:4px 0 10px;
+  text-shadow:4px 0 0 var(--mag),-4px 0 0 var(--cy),0 5px 0 var(--ink9),3px 8px 0 var(--ink9);-webkit-text-stroke:2px var(--ink9)}
+.ic-hero h1 em{font-style:normal;color:var(--yel)}
+.ic-hero p{margin:0;color:#fff;max-width:560px;font-size:16.5px;font-weight:700;text-shadow:0 2px 0 var(--ink9)}
+/* sticker chips */
+.ic-jump{display:flex;flex-wrap:wrap;gap:9px;margin:22px 0 4px;position:sticky;top:0;z-index:4;padding:10px 0;
+  background:linear-gradient(180deg,rgba(42,15,61,.94),rgba(42,15,61,.78));backdrop-filter:blur(10px)}
+.ic-jump a{display:inline-flex;align-items:center;gap:6px;font:400 15px Bangers,Impact,sans-serif;letter-spacing:1.1px;text-decoration:none;
+  color:var(--ink9);background:#fff;border:2.5px solid var(--ink9);padding:4px 11px 3px 7px;box-shadow:3px 3px 0 var(--mag);transition:transform .12s,box-shadow .12s}
+.ic-jump a:nth-child(odd){transform:rotate(-1.2deg)}.ic-jump a:nth-child(even){transform:rotate(1deg)}
+.ic-jump a:nth-child(3n){background:var(--yel)}.ic-jump a:nth-child(4n){background:var(--cy)}
+.ic-jump a svg{width:17px;height:17px;background:var(--ink9);border-radius:4px;padding:1px}
+.ic-jump a:hover{transform:translate(-2px,-2px) rotate(0);box-shadow:5px 5px 0 var(--cy)}
+.ic-sec{margin-top:46px;scroll-margin-top:70px}
+.ic-head{display:grid;grid-template-columns:210px 1fr;gap:22px;align-items:center;margin-bottom:18px}
+.ic-head .art{position:relative;width:210px;border:4px solid var(--ink9);box-shadow:7px 7px 0 var(--cy);transform:rotate(-2deg);background:#1a1030;overflow:hidden}
+.ic-sec:nth-of-type(even) .ic-head .art{transform:rotate(2deg);box-shadow:7px 7px 0 var(--mag)}
+.ic-head .art:after{content:"";position:absolute;inset:0;background:radial-gradient(circle,rgba(11,7,16,.6) 1px,transparent 1.5px) 0 0/6px 6px;
+  -webkit-mask-image:linear-gradient(135deg,transparent 40%,#000);mask-image:linear-gradient(135deg,transparent 40%,#000);pointer-events:none}
+.ic-head .art svg{width:100%;height:auto;display:block;filter:drop-shadow(2px 0 0 rgba(255,46,136,.55)) drop-shadow(-2px 0 0 rgba(33,230,255,.5))}
+.ic-head h2{font:400 40px/1 Bangers,Impact,sans-serif;letter-spacing:1.5px;color:#fff;margin:0 0 6px;
+  text-shadow:3px 0 0 var(--mag),-3px 0 0 var(--cy),0 4px 0 var(--ink9);-webkit-text-stroke:1.4px var(--ink9)}
+.ic-head .n{display:inline-block;font:400 14px Bangers,Impact,sans-serif;letter-spacing:1.6px;color:var(--ink9);background:var(--yel);
+  border:2.5px solid var(--ink9);padding:1px 9px;transform:rotate(-2deg);margin-bottom:8px}
+.ic-head .sub{color:#f3e6ff;font-size:15.5px;margin:0;font-weight:600}
+/* link cards = comic panels */
+.ic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.ic-card{position:relative;display:flex;gap:12px;text-decoration:none;background:linear-gradient(160deg,#3b1850,#162a4a);
+  border:3px solid var(--ink9);padding:14px 14px 13px;box-shadow:6px 6px 0 var(--mag);transition:transform .14s,box-shadow .14s;overflow:hidden}
+.ic-grid .ic-card:nth-child(3n+2){box-shadow:6px 6px 0 var(--cy)}.ic-grid .ic-card:nth-child(3n){box-shadow:6px 6px 0 var(--yel)}
+.ic-card:after{content:"";position:absolute;right:-10px;bottom:-10px;width:110px;height:110px;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,255,255,.22) 1.2px,transparent 1.8px) 0 0/7px 7px;-webkit-mask-image:radial-gradient(circle at 100% 100%,#000,transparent 70%);mask-image:radial-gradient(circle at 100% 100%,#000,transparent 70%)}
+.ic-card:hover{transform:translate(-3px,-3px) rotate(-.4deg);box-shadow:10px 10px 0 var(--ink9)}
+.ic-card .g{flex:0 0 38px;height:38px;background:#fff;display:grid;place-items:center;border:2.5px solid var(--ink9);transform:rotate(-4deg)}
+.ic-card .g svg{width:25px;height:25px;background:var(--ink9);border-radius:3px}
+.ic-card b{display:block;color:#fff;font:400 20px/1.05 Bangers,Impact,sans-serif;letter-spacing:.9px;text-shadow:2px 2px 0 var(--ink9)}
+.ic-card .src{display:inline-block;font:800 9.5px Montserrat,Arial,sans-serif;letter-spacing:1px;color:var(--ink9);background:var(--cy);
+  padding:1px 6px;margin:6px 0 6px;text-transform:uppercase}
+.ic-card .src.yt{background:#ff5a5a;color:#fff}
+.ic-card span.d{display:block;color:#f1e6f7;font-size:13.8px;line-height:1.42}
+.ic-card .go{position:absolute;right:10px;top:8px;color:var(--yel);font:400 20px Bangers,Impact,sans-serif}
+.ic-vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+.ic-vid{display:block;text-decoration:none;background:#160c26;border:4px solid var(--ink9);box-shadow:7px 7px 0 var(--mag);transition:transform .14s,box-shadow .14s}
+.ic-vgrid .ic-vid:nth-child(even){box-shadow:7px 7px 0 var(--cy);transform:rotate(.6deg)}
+.ic-vgrid .ic-vid:nth-child(odd){transform:rotate(-.6deg)}
+.ic-vid:hover{transform:translate(-3px,-3px) rotate(0)!important;box-shadow:11px 11px 0 var(--yel)!important}
+.ic-vid svg.cover{display:block;width:100%;height:auto;aspect-ratio:16/9;border-bottom:4px solid var(--ink9)}
+.ic-vid .meta{padding:11px 14px 13px;background:linear-gradient(160deg,#3b1850,#162a4a)}
+.ic-vid b{display:block;color:#fff;font:400 21px/1.05 Bangers,Impact,sans-serif;letter-spacing:.9px;text-shadow:2px 2px 0 var(--ink9)}
+.ic-vid span{display:block;color:#f1e6f7;font-size:13.8px;margin-top:3px}
+.ic-fav .ic-card{background:linear-gradient(160deg,#6a1a5a,#1d4a5a)}
+.ic-note{position:relative;margin:50px 0 160px;padding:16px 20px;background:#fff;color:var(--ink9);border:3.5px solid var(--ink9);
+  box-shadow:7px 7px 0 var(--mag);font-size:14px;font-weight:600;display:flex;gap:14px;align-items:center;border-radius:28px}
+.ic-note:after{content:"";position:absolute;left:46px;bottom:-22px;border:12px solid transparent;border-top:14px solid var(--ink9)}
+.ic-note a{color:#c2185b}
+.ic-note svg{flex:0 0 52px;width:52px;height:52px}
+@media(max-width:640px){.ic-city{height:130px;opacity:.7}
+  .ic-jump{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-16px;margin-right:-16px;padding:12px 16px}
   .ic-jump::-webkit-scrollbar{display:none}.ic-jump a{flex:0 0 auto}
-  .ic-hero{min-height:260px;border-radius:20px}.ic-hero h1{font-size:34px}.ic-hero .txt{padding:18px}
-  .ic-head{grid-template-columns:110px 1fr;gap:12px}.ic-head .art{width:110px}.ic-head h2{font-size:21px}
+  .ic-hero{min-height:380px;align-items:flex-end}.ic-hero h1{font-size:44px}.ic-hero .txt{padding:200px 18px 18px;max-width:100%}.ic-hb{top:78px;transform:none;right:8px;width:48%}
+  .ic-head{grid-template-columns:120px 1fr;gap:14px}.ic-head .art{width:120px}.ic-head h2{font-size:28px}
   .ic-grid,.ic-vgrid{grid-template-columns:1fr}}
 """
+
+
+def _hero_brain():
+    """The BRAIN as the comic hero: big ink-outlined two-tone brain leaping out of the panel with motion lines and a chart."""
+    lines = "".join(f'<path d="M{x} {y} l-{l} {l * .35:.0f}" stroke="#fff" stroke-width="{w}" stroke-linecap="round" opacity=".85"/>'
+                    for x, y, l, w in [(70, 120, 60, 5), (64, 150, 80, 4), (72, 182, 54, 5), (84, 210, 40, 3.5)])
+    burst = ('<path d="M180 20 L196 62 L240 48 L214 84 L256 106 L210 112 L224 156 L184 130 L160 170 L150 124 L104 136 L132 100 L94 72 L140 70 L132 26 L164 56Z" '
+             'fill="#ffe14d" stroke="#0b0710" stroke-width="5" stroke-linejoin="round"/>')
+    chart = ('<g transform="translate(118 196) rotate(-8)"><rect width="150" height="62" fill="#160c26" stroke="#0b0710" stroke-width="4"/>'
+             + "".join(_cand(12 + i * 17, o, c, 9, 4) for i, (o, c) in enumerate([(46, 38), (38, 42), (42, 30), (30, 34), (34, 22), (22, 26), (26, 14), (14, 18)]))
+             + '<path d="M10 44 Q60 30 140 12" stroke="#ffe14d" stroke-width="3" fill="none"/></g>')
+    brain = (f'<g transform="translate(178 112) rotate(-10)">'
+             f'<path d="M0 -70C-20 -92 -62 -86 -66 -56C-96 -50 -100 -10 -80 6C-96 30 -76 62 -46 56C-36 76 -10 76 0 66Z" fill="{_C["rose"]}" stroke="#0b0710" stroke-width="6" stroke-linejoin="round"/>'
+             f'<path d="M0 -70C20 -92 62 -86 66 -56C96 -50 100 -10 80 6C96 30 76 62 46 56C36 76 10 76 0 66Z" fill="{_C["tan"]}" stroke="#0b0710" stroke-width="6" stroke-linejoin="round"/>'
+             '<path d="M-50 -30q14 -10 28 0M-46 14q14 -10 28 0M-30 -56q10 -8 20 0M22 -30q14 -10 28 0M18 14q14 -10 28 0M12 -56q10 -8 20 0" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round"/>'
+             '<path d="M-66 -40q-6 -14 4 -22" stroke="#fff" stroke-width="4" fill="none" opacity=".7"/>'
+             '<g fill="#0b0710"><ellipse cx="-22" cy="-6" rx="7" ry="10"/><ellipse cx="22" cy="-6" rx="7" ry="10"/></g>'
+             '<g fill="#fff"><circle cx="-19" cy="-10" r="3"/><circle cx="25" cy="-10" r="3"/></g>'
+             '<path d="M-16 22 Q0 36 16 22" stroke="#0b0710" stroke-width="5" fill="none" stroke-linecap="round"/>'
+             '<path d="M-60 40 L-92 66M60 40 L94 60" stroke="#0b0710" stroke-width="7" stroke-linecap="round"/>'
+             '</g>')
+    off = (f'<g opacity=".55" transform="translate(-5 2)" filter="url(#hbm)">{brain}</g><g opacity=".5" transform="translate(5 -2)" filter="url(#hbc)">{brain}</g>')
+    fx = ('<defs><filter id="hbm"><feFlood flood-color="#ff2e88"/><feComposite in2="SourceAlpha" operator="in"/></filter>'
+          '<filter id="hbc"><feFlood flood-color="#21e6ff"/><feComposite in2="SourceAlpha" operator="in"/></filter></defs>')
+    return _svg(300, 280, fx + burst + lines + chart + off + brain + _sparkle(262, 34, 12, "#fff") + _sparkle(40, 60, 9, "#ffe14d"), "hb")
 
 
 def info_center_page(user=None):
@@ -1128,24 +1194,38 @@ def info_center_page(user=None):
         '<a class="btn pink" style="padding:8px 16px;font-size:13px" href="/pricing">Get BRAIN</a></div>')
     fire = "".join(f'<i class="ic-fire" style="left:{x}%;top:{y}%;animation-delay:{dl}s"></i>' for x, y, dl in
                    [(8, 70, 0), (22, 85, 2.5), (40, 75, 5), (61, 88, 1.2), (78, 72, 3.8), (92, 82, 6.3), (15, 40, 4.4), (85, 35, 7.1)])
-    isle = ('<div class="ic-isle"><svg viewBox="0 0 1440 200" preserveAspectRatio="xMidYMax slice" aria-hidden="true">'
+    import random as _r
+    _r.seed(7)
+    bld, x = [], 0
+    while x < 1440:
+        bw, bh = _r.randint(38, 90), _r.randint(50, 160)
+        top = 170 - bh
+        col = _r.choice(["#24103a", "#2c1446", "#1c1236", "#321450"])
+        bld.append(f'<rect x="{x}" y="{top}" width="{bw}" height="{bh}" fill="{col}" stroke="#0b0710" stroke-width="2.5"/>')
+        for wy in range(top + 8, 164, 12):
+            for wx in range(x + 6, x + bw - 8, 11):
+                if _r.random() < .38:
+                    bld.append(f'<rect x="{wx}" y="{wy}" width="5" height="6" fill="{_r.choice(["#ff2e88", "#21e6ff", "#ffe14d", "#f4a6c6"])}" opacity="{_r.choice([".55", ".8", "1"])}"/>')
+        x += bw + _r.randint(0, 6)
+    isle = ('<div class="ic-city"><svg viewBox="0 0 1440 240" preserveAspectRatio="xMidYMax slice" aria-hidden="true">'
             '<defs><linearGradient id="isea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fe3dc"/><stop offset=".5" stop-color="#2ec4c6"/>'
-            '<stop offset="1" stop-color="#0d4a5a"/></linearGradient></defs>'
-            '<path d="M980 120 C1040 60 1120 50 1200 70 C1260 84 1300 100 1340 120Z" fill="#1f4a44"/>'
-            '<path d="M60 124 C110 96 170 92 230 124Z" fill="#244f48"/>'
-            '<rect y="118" width="1440" height="82" fill="url(#isea)"/>'
-            '<g class="wv">' + "".join(f'<path d="M{x} {y}q24 -8 48 0" stroke="#e8fffb" stroke-width="2" fill="none" opacity=".55"/>'
-                                       for x, y in [(80, 140), (260, 150), (430, 136), (610, 158), (790, 142), (980, 152), (1160, 138), (1330, 156), (180, 176), (720, 182), (1240, 180)])
-            + '</g><path d="M0 200 L0 168 C80 160 160 170 240 190 L260 200Z" fill="#f2d3b0"/>'
-            '<path d="M1200 200 C1260 176 1360 170 1440 172 L1440 200Z" fill="#f2d3b0"/>'
-            '<svg x="0" y="0" width="1440" height="200" viewBox="0 0 1440 200">' + _palm(70, 176, 1.35, "#17322f") + _palm(150, 184, 1.0, "#17322f")
-            + _palm(1300, 178, 1.3, "#17322f") + _palm(1380, 182, 1.05, "#17322f") + _palm(1090, 98, .7, "#1d3b37") + '</svg></svg></div>')
-    body = ('<div class="ic-stars"></div>' + isle + fire + tabs + '<div class="ic"><div class="ic-hero">' + hero_img("pic")
-            + '<div class="txt"><div class="kick">BRAIN &middot; Info Center</div><h1>Learn the market <em>BRAIN reads</em></h1>'
+            '<stop offset="1" stop-color="#0d4a5a"/></linearGradient>'
+            '<pattern id="iht" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="1.3" fill="#0b0710"/></pattern></defs>'
+            '<g transform="translate(0 30)">' + "".join(bld) + '</g>'
+            '<rect y="198" width="1440" height="42" fill="url(#isea)" stroke="#0b0710" stroke-width="3"/>'
+            '<rect y="198" width="1440" height="42" fill="url(#iht)" opacity=".28"/>'
+            '<g class="wv">' + "".join(f'<path d="M{x2} {y2}q24 -7 48 0" stroke="#ffffff" stroke-width="2.4" fill="none" opacity=".75"/>'
+                                       for x2, y2 in [(80, 212), (260, 222), (430, 210), (610, 226), (790, 214), (980, 224), (1160, 212), (1330, 228)])
+            + '</g><svg x="0" y="0" width="1440" height="240" viewBox="0 0 1440 240">' + _palm(60, 238, 1.5, "#0b0710") + _palm(140, 240, 1.1, "#0b0710")
+            + _palm(1310, 238, 1.45, "#0b0710") + _palm(1392, 240, 1.1, "#0b0710") + '</svg></svg></div>')
+    body = ('<div class="ic-dots"></div>' + isle + fire + tabs + '<div class="ic"><div class="ic-hero">' + hero_img("pic")
+            + '<div class="ic-cap">MEANWHILE, AT THE BRAIN DESK&hellip;</div><div class="ic-hb">' + _hero_brain() + '</div>'
+            + '<div class="txt"><div class="kick">BRAIN &middot; INFO CENTER</div><h1>Learn the market <em>BRAIN reads!</em></h1>'
               '<p>Free, trusted places to learn candles, 15-minute charts, investing and trading &mdash; hand-picked and sorted for you.</p></div></div>'
             f'<nav class="ic-jump" aria-label="Sections">{jump}</nav>' + "".join(secs)
             + '<div class="ic-note">' + _svg(48, 48, _brain(24, 26, 1.25))
             + '<span>Every link goes to an outside site BRAIN doesn&rsquo;t own or control, and none of them pay us. This page is for learning only '
               '&mdash; not financial advice. Trading and event contracts can lose money fast; practice on a simulator first and never trade money '
               'you can&rsquo;t afford to lose. <a href="/terms">Terms</a></span></div></div>')
-    return page("Info Center - BRAIN", body, INFO_CSS)
+    return page("Info Center - BRAIN", body, INFO_CSS,
+                extra_head='<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">')
