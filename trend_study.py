@@ -1,7 +1,7 @@
 """Trend study (2026-10-24, user: "develop a better understanding of the trend so we call accurately; if 6 minutes is a
 better time to make the call, run the backtest and add it").
 
-Replays every settled BTC 15-minute round in the backtest cache (~30 days) and asks, at 6:00, 6:00 and 8:00:
+Replays every settled BTC 15-minute round in the backtest cache (~30 days) and asks, at 4:00, 6:00 and 8:00:
   * which trend read best predicts how the round ENDS - the 1-minute read used live today, or 5m / 15m / 1h candles,
     or a combination of the bigger timeframes;
   * what happens to win rate and profit when the call is lined up with each trend read (take the trend side when the
@@ -374,9 +374,9 @@ def run(coin="BTC"):
                 lambda x, nm=nm: (("YES" if x["t"][nm] > 0 else "NO") if (x["call"] and x["t"][nm]) else x["call"]))
             mk["strategies"][f"only with {nm}"] = strat(
                 lambda x, nm=nm: x["call"] if (x["call"] and x["t"][nm] and (x["t"][nm] > 0) == (x["call"] == "YES")) else None)
-        if mark == 480:     # early (6:00) vs sealed (8:00): hold the early side, or only seal when the two agree
+        if mark == 480:     # early (4:00) vs sealed (8:00): hold the early side, or only seal when the two agree
             def _early(r):
-                e = r["per"].get(360)
+                e = r["per"].get(240)
                 return e["call"] if e else None
             def strat2(fn):
                 out = {}
@@ -472,7 +472,7 @@ def _log(res):
             print(f"[trend study] {res.get('coin', 'BTC')} {lab} TOP {k:<18} unseen {_f(v['unseen'])} | all {_f(v['all'])}")
         if mk.get("disagree"):
             d_ = mk["disagree"]
-            print(f"[trend study] {res.get('coin', 'BTC')} 8:00 vs 6:00: the calls disagreed in {d_['rate']:.0%} of rounds ({d_['n']}); when they did, the sealed side was right {d_['sealed_right']:.0%}")
+            print(f"[trend study] {res.get('coin', 'BTC')} 8:00 vs 4:00: the calls disagreed in {d_['rate']:.0%} of rounds ({d_['n']}); when they did, the sealed side was right {d_['sealed_right']:.0%}")
         p = res["pick"][mark]
         print(f"[trend study] {res.get('coin', 'BTC')} {lab} PICK: {p['rule'] or 'none beat the current rule on win rate AND profit - kept'}"
               + (f" | unseen {_f(p['stats']['unseen'])} vs current {_f(p['current']['unseen'])}" if p['rule'] else ""))
@@ -514,21 +514,21 @@ def trend_from_windows(win, trend_read):
 
 def apply_rule(rule, call, t, early=None):
     """(side or None, note) for a live call under a picked rule. call = 'YES'/'NO'/None, t = trend_from_windows(),
-    early = the 6:00 call (for the sealed-call rules)."""
+    early = the 4:00 call (for the sealed-call rules)."""
     if not rule or not call or rule in ("call, no trend",):
         return call, ""
     if rule == "seal = early side":
-        return (early or call), ("held the 6:00 side" if early and early != call else "")
+        return (early or call), ("held the 4:00 side" if early and early != call else "")
     if rule.startswith("seal only if early agrees") or rule.startswith("seal if early agrees"):
         if not early or early != call:
-            return None, "the 6:00 and 8:00 reads disagree"
+            return None, "the 4:00 and 8:00 reads disagree"
         if " + with " in rule:
             nm = rule.split(" + with ", 1)[1]
             v = t.get(nm, 0)
             if not v or (v > 0) != (call == "YES"):
                 return None, f"not backed by the {nm} trend"
-            return call, f"6:00 and 8:00 agree, with the {nm} trend"
-        return call, "6:00 and 8:00 agree"
+            return call, f"4:00 and 8:00 agree, with the {nm} trend"
+        return call, "4:00 and 8:00 agree"
     if rule == "market favorite" or rule == "current (1m skip)":
         return call, ""
     kind, nm = rule.split(" ", 1) if " " in rule else (rule, "")
@@ -662,7 +662,7 @@ def method2(rows, outcome, cur_by_mark):
                      and s_u["win"] >= cur["unseen"]["win"] and s_u["pnl"] > cur["unseen"]["pnl"])
         out[str(mark)] = {"w": w, "thr": thr, "flip": fl, "train": s_t, "unseen": s_u, "valid": valid,
                           "current_unseen": cur["unseen"], "feats": M2_FEATS}
-        if mark == 360:                                  # the early call is made at 6:00
+        if mark == 240:
             for r in R:
                 x = r["per"][mark]
                 p = m2_p(w, m2_x(x["kp"], x["dist"], x["t"]))
@@ -774,7 +774,7 @@ def m2_live(mark, kp, dist, t, early=None, coin="BTC"):
     conf = max(p, 1 - p)
     note = f"BRAIN v2 read {conf:.0%} {'UP' if side == 'YES' else 'DOWN'}"
     if mark == 480 and m.get("flip") is not None and early and early != side and conf < m["flip"]:
-        return early, p, f"held the 6:00 side - the {'UP' if side == 'YES' else 'DOWN'} read ({conf:.0%}) isn't strong enough to flip it"
+        return early, p, f"held the 4:00 side - the {'UP' if side == 'YES' else 'DOWN'} read ({conf:.0%}) isn't strong enough to flip it"
     if conf < (m.get("thr") or 0.5):
         return (None, p, f"{note} - not confident enough to call")
     return side, p, note
