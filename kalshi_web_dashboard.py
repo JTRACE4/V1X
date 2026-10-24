@@ -582,6 +582,51 @@ def _backfill_rounds_from_log():
     _save_rounds()
 
 
+# 2026-10-23 (user: "don't give me a 50% call again unless the majority of calls at that threshold win - and even then it
+# shouldn't be graded 50%"): a call whose own chance is under CLOSE_CALL_BAND is only made when past calls in that same
+# near-50/50 band have won the majority (at least CLOSE_CALL_MIN_N graded). When it is made, the confidence shown/spoken is
+# that band's real win rate, not the ~50% coin-flip number.
+CLOSE_CALL_BAND = 0.55
+CLOSE_CALL_MIN_N = 10
+
+
+def _side_chance(call, p_yes):
+    if call is None or p_yes is None:
+        return None
+    return p_yes if call == "YES" else 1 - p_yes
+
+
+def call_conf(c):
+    """Confidence to show / speak for a locked call: the stored 'conf' when there is one, else the call side's chance."""
+    if not c:
+        return 0.5
+    if c.get("conf") is not None:
+        return c["conf"]
+    p = c.get("p_yes")
+    if p is None:
+        return 0.5
+    return _side_chance(c.get("call"), p) if c.get("call") else max(p, 1 - p)
+
+
+def close_call_record(asset_history, key):
+    """(wins, graded) for past non-reversal calls of this stage made under CLOSE_CALL_BAND."""
+    w = n = 0
+    for h in asset_history:
+        c = h.get(f"{key}_correct")
+        if c is None or h.get(f"{key}_reversal"):
+            continue
+        conf = h.get(f"{key}_conf")
+        if conf is None:
+            if h.get(f"{key}_regime"):
+                continue                  # older regime rows: the stored p isn't what decided them
+            conf = _side_chance(h.get(f"{key}_call"), h.get(f"{key}_p"))
+        if conf is None or conf >= CLOSE_CALL_BAND:
+            continue
+        n += 1
+        w += bool(c)
+    return w, n
+
+
 def stage_strength(p_yes):
     edge = abs(p_yes - 0.5)
     return "toss-up" if edge < 0.05 else ("lean" if edge < 0.15 else ("strong" if edge < 0.3 else "very strong"))
@@ -4562,6 +4607,7 @@ def poll_loop():
                             _c = _sc_prev.get(_sk) or {}
                             hist[-1][f"{_sk}_call"] = _c.get("call")
                             hist[-1][f"{_sk}_p"] = _c.get("p_yes")
+                            hist[-1][f"{_sk}_conf"] = _c.get("raw_conf")     # raw chance at the lock (close-call gate)
                             hist[-1][f"{_sk}_kp"] = _c.get("kp")
                             hist[-1][f"{_sk}_correct"] = (_c["call"] == actual_side) if _c.get("call") else None
                             hist[-1][f"{_sk}_tier"] = _c.get("tier")
@@ -4940,6 +4986,28 @@ def poll_loop():
                     if _sitout:
                         _why = f"leaning {'UP' if _call == 'YES' else 'DOWN'}, but {_sitout} - sit this one out"
                         _call, _tier, _rev = None, None, None
+                    # 2026-10-23 (user): no ~50% calls unless that band has been winning the majority; when it has, show the
+                    # band's real win rate as the confidence instead of 50%. Reversal calls keep their own payout logic.
+                    _raw_conf = _conf_show = None
+                    if _call:
+                        if _reg and _call == _reg["call"]:
+                            _raw_conf = _reg["p"]
+                        else:
+                            _raw_conf = _side_chance(_call, _use_p if _use_p is not None else stage_p_yes)
+                        _conf_show = _raw_conf
+                    if _call and not _rev and _raw_conf is not None and _raw_conf < CLOSE_CALL_BAND:
+                        _cw, _cn = close_call_record(_history.get(asset["name"], []), _sk)
+                        if _cn >= CLOSE_CALL_MIN_N and _cw * 2 > _cn:
+                            _conf_show = _cw / _cn
+                            _tier = "WEAK" if _conf_show < 0.65 else _tier
+                            _why = " + ".join(x for x in (_why, f"close round - near 50/50 calls have won {_cw} of {_cn}") if x)
+                        else:
+                            _lean = _call
+                            _why = ("too close to call (" + f"{_raw_conf:.0%}" + ")"
+                                    + (f" - near 50/50 calls have won only {_cw} of {_cn}" if _cn else "")
+                                    + " - no call")
+                            print(f"[close call] {asset['name']} {_sk} skipped: {_raw_conf:.0%} sure, band record {_cw}/{_cn} {ticker}")
+                            _call, _tier, _raw_conf, _conf_show = None, None, None, None
                     # 2026-10-22 (user): SEALED call only - if 2+ verified top traders (80%+ over 10+ rounds, 7 days) are in
                     # the round and most agree with the call, it moves up one tier; most against, down one. Never flips the
                     # side, never makes a call on its own, never changes what auto-buy buys (that follows the price band).
@@ -4972,6 +5040,8 @@ def poll_loop():
                         print(f"[80% rule] {_ze!r}")
                     stage_calls[_sk] = {
                         "zone80": _z80, "zone80_roi": _z80roi, "sitout": bool(_sitout), "lean": _lean,
+                        "conf": round(_conf_show, 4) if _conf_show is not None else None,
+                        "raw_conf": round(_raw_conf, 4) if _raw_conf is not None else None,
                         "regime": ({k: (round(v, 4) if isinstance(v, float) else v) for k, v in _reg.items()} if _reg else None),
                         "reversal": bool(_rev), "rev_payout": _rev["payout"] if _rev else None,
                         "rev_score": _rev["score"] if _rev else None,
@@ -11388,8 +11458,7 @@ def build_stage_box(name, d, key):
     title = f'{"<i class=ico data-i=lock></i> SEALED CALL" if key == "sealed" else "EARLY CALL"} &middot; {mk}'
     if c.get("call"):
         up = c["call"] == "YES"
-        p_up = c.get("p_yes") or 0.5
-        p_side = p_up if up else 1 - p_up
+        p_side = call_conf(c)
         tier = c.get("tier") or "GOOD"
         diff = (c["spot"] - c["line"]) if (c.get("spot") is not None and c.get("line")) else None
         live_kp = d.get("kalshi_price")
@@ -11500,7 +11569,7 @@ def build_stage_box(name, d, key):
     if (c.get("call") or c.get("skipped")) and (d.get("stage_just") == key or time.time() - (c.get("ts") or 0) < 25):
         alert = (f'<span class="stage-alert" data-name="{name}" data-stage="{key}" data-call="{c.get("call") or ""}" '
                  f'data-tier="{c.get("tier") or ""}" data-why="{_html_attr(c.get("why") or "") if not c.get("call") else ""}" data-rev="{1 if c.get("reversal") else 0}" data-lean="{c.get("lean") or ""}" data-sitout="{1 if c.get("sitout") else 0}" '
-                 f'data-sure="{round(max(c.get("p_yes") or 0.5, 1 - (c.get("p_yes") or 0.5)) * 100)}" '
+                 f'data-sure="{round(call_conf(c) * 100)}" '
                  f'data-kp="{round(_kalshi_at_lock(c) * 100) if _kalshi_at_lock(c) is not None else ""}" '
                  f'data-key="{name}::{d.get("ticker", "")}::{key}" style="display:none;"></span>')
     lt_ = (d.get("stage_calls") or {}).get("late") or {}
