@@ -2616,6 +2616,49 @@ def compute_cumulative_bet_pnl(asset_history, bet_size=100.0, series_prefix=None
     return {"total": total, "n": len(bets), "wins": wins, "bet_size": bet_size}
 
 
+def live_scorecard(days=10):
+    """2026-10-24 (user: "compare the Oct-10 bot to what BRAIN has now"): what the LIVE graded calls actually did, per coin and call
+    time, $100 a call with Kalshi's fee and 1c slippage (same math as the backtest), split by the price paid. Also the Oct-10 style
+    'locked first call' that is still graded in the same history. Printed to the server log as [live scorecard]."""
+    import backtest_engine as _bte
+    cutoff = time.time() - days * 86400
+    bands = (("55-80c", 0.55, 0.80), ("55-85c", 0.55, 0.85), ("80-89c", 0.80, 0.89), ("89c+", 0.89, 1.01), ("any", 0.0, 1.01))
+    for name in ("BTC", "XRP"):
+        hs = [h for h in list(_history.get(name, [])) if h.get("ticker")]
+        hs = [h for h in hs if (_window_close_utc(h["ticker"]) or dt.datetime.fromtimestamp(0, dt.timezone.utc)).timestamp() > cutoff]
+        if not hs:
+            continue
+        hs.sort(key=lambda h: (_window_close_utc(h["ticker"]) or dt.datetime.fromtimestamp(0, dt.timezone.utc)).timestamp())
+        stages = [("4:00 call", "early_call", "early_correct", "early_kp"), ("6:00 call", "mid_call", "mid_correct", "mid_kp"),
+                  ("8:00 call (live, majority)", "sealed_call", "sealed_correct", "sealed_kp"),
+                  ("8:00 read alone", "sealed_raw_call", "sealed_raw_correct", "sealed_kp"),
+                  ("Oct-10 locked first call", "locked_call", "correct", "locked_kalshi_price")]
+        print(f"[live scorecard] {name} ===== last {days} days, {len(hs)} graded rounds, $100 a call, fee + 1c slippage")
+        for lab, ck, ok, pk in stages:
+            for bl, lo, hi in bands:
+                seq = []
+                for h in hs:
+                    c, w, kp = h.get(ck), h.get(ok), h.get(pk)
+                    if ck == "locked_call":
+                        c = h.get("call")
+                    if c not in ("YES", "NO") or w is None or kp is None:
+                        continue
+                    price = kp if c == "YES" else 1 - kp
+                    if ck == "locked_call":
+                        price = kp                    # locked_kalshi_price is already the side's price
+                    if not (lo <= price < hi):
+                        continue
+                    seq.append((bool(w), _bte.pnl(bool(w), price)))
+                if len(seq) < 5:
+                    continue
+                n = len(seq); wins = sum(1 for s in seq if s[0]); pl = sum(s[1] for s in seq) * 100
+                bw = bl_ = cw = cl = 0; eq = pk_ = dd = 0.0
+                for w, p in seq:
+                    cw, cl = (cw + 1, 0) if w else (0, cl + 1); bw, bl_ = max(bw, cw), max(bl_, cl)
+                    eq += p * 100; pk_ = max(pk_, eq); dd = min(dd, eq - pk_)
+                print(f"[live scorecard] {name} {lab:<28} {bl:<7} n={n:<4} win={wins / n:.1%} ${pl:+,.0f} ({pl / n:+.1f}/call) | best run {bw} wins, worst {bl_} losses, worst drawdown ${dd:+,.0f}")
+
+
 ET_ZONE = ZoneInfo("America/New_York")
 
 
@@ -17541,6 +17584,10 @@ def main():
             while True:
                 try:
                     import trend_study as _tst
+                    try:
+                        live_scorecard()
+                    except Exception as _lse:
+                        print(f"[live scorecard] {_lse!r}")
                     _tst.run_all()
                 except Exception as _tse:
                     print(f"[trend study] {_tse!r}")
