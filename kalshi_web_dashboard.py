@@ -679,9 +679,9 @@ def stage_record(asset_history, key, reversals=False):
         kp = h.get(f"{key}_kp")
         if c:
             wins += 1
-            if kp and 0 < kp < 1:
-                pnl += 100 / kp - 100
-        else:
+        if kp and 0 < kp < 1:
+            pnl += _net100(bool(c), kp)                 # 2026-10-24: fee + slippage included
+        elif not c:
             pnl -= 100
     return {"wins": wins, "n": n, "pnl": pnl}
 
@@ -2607,12 +2607,9 @@ def compute_cumulative_bet_pnl(asset_history, bet_size=100.0, series_prefix=None
         kp = h["locked_kalshi_price"]
         if kp <= 0:
             continue
-        contracts = bet_size / kp
+        total += bet_size / 100.0 * _net100(bool(h["correct"]), kp)      # 2026-10-24: fee + slippage included
         if h["correct"]:
-            total += contracts - bet_size
             wins += 1
-        else:
-            total -= bet_size
     return {"total": total, "n": len(bets), "wins": wins, "bet_size": bet_size}
 
 
@@ -2644,9 +2641,7 @@ def live_scorecard(days=10):
                         c = h.get("call")
                     if c not in ("YES", "NO") or w is None or kp is None:
                         continue
-                    price = kp if c == "YES" else 1 - kp
-                    if ck == "locked_call":
-                        price = kp                    # locked_kalshi_price is already the side's price
+                    price = kp                        # every *_kp and locked_kalshi_price is already the called side's price
                     if not (lo <= price < hi) or not (0.03 <= price <= 0.99):
                         continue
                     seq.append((bool(w), _bte.pnl(bool(w), price)))
@@ -2703,13 +2698,10 @@ def compute_bet_pnl_since(asset_history, series_prefix, cutoff, bet_size=100.0):
         kp = h["locked_kalshi_price"]
         if kp <= 0:
             continue
-        contracts = bet_size / kp
         staked += bet_size
+        total += bet_size / 100.0 * _net100(bool(h["correct"]), kp)      # 2026-10-24: fee + slippage included
         if h["correct"]:
-            total += contracts - bet_size
             wins += 1
-        else:
-            total -= bet_size
     pct = (total / staked * 100) if staked else 0.0
     return {"total": total, "n": len(bets), "wins": wins, "pct": pct}
 
@@ -13158,8 +13150,30 @@ def build_sb_jump(name):
             f'<b>{pct}</b></button>')
 
 
+# 2026-10-24 (user: "make sure the scoreboard is tracking correctly"): every $100-a-call number on the site now includes Kalshi's taker
+# fee (7% of p*(1-p), rounded up to the cent) and 1c of slippage on the buy - and on the sell for cash-outs - the same math as the
+# backtests. Before this the site showed gross profit, which is how the Oct-10 bot looked profitable when it was not.
+def _net_buy(p):
+    p = min(0.99, max(0.01, p + 0.01))
+    return p + math.ceil(0.07 * p * (1 - p) * 100) / 100
+
+
+def _net_sell(p):
+    p = min(0.99, max(0.01, p - 0.01))
+    return p - math.ceil(0.07 * p * (1 - p) * 100) / 100
+
+
+def _net100(win, kp, sell_at=None):
+    """Profit on $100 staked at side price kp: held to the end, or sold at sell_at."""
+    cost = _net_buy(kp)
+    n = 100.0 / cost
+    if sell_at is not None:
+        return n * _net_sell(sell_at) - 100.0
+    return (n * 1.0 - 100.0) if win else -100.0
+
+
 def _call_money(rows, key):
-    """$100-a-call profit at the market price of the called side when it locked, and the average buy-in price."""
+    """$100-a-call profit (fee + slippage included) at the market price of the called side when it locked, and the average buy-in."""
     pnl, kps = 0.0, []
     for h in rows:
         kp = h.get(f"{key}_kp")
@@ -13167,7 +13181,7 @@ def _call_money(rows, key):
         if c is None or not kp or not (0 < kp < 1):
             continue
         kps.append(kp)
-        pnl += (100 / kp - 100) if c else -100
+        pnl += _net100(bool(c), kp)
     return pnl, (sum(kps) / len(kps) if kps else None), len(kps)
 
 
@@ -13246,13 +13260,13 @@ def _cash_pnl(h, key, at=CASHOUT_AT):
     kp, c, side = h.get(f"{key}_kp"), h.get(f"{key}_correct"), h.get(f"{key}_call")
     if c is None or not kp or not (0 < kp < 1) or side not in ("YES", "NO"):
         return None
-    hold = (100 / kp - 100) if c else -100.0
+    hold = _net100(bool(c), kp)
     m = _cash_marks.get(h.get("ticker"))
     if m is None:
         return (hold, None, None)
     mk = m.get(str(_CALL_SEC[key])) if m else None
     hit = bool(mk) and kp < at and ((side == "YES" and mk[0] >= at) or (side == "NO" and mk[1] <= 1 - at))
-    return (hold, (100 * at / kp - 100) if hit else hold, hit)
+    return (hold, _net100(bool(c), kp, sell_at=at) if hit else hold, hit)
 
 
 def _cashout_loop():
@@ -13368,8 +13382,8 @@ def _ps_sum(rows):
     if not n:
         return {"n": 0}
     w = sum(r["c"] for r in rows)
-    pnl = sum((100 / r["kp"] - 100) if r["c"] else -100 for r in rows)
-    fee = sum(7 * (1 - r["kp"]) for r in rows)          # Kalshi taker fee on $100: 0.07 x contracts x p x (1-p) = $7 x (1-p)
+    pnl = sum(_net100(bool(r["c"]), r["kp"]) for r in rows)        # 2026-10-24: fee + slippage already inside
+    fee = 0.0
     return {"n": n, "win": round(w / n, 3), "pnl": round(pnl), "per": round(pnl / n, 1),
             "pnl_after_fee": round(pnl - fee), "per_after_fee": round((pnl - fee) / n, 1),
             "avg_kp": round(sum(r["kp"] for r in rows) / n, 3), "be": round(sum(r["kp"] for r in rows) / n, 3)}
@@ -13482,7 +13496,7 @@ def _disagree_html(hist, keep):
 def _fav_rows(hist, keep, at_by=None):
     """Per call: record + $100/call profit (held to the end = primary; cashing out at 90c = secondary) for rounds kept."""
     out = []
-    for key, lab in (("early", "Early call &middot; 4:00"), ("sealed", "Sealed call &middot; 8:00")):
+    for key, lab in (("early", "Early call &middot; 4:00"), ("mid", "Mid call &middot; 6:00"), ("sealed", "Sealed call &middot; 8:00")):
         g, res, kps = [], [], []
         for h in hist:
             if h.get(f"{key}_correct") is None or h.get(f"{key}_reversal"):
@@ -13554,7 +13568,7 @@ def _build_brain_favorite(name):
     bc = _best_at_cache.setdefault(name, {})
     if bc.get("k") != ck:
         bc["k"] = ck
-        bc["v"] = {k: _best_cashout(hist, k)[0] for k in ("early", "sealed")}
+        bc["v"] = {k: _best_cashout(hist, k)[0] for k in ("early", "mid", "sealed")}
     at_by = bc["v"]
     panes = []
     # 2026-10-23 (user): by calendar day (ET), not rolling hours; "All time" = exactly the scoreboard's numbers
@@ -13584,7 +13598,7 @@ def _build_brain_favorite(name):
         tops.append((H, b, bv))
     mx = max([abs(v) for _h, _b, v in tops] + [1])
     ranked = [x for x in sorted(tops, key=lambda x: -x[2]) if x[2] > 0][:3]
-    short = {"mini": "Mini", "early": "Early", "sealed": "Sealed"}
+    short = {"mini": "Mini", "early": "Early", "mid": "Mid", "sealed": "Sealed"}
     best_txt = (" &middot; ".join(f'<b>{lab12(H)}</b> {short[b]} <span class="up">+${v:,.0f}</span>' for H, b, v in ranked)
                 if ranked else "not enough rounds yet")
     fav_line = ""
@@ -13615,7 +13629,7 @@ def _build_brain_favorite(name):
     tabs += (f'<button type="button" class="ma-tab ma-tab-hr" data-tf="hr" '
              f'onclick="document.body.dataset.matf=\'h{now_et.hour}\'">By hour</button>')
     return (f'<div class="most-acc"><div class="ma-head"><span class="ma-title">BRAIN&rsquo;S FAVORITE</span><span class="ma-tabs">{tabs}</span></div>'
-            f'{"".join(panes)}<div class="hint ma-key"><!--OWNER-->Big number = profit on $100 a call held to the end &middot; <!--/OWNER-->'
+            f'{"".join(panes)}<div class="hint ma-key"><!--OWNER-->Big number = profit on $100 a call held to the end, after Kalshi&rsquo;s fee &middot; <!--/OWNER-->'
             f'AVG IN = average buy-in price &middot; BEST CO = best cash-out point (tested 70&ndash;99&cent; vs holding)</div></div>')
 
 
@@ -13664,7 +13678,7 @@ def build_scoreboard(name, d):
         streak = (f'<span class="sc-streak {"win" if ct else "loss"}">{cn} {("WIN" if cn == 1 else "WINS") if ct else ("LOSS" if cn == 1 else "LOSSES")} IN A ROW</span>')
         chips = "".join(_result_chip(bool(h[field]), h.get("actual_side")) for h in rows[-15:])
         pnl = ""
-        if key in ("early", "sealed", "mini"):
+        if key in ("early", "mid", "sealed", "mini"):
             _p, _avg, _np = _call_money(rows, key)
             pnl = _money_html(_p, _avg, _np)
         elif d.get("bet_pnl"):
@@ -14358,9 +14372,8 @@ def render_html():
             kp = last.get("locked_kalshi_price")
             bet = ""
             if kp and not synthetic:
-                contracts = 100 / kp
-                payoff = contracts - 100 if last["correct"] else -100
-                bet = f' | $100 bet @ {kp:.1%}: {payoff:+.2f}'
+                payoff = _net100(bool(last["correct"]), kp)
+                bet = f' | $100 bet @ {kp:.1%}: {payoff:+.2f} after fee'
             last_html = (f'<div class="row"><span class="label">Last locked call ({last["ticker"]})</span>'
                          f'<span class="value">{last["call"] or "NO CALL"} {verdict} - guessed {lp}, '
                          f'settled ~{fp}'
