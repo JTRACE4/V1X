@@ -7332,7 +7332,7 @@ const LEGACY_SOUNDS = false;
 // 2026-10-23 (user): "all the other voices are bad except Ava" - Snoop + Caller are gone. Sarge is a REAL shouting drill
 // sergeant (an ElevenLabs voice) and only shows up once his voice key is set on the server (window.SARGE_REAL).
 // Switching voices no longer reads a fake "84 percent" call - just a short hello in the new voice.
-// 2026-10-23 (user): SDS + DS - two drill sergeants made from the owner's own clips (owner-only until approved).
+// 2026-10-23 (user): SDS + DS - two ElevenLabs library drill sergeants (owner-only until approved).
 const NEURAL_VOICES = { ava: 'Ava', sarge: 'Sarge', sds: 'SDS', ds: 'DS' };
 const DRILL = { sarge: 1, sds: 1, ds: 1 };
 function _voiceOk(v) { return v === 'sarge' ? !!window.SARGE_REAL : (v === 'sds' || v === 'ds') ? (window.DRILL_VOICES || []).indexOf(v) >= 0 : true; }
@@ -14808,10 +14808,11 @@ _TTS_VOICES = {"ava": "en-US-AvaNeural",
 _TTS_STYLE = {"sarge": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"},
               "sds": {"rate": "+20%", "pitch": "-12Hz", "volume": "+50%"},
               "ds": {"rate": "+18%", "pitch": "-6Hz", "volume": "+50%"}}
-# 2026-10-23 (user): two drill sergeants built from the owner's own voice clips - SDS (clip 1) and DS (clip 2). They read the
-# same scripts Sarge does. Owner-only until VOICES_PUBLIC (Railway) lists them, e.g. VOICES_PUBLIC=sds,ds.
+# 2026-10-23 (user): two ElevenLabs voice-library drill sergeants - SDS (sergeant 1) and DS (sergeant 2), set in Railway as
+# ELEVENLABS_SDS_VOICE_ID / ELEVENLABS_DS_VOICE_ID. They read the same scripts Sarge does. Owner-only until VOICES_PUBLIC
+# (Railway) lists them, e.g. VOICES_PUBLIC=sds,ds.
 _DRILL = ("sarge", "sds", "ds")
-_CLONE_SRC = {"sds": "sds.mp3", "ds": "ds.mp3"}
+_CLONE_SRC = {"sds": 1, "ds": 1}     # the owner-approved library voices
 _NY_WORDS = ((r"\bgoing to\b", "gonna"), (r"\bwant to\b", "wanna"), (r"\babout\b", "'bout"), (r"\bAlright\b", "Awright"),
              (r"\b(go|head|mov|flipp|hold|look|build|com|tell|buy|sell|runn|push|turn|hang|watch|bring|happen|mak|stay|get|tak|break)ing\b", r"\1in'"),
              (r"\byour\b", "ya"), (r"\byou\b", "ya"), (r"\bsure\b", "shuah"), (r"\bhere\b", "heah"), (r"\bover\b", "ovah"),
@@ -14833,59 +14834,10 @@ _CAUTION = re.compile(r"(?i)flip|other way|overbought|oversold|warning|lost|coin
 # are spoken by that voice instead - pick a consented New York-accent voice from the ElevenLabs Voice Library:
 #   ELEVENLABS_API_KEY, ELEVENLABS_TONY_VOICE_ID, (optional) ELEVENLABS_SARGE_VOICE_ID
 # The real accent then does the work, so Tony's lines are NOT respelled ("goin'", "shuah") for that voice.
-_VOICE_IDS_FILE = os.path.join(_DATA_ROOT, "voice_ids.json")
-_clone_lock = threading.Lock()
-_clone_fail_until = {}
-
-
-def _cloned_voice(key):
-    """SDS / DS: the ElevenLabs voice made once from the bundled clip (assets/voices/<key>.mp3), kept on the data volume."""
-    try:
-        with open(_VOICE_IDS_FILE, encoding="utf-8") as f:
-            vid = (json.load(f) or {}).get(key)
-        if vid:
-            return vid
-    except Exception:
-        pass
-    if time.time() < _clone_fail_until.get(key, 0):
-        return None
-    with _clone_lock:
-        try:
-            with open(_VOICE_IDS_FILE, encoding="utf-8") as f:
-                ids = json.load(f) or {}
-        except Exception:
-            ids = {}
-        if ids.get(key):
-            return ids[key]
-        try:
-            import requests as _rq
-            src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "voices", _CLONE_SRC[key])
-            with open(src, "rb") as f:
-                r = _rq.post("https://api.elevenlabs.io/v1/voices/add",
-                             headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
-                             data={"name": f"BRAIN {key.upper()}", "description": "BRAIN drill sergeant voice (owner's clip)"},
-                             files={"files": (_CLONE_SRC[key], f, "audio/mpeg")}, timeout=60)
-            r.raise_for_status()
-            ids[key] = r.json()["voice_id"]
-            os.makedirs(os.path.dirname(_VOICE_IDS_FILE), exist_ok=True)
-            with open(_VOICE_IDS_FILE + ".tmp", "w", encoding="utf-8") as f:
-                json.dump(ids, f)
-            os.replace(_VOICE_IDS_FILE + ".tmp", _VOICE_IDS_FILE)
-            print(f"[tts] made the {key.upper()} voice: {ids[key]}")
-            return ids[key]
-        except Exception as e:
-            _clone_fail_until[key] = time.time() + 600
-            print(f"[tts] could not make the {key.upper()} voice: {e!r}")
-            return None
-
-
 def _eleven_voice(key):
     if not os.environ.get("ELEVENLABS_API_KEY"):
         return None
-    vid = os.environ.get(f"ELEVENLABS_{key.upper()}_VOICE_ID")
-    if not vid and key in _CLONE_SRC:
-        vid = _cloned_voice(key)
-    return vid or None
+    return os.environ.get(f"ELEVENLABS_{key.upper()}_VOICE_ID") or None
 
 
 def _voice_public(key):
@@ -14946,7 +14898,7 @@ def _voice_real(key):
     if key == "sarge":
         return _sarge_real()
     if key in _CLONE_SRC:
-        return bool(os.environ.get("ELEVENLABS_API_KEY"))      # made from the clip on first use
+        return bool(_eleven_voice(key))
     return True
 
 
@@ -16691,9 +16643,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _rows = "".join(
                 f'<h2>{nm}</h2>' + "".join(f'<p>{_html_attr(t)}<br><audio controls preload="none" '
                                            f'src="/tts?v={k}&amp;t={urllib.parse.quote(t)}"></audio></p>' for t in _lines)
-                for k, nm in (("sds", "SDS (clip 1)"), ("ds", "DS (clip 2)")))
+                for k, nm in (("sds", "SDS (sergeant 1)"), ("ds", "DS (sergeant 2)")))
             _note = ("" if os.environ.get("ELEVENLABS_API_KEY") else
-                     "<p><b>No ElevenLabs key set yet - these will play in the backup voice.</b></p>")
+                     "<p><b>No ElevenLabs key set yet.</b></p>")
             return self._send(200, f'<!doctype html><meta name=viewport content="width=device-width"><title>Voice test</title>'
                                    f'<body style="font-family:system-ui;background:#1c1a18;color:#eee;padding:16px">'
                                    f'<h1>Drill sergeant voice test</h1>{_note}{_rows}</body>')
