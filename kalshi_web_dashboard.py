@@ -4956,7 +4956,31 @@ def poll_loop():
                     # sit the round out instead of calling into it. (Flipping to the trend side would win LESS - against-trend
                     # calls still win just over half - so the round is skipped, not reversed.) A skipped sealed call can still
                     # get a LATE call if price clearly decides afterwards.
-                    if (SKIP_AGAINST_TREND and _call and not _rev and stage_sig.get("trend")
+                    # 2026-10-24 (user: "develop a better understanding of the trend so we call accurately"): the trend study
+                    # replays 30 days of rounds and picks, per call time, which trend read (1m / 5m / 15m / 1h or a mix) the
+                    # call should line up with, and how. When it has picked one, that rule replaces the old 1-minute skip.
+                    _ts_rule, _ts_note = None, ""
+                    try:
+                        import trend_study as _tst
+                        _ts_rule = _tst.decisions().get(str(_mark))
+                        if _ts_rule and _call and not _rev and _mtf is not None:
+                            _tt = _tst.trend_from_windows(_mtf.windows.get(asset["symbol"]), trend_read)
+                            _was_c = _call
+                            _call, _ts_note = _tst.apply_rule(_ts_rule, _call, _tt, (stage_calls.get("early") or {}).get("call") if _sk == "sealed" else None)
+                            if _call is None:
+                                _sitout = _ts_note
+                                _call = _was_c
+                            elif _call != _was_c:
+                                _tier = "GOOD"
+                                _why = f"{_why} + {_ts_note}"
+                            elif _ts_note:
+                                _why = f"{_why} + {_ts_note}"
+                            print(f"[trend rule] {asset['name']} {_sk}: {_ts_rule} | trend {_tt} | {_was_c} -> "
+                                  f"{'SIT' if _sitout else _call} {ticker}")
+                    except Exception as _tse:
+                        print(f"[trend rule] {_tse!r}")
+                        _ts_rule = None
+                    if (not _ts_rule and SKIP_AGAINST_TREND and _call and not _rev and stage_sig.get("trend")
                             and (stage_sig["trend"] > 0) != (_call == "YES")):     # reversal calls are never skipped
                         _aw = None
                         try:
@@ -4968,7 +4992,7 @@ def poll_loop():
                     _lean = _call
                     # 2026-10-23 (user: "if the stay-out hasn't been saving money, make the correct call instead"): the daily
                     # audit scores sitting out vs taking the call vs the trend side on rounds it never saw, and this follows it.
-                    if _sitout:
+                    if _sitout and not _ts_rule:
                         try:
                             import flip_audit as _fa
                             _mode = ((_fa.decisions().get("stayout") or {}).get(_sk)) or "sit"
@@ -17331,7 +17355,17 @@ def main():
         threading.Thread(target=_book_track_loop, daemon=True, name="book-tracker").start()
         _bt.configure(trend_read=trend_read, stage_decide=stage_decide, signal_consensus=signal_consensus)
         _bt.load_saved()
-        _bt.start_background(delay=90, every_hours=6)     # 2026-10-22: refresh the price-vs-target history 4x a day
+        _bt.start_background(delay=90, every_hours=6)
+        def _trend_study_loop():
+            time.sleep(150)
+            while True:
+                try:
+                    import trend_study as _tst
+                    _tst.run()
+                except Exception as _tse:
+                    print(f"[trend study] {_tse!r}")
+                time.sleep(6 * 3600)
+        threading.Thread(target=_trend_study_loop, daemon=True, name="trend-study").start()     # 2026-10-22: refresh the price-vs-target history 4x a day
 
         def _audit_loop():     # 2026-10-23 (user): flip + stay-out audit into the server log, once at start and daily
             import flip_audit as _fa
