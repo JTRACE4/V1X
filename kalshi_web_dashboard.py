@@ -7341,14 +7341,15 @@ const LEGACY_SOUNDS = false;
 // Switching voices no longer reads a fake "84 percent" call - just a short hello in the new voice.
 const NEURAL_VOICES = { ava: 'Ava', sarge: 'Sarge' };
 let neuralVoice = 'ava';
-try { const nv = localStorage.getItem('neuralVoice'); if (nv && (nv in NEURAL_VOICES || nv === 'device')) neuralVoice = nv; } catch (e) {}
+// 2026-10-24 (user): only two choices - Ava or the ElevenLabs drill sergeant. The old "Device" pick is gone (saved picks -> Ava).
+try { const nv = localStorage.getItem('neuralVoice'); if (nv && nv in NEURAL_VOICES) neuralVoice = nv; } catch (e) {}
 if (neuralVoice === 'sarge' && !window.SARGE_REAL) neuralVoice = 'ava';
 function setNeuralVoice(v) {
-  if (v === 'sarge' && !window.SARGE_REAL) v = 'ava';
+  if (!(v in NEURAL_VOICES) || (v === 'sarge' && !window.SARGE_REAL)) v = 'ava';
   neuralVoice = v; neuralBroken = false;
   try { localStorage.setItem('neuralVoice', v); } catch (e) {}
   if (v === 'sarge') { speakRaw('Sarge here. Eyes on the market.'); return; }
-  speakRaw(v === 'device' ? 'This is the built-in voice on this device.' : 'Hi, this is Ava. I am watching the market for you.');
+  speakRaw('Hi, this is Ava. I am watching the market for you.');
 }
 function syncVoicePick() {
   const sel = document.getElementById('voice-pick');
@@ -7362,7 +7363,7 @@ function syncVoicePick() {
     b.setAttribute('aria-pressed', String(b.dataset.v === neuralVoice));
   });
 }
-// the Voice alerts widget: pick Ava / Sarge / Device in one tap (sound turns on if it was off, so you hear the hello)
+// the Voice alerts widget: pick Ava / Sarge in one tap (sound turns on if it was off, so you hear the hello)
 function pickVoice2(v) {
   if (typeof soundEnabled !== 'undefined' && !soundEnabled) enableSound(true);
   if (typeof voiceAlertsEnabled !== 'undefined' && !voiceAlertsEnabled) toggleVoiceAlerts();
@@ -7413,7 +7414,7 @@ function _voicePunch(a) {
       src.connect(lo); lo.connect(eq); eq.connect(comp); comp.connect(g); g.connect(ctx.destination);
       _vChain = { eq: eq, lo: lo, g: g };
     }
-    const hard = neuralVoice === 'sarge';
+    const hard = false;                            // 2026-10-24: no boost on any voice - ElevenLabs Sarge plays as made
     _vChain.eq.gain.value = hard ? 5 : 0;          // presence: crisp consonants
     _vChain.lo.gain.value = hard ? 3 : 0;          // chest: a bigger, manlier voice
     _vChain.g.gain.value = hard ? 1.9 : 1.0;       // loud
@@ -7444,20 +7445,30 @@ function _voiceNext() {
   voiceBusy = true;
   let finished = false;
   const done = () => { if (finished) return; finished = true; voiceBusy = false; setTimeout(_voiceNext, 120); };
-  if (neuralVoice === 'device' || neuralBroken) { _deviceSay(item.text, done); return; }
+  if (neuralBroken) { _deviceSay(item.text, done); return; }     // last resort only: the server's voices are down
   const a = _voiceEl();
-  const fallback = () => { if (finished) return; try { a.onended = null; a.onerror = null; a.pause(); } catch (e) {} neuralBroken = true; _deviceSay(item.text, done); setTimeout(() => { neuralBroken = false; }, 120000); };
-  a.onended = done; a.onerror = fallback;
-  a.src = '/tts?v=' + neuralVoice + '&t=' + encodeURIComponent(item.text);
-  // 2026-10-24 (user: "have him talk a little faster, like a drill sergeant"): Sarge plays ~18% faster, same pitch
-  const _rate = neuralVoice === 'sarge' ? 1.18 : 1.0;
-  try { a.preservesPitch = true; a.defaultPlaybackRate = _rate; a.playbackRate = _rate; } catch (e) {}
-  if (neuralVoice === 'sarge' || _vChain) _voicePunch(a);
-  a.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
-  const pr = a.play();
-  if (pr && pr.catch) pr.catch(fallback);
-  setTimeout(() => { if (!finished && a.paused && a.currentTime === 0) fallback(); }, 6000);   // server too slow - read it locally
-  setTimeout(done, 15000);
+  // 2026-10-24 (user): if one of the sergeant's ElevenLabs clips fails or is slow, Ava reads that same line - no stand-in voice
+  let _vk = neuralVoice;
+  const fallback = () => {
+    if (finished) return;
+    try { a.onended = null; a.onerror = null; a.pause(); } catch (e) {}
+    if (_vk === 'sarge') { _vk = 'ava'; _play(); return; }
+    neuralBroken = true; _deviceSay(item.text, done); setTimeout(() => { neuralBroken = false; }, 120000);
+  };
+  const _play = () => {
+    a.onended = done; a.onerror = fallback;
+    a.src = '/tts?v=' + _vk + '&t=' + encodeURIComponent(item.text);
+    // 2026-10-24 (user: "have him talk a little faster, like a drill sergeant"): Sarge plays ~18% faster, same pitch
+    const _rate = _vk === 'sarge' ? 1.18 : 1.0;
+    try { a.preservesPitch = true; a.defaultPlaybackRate = _rate; a.playbackRate = _rate; } catch (e) {}
+    a.volume = Math.max(0.7, Math.min(1, masterVolume * 1.3));
+    const pr = a.play();
+    if (pr && pr.catch) pr.catch(fallback);
+    const _mine = _vk;
+    setTimeout(() => { if (!finished && _vk === _mine && a.paused && a.currentTime === 0) fallback(); }, _mine === 'sarge' ? 8000 : 6000);
+  };
+  _play();
+  setTimeout(done, 20000);
 }
 // 2026-10-22: spoken lines say "market", never "Kalshi" (the screen says "market" too, since 2026-10-22 per user)
 function _marketWords(t) {
@@ -9842,10 +9853,10 @@ Railway &rarr; your service &rarr; Settings &rarr; Volumes &rarr; mount at <b>/d
     <span class="vw-title">Voice alerts</span>
     <button id="toggle-voice" onclick="toggleVoiceAlerts()" title="Turn spoken alerts on or off">ON</button>
     <div class="vw-seg">
-      <button class="vw-opt" data-v="ava" onclick="pickVoice2('ava')">Ava</button><button class="vw-opt" data-v="sarge" onclick="pickVoice2('sarge')">Sarge</button><button class="vw-opt" data-v="device" onclick="pickVoice2('device')">Device</button>
+      <button class="vw-opt" data-v="ava" onclick="pickVoice2('ava')">Ava</button><button class="vw-opt" data-v="sarge" onclick="pickVoice2('sarge')">Drill Sergeant</button>
     </div>
     <select id="voice-pick" onchange="setNeuralVoice(this.value)" hidden>
-      <option value="ava">Ava</option><option value="sarge">Sarge</option><option value="device">This device's voice</option>
+      <option value="ava">Ava</option><option value="sarge">Drill Sergeant</option>
     </select>
   </div>
   <details class="sound-details">
@@ -14945,11 +14956,13 @@ def _tts_mp3(text, voice_key):
         return None
     if voice_key not in _TTS_VOICES or (voice_key == "sarge" and not _sarge_real()):
         voice_key = "ava"
+    # 2026-10-24 (user): the drill sergeant reads exactly the same lines Ava reads - no rewording ("Attention!", "Going UP!")
+    _same = text
     voice = _TTS_VOICES[voice_key]
     style = _TTS_STYLE.get(voice_key, {})
     _sv = _speechify_voice(voice_key)
     if _sv:
-        _ts = _persona(text, voice_key, respell=False).replace("XRP", "X R P")
+        _ts = _same.replace("XRP", "X R P")
         fps = os.path.join(_TTS_DIR, "sp-" + hashlib.sha1(f"{_sv}|{_ts}".encode()).hexdigest() + ".mp3")
         if os.path.isfile(fps):
             with open(fps, "rb") as f_:
@@ -14965,7 +14978,7 @@ def _tts_mp3(text, voice_key):
             print(f"[tts] Speechify {voice_key} failed, trying the next voice source: {e!r}")
     _ev = _eleven_voice(voice_key)
     if _ev:
-        _t11 = _persona(text, voice_key, respell=False).replace("XRP", "X R P")
+        _t11 = _same.replace("XRP", "X R P")
         fp11 = os.path.join(_TTS_DIR, "11-" + hashlib.sha1(f"{_ev}|{_t11}".encode()).hexdigest() + ".mp3")
         if os.path.isfile(fp11):
             with open(fp11, "rb") as f_:
@@ -14978,7 +14991,9 @@ def _tts_mp3(text, voice_key):
             os.replace(fp11 + ".part", fp11)
             return audio
         except Exception as e:
-            print(f"[tts] ElevenLabs {voice_key} failed, using the free voice: {e!r}")
+            print(f"[tts] ElevenLabs {voice_key} failed: {e!r}")
+    if voice_key == "sarge":
+        return None      # 2026-10-24 (user): no stand-in sarge voice - the page has Ava read this line instead
     text = _persona(text, voice_key)
     rate, pitch, volume = style.get("rate", "+4%"), style.get("pitch", "+0Hz"), style.get("volume", "+0%")
     key = hashlib.sha1(f"{voice}|{rate}|{pitch}|{volume}|{text}".encode()).hexdigest()
